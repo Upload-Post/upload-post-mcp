@@ -1,0 +1,119 @@
+import { z } from "zod";
+
+export const VideoPlatform = z.enum([
+  "tiktok",
+  "instagram",
+  "youtube",
+  "linkedin",
+  "facebook",
+  "pinterest",
+  "threads",
+  "bluesky",
+  "x",
+  "google_business",
+]);
+
+export const PhotoPlatform = z.enum([
+  "tiktok",
+  "instagram",
+  "linkedin",
+  "facebook",
+  "pinterest",
+  "threads",
+  "reddit",
+  "bluesky",
+  "x",
+  "google_business",
+]);
+
+export const TextPlatform = z.enum([
+  "x",
+  "linkedin",
+  "facebook",
+  "threads",
+  "reddit",
+  "bluesky",
+  "google_business",
+]);
+
+export const AnalyticsPlatform = z.enum([
+  "tiktok",
+  "instagram",
+  "youtube",
+  "linkedin",
+  "facebook",
+  "pinterest",
+  "threads",
+  "bluesky",
+  "x",
+  "reddit",
+  "google_business",
+]);
+
+/**
+ * Common scheduling/queue fields shared by every upload tool.
+ */
+export const schedulingFields = {
+  scheduledDate: z
+    .string()
+    .optional()
+    .describe(
+      "ISO 8601 date for scheduled publishing, e.g. '2026-12-25T10:00:00Z'. Omit for immediate post."
+    ),
+  timezone: z
+    .string()
+    .optional()
+    .describe("IANA timezone for scheduled date, e.g. 'Europe/Madrid'."),
+  addToQueue: z
+    .boolean()
+    .optional()
+    .describe("Insert into the user's posting queue instead of publishing now."),
+  maxPostsPerSlot: z.number().int().positive().optional(),
+  asyncUpload: z
+    .boolean()
+    .optional()
+    .describe("Return immediately with request_id (default true)."),
+};
+
+/** Standard MCP-style content envelope. */
+export type ToolResult = {
+  content: Array<{ type: "text"; text: string }>;
+  isError?: boolean;
+};
+
+export function ok(payload: unknown): ToolResult {
+  return {
+    content: [
+      {
+        type: "text",
+        text:
+          typeof payload === "string"
+            ? payload
+            : JSON.stringify(payload, null, 2),
+      },
+    ],
+  };
+}
+
+export function fail(err: unknown): ToolResult {
+  const message =
+    err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
+  return {
+    isError: true,
+    content: [{ type: "text", text: message }],
+  };
+}
+
+/** Wrap any tool handler so SDK/HTTP errors bubble up as MCP isError results. */
+export function safe<TArgs>(
+  handler: (args: TArgs) => Promise<unknown>
+): (args: TArgs) => Promise<ToolResult> {
+  return async (args) => {
+    try {
+      const result = await handler(args);
+      return ok(result);
+    } catch (err) {
+      return fail(err);
+    }
+  };
+}

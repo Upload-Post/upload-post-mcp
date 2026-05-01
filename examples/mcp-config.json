@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "upload-post": {
+      "command": "npx",
+      "args": ["-y", "@upload-post/mcp"],
+      "env": {
+        "UPLOAD_POST_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
