@@ -4,6 +4,11 @@ import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
 import { safe } from "../schemas.js";
 
+/**
+ * FFmpeg editor endpoints. Note the path is `/ffmpeg-editor` (sibling of the
+ * other `/uploadposts/*` resources), as documented at
+ * https://docs.upload-post.com/llm.txt — Media Processing.
+ */
 export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
     "submit_ffmpeg_job",
@@ -24,7 +29,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       },
     },
     safe(async (args) =>
-      client.request("POST", "/uploadposts/ffmpeg/jobs/upload", {
+      client.request("POST", "/ffmpeg-editor", {
         body: compact(args as Record<string, unknown>),
       })
     )
@@ -33,15 +38,29 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
   server.registerTool(
     "get_ffmpeg_job",
     {
-      title: "Get FFmpeg job status",
+      title: "Poll FFmpeg job status",
       description:
-        "Status and (when ready) download URL of an FFmpeg job. Includes the result file URL once `status` is 'completed'.",
+        "Poll the status of an FFmpeg job. When status is 'completed', call `download_ffmpeg_result` to obtain the file.",
       inputSchema: {
         jobId: z.string(),
       },
     },
     safe(async ({ jobId }) =>
-      client.request("GET", `/uploadposts/ffmpeg/jobs/${encodeURIComponent(jobId as string)}`)
+      client.request("GET", "/ffmpeg-editor/status", { query: { job_id: jobId } })
+    )
+  );
+
+  server.registerTool(
+    "download_ffmpeg_result",
+    {
+      title: "Get FFmpeg result download URL",
+      description: "Returns the download URL (and metadata) for the processed file of a completed FFmpeg job.",
+      inputSchema: {
+        jobId: z.string(),
+      },
+    },
+    safe(async ({ jobId }) =>
+      client.request("GET", "/ffmpeg-editor/download", { query: { job_id: jobId } })
     )
   );
 
@@ -52,6 +71,6 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       description: "Monthly FFmpeg processing minutes used vs. plan allowance.",
       inputSchema: {},
     },
-    safe(async () => client.request("GET", "/uploadposts/ffmpeg/consumption"))
+    safe(async () => client.request("GET", "/ffmpeg-editor/consumption"))
   );
 }

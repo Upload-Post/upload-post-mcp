@@ -6,6 +6,17 @@ import { safe } from "../schemas.js";
 
 export function registerUserTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
+    "get_account_info",
+    {
+      title: "Validate API key & get account",
+      description:
+        "Validate the current API key and return account information. Useful as a first call to confirm credentials before doing real work.",
+      inputSchema: {},
+    },
+    safe(async () => client.request("GET", "/uploadposts/me"))
+  );
+
+  server.registerTool(
     "list_users",
     {
       title: "List profiles",
@@ -37,24 +48,6 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       },
     },
     safe(async ({ username }) => client.sdk.deleteUser(username as string))
-  );
-
-  server.registerTool(
-    "disconnect_social",
-    {
-      title: "Disconnect a social account",
-      description:
-        "Disconnect a single social platform from a profile, leaving the profile and its other accounts intact.",
-      inputSchema: {
-        username: z.string(),
-        platform: z.string().describe("Platform key, e.g. 'tiktok', 'instagram', 'youtube'."),
-      },
-    },
-    safe(async (args) =>
-      client.request("DELETE", "/uploadposts/users/social", {
-        body: compact(args as Record<string, unknown>),
-      })
-    )
   );
 
   server.registerTool(

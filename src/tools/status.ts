@@ -47,12 +47,21 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
   );
 
   server.registerTool(
-    "get_daily_limits",
+    "get_media",
     {
-      title: "Get daily upload limits",
-      description: "Current daily upload quota usage for the account.",
-      inputSchema: {},
+      title: "Get recent media from connected accounts",
+      description:
+        "Retrieve recent media (videos, photos) pulled directly from a profile's connected social accounts. Useful for browsing what already exists on a platform before posting more.",
+      inputSchema: {
+        user: z.string().optional().describe("Profile username to scope the query to."),
+        platform: z.string().optional().describe("Restrict to a single platform key."),
+        limit: z.number().int().positive().max(200).optional(),
+      },
     },
-    safe(async () => client.request("GET", "/uploadposts/limits/daily"))
+    safe(async (args) =>
+      client.request("GET", "/uploadposts/media", {
+        query: compact(args as Record<string, unknown>),
+      })
+    )
   );
 }

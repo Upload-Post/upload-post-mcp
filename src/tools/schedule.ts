@@ -46,33 +46,4 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
       );
     })
   );
-
-  server.registerTool(
-    "list_retryable",
-    {
-      title: "List retryable failed posts",
-      description: "Posts whose publication failed and are still inside the retry window.",
-      inputSchema: {},
-    },
-    safe(async () => client.request("GET", "/uploadposts/retryable"))
-  );
-
-  server.registerTool(
-    "retry_post",
-    {
-      title: "Retry a failed post",
-      description:
-        "Retry the publication of a previously failed post. Provide either `requestId` or `jobId`. Optionally restrict to a subset of platforms.",
-      inputSchema: {
-        requestId: z.string().optional(),
-        jobId: z.string().optional(),
-        platforms: z.array(z.string()).optional(),
-      },
-    },
-    safe(async (args) =>
-      client.request("POST", "/uploadposts/retry", {
-        body: compact(args as Record<string, unknown>),
-      })
-    )
-  );
 }

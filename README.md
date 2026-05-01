@@ -51,23 +51,20 @@ Run the server somewhere (Coolify / Fly / Railway / your own box) and let each u
 
 ## What can the agent do?
 
-The server exposes **51 tools** grouped by domain:
+The server exposes **40 tools** — every one maps 1:1 to an endpoint documented at <https://docs.upload-post.com/llm.txt>.
 
 | Group         | Tools |
 |---------------|-------|
 | Upload        | `upload_video`, `upload_photos`, `upload_text`, `upload_document` |
-| Status        | `get_status`, `get_job_status`, `get_history`, `get_daily_limits` |
-| Schedule      | `list_scheduled`, `cancel_scheduled`, `edit_scheduled`, `retry_post`, `list_retryable` |
-| Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_platform_metrics`, `get_best_post`, `get_growth_snapshot` |
-| Users         | `list_users`, `create_user`, `delete_user`, `disconnect_social`, `generate_jwt`, `validate_jwt` |
-| Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `get_reddit_subreddits` |
+| Status        | `get_status`, `get_job_status`, `get_history`, `get_media` |
+| Schedule      | `list_scheduled`, `cancel_scheduled`, `edit_scheduled` |
+| Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_platform_metrics` |
+| Users         | `get_account_info`, `list_users`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
+| Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `select_google_business_location`, `get_reddit_detailed_posts` |
 | Comments      | `get_post_comments`, `reply_to_comment`, `public_reply_to_comment` |
 | DMs           | `send_dm`, `list_dm_conversations`, `manage_autodms` |
-| Teams         | `invite_team_member`, `list_team_members`, `remove_team_member`, `list_shared_profiles`, `respond_team_invite` |
-| FFmpeg        | `submit_ffmpeg_job`, `get_ffmpeg_job`, `get_ffmpeg_consumption` |
-| AI            | `rewrite_captions`, `analyze_shorts` |
+| FFmpeg        | `submit_ffmpeg_job`, `get_ffmpeg_job`, `download_ffmpeg_result`, `get_ffmpeg_consumption` |
 | Queue         | `get_queue_settings`, `update_queue_settings`, `preview_queue` |
-| Status page   | `get_status_page`, `list_incidents` |
 
 Async uploads return a `request_id`. The agent should poll `get_status` until `success: true`.
 

@@ -8,11 +8,8 @@ import { registerUserTools } from "./tools/users.js";
 import { registerPagesTools } from "./tools/pages.js";
 import { registerCommentTools } from "./tools/comments.js";
 import { registerDmTools } from "./tools/dms.js";
-import { registerTeamTools } from "./tools/teams.js";
 import { registerFfmpegTools } from "./tools/ffmpeg.js";
-import { registerAiTools } from "./tools/ai.js";
 import { registerQueueTools } from "./tools/queue.js";
-import { registerStatusPageTools } from "./tools/status_page.js";
 
 export function buildServer(client: UploadPostMcpClient): McpServer {
   const server = new McpServer(
@@ -34,11 +31,8 @@ export function buildServer(client: UploadPostMcpClient): McpServer {
   registerPagesTools(server, client);
   registerCommentTools(server, client);
   registerDmTools(server, client);
-  registerTeamTools(server, client);
   registerFfmpegTools(server, client);
-  registerAiTools(server, client);
   registerQueueTools(server, client);
-  registerStatusPageTools(server, client);
 
   return server;
 }

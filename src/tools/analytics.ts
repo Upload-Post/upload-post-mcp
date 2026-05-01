@@ -77,49 +77,4 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
     },
     safe(async () => client.sdk.getPlatformMetrics())
   );
-
-  server.registerTool(
-    "get_best_post",
-    {
-      title: "Get best-performing post",
-      description: "Best-performing post for a profile in the last N days (default 10).",
-      inputSchema: {
-        profileUsername: z.string(),
-        days: z.number().int().positive().max(365).optional(),
-      },
-    },
-    safe(async (args) => {
-      const { profileUsername, days } = args as { profileUsername: string; days?: number };
-      return client.request(
-        "GET",
-        `/uploadposts/metrics/best-post/${encodeURIComponent(profileUsername)}`,
-        { query: compact({ days }) }
-      );
-    })
-  );
-
-  server.registerTool(
-    "get_growth_snapshot",
-    {
-      title: "Get growth snapshot",
-      description:
-        "Followers / total counters growth over time for a profile, computed from daily snapshots.",
-      inputSchema: {
-        profileUsername: z.string(),
-        platforms: z.array(AnalyticsPlatform).optional(),
-        period: z.string().optional(),
-      },
-    },
-    safe(async (args) => {
-      const { profileUsername, ...rest } = args as {
-        profileUsername: string;
-        [k: string]: unknown;
-      };
-      return client.request(
-        "GET",
-        `/uploadposts/snapshots/growth/${encodeURIComponent(profileUsername)}`,
-        { query: compact(rest) }
-      );
-    })
-  );
 }

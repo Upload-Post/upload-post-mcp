@@ -58,29 +58,38 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
   );
 
   server.registerTool(
-    "get_reddit_subreddits",
+    "select_google_business_location",
     {
-      title: "List Reddit subreddits / flairs / post types",
+      title: "Select Google Business location",
       description:
-        "Reddit metadata available to the profile. Use `kind` to choose which list: 'subreddits' (default), 'flairs', 'post-types'.",
+        "Pick the active Google Business location for a profile. Subsequent posts to `google_business` will publish there.",
       inputSchema: {
-        profile: z.string().optional(),
-        subreddit: z
-          .string()
-          .optional()
-          .describe("Required when kind='flairs' (the subreddit whose flairs to fetch)."),
-        kind: z.enum(["subreddits", "flairs", "post-types"]).optional(),
+        profile: z.string(),
+        locationId: z.string(),
       },
     },
-    safe(async (args) => {
-      const { kind = "subreddits", ...rest } = args as { kind?: string; [k: string]: unknown };
-      const path =
-        kind === "flairs"
-          ? "/uploadposts/reddit/flairs"
-          : kind === "post-types"
-            ? "/uploadposts/reddit/post-types"
-            : "/uploadposts/reddit/subreddits";
-      return client.request("GET", path, { query: compact(rest) });
-    })
+    safe(async (args) =>
+      client.request("POST", "/uploadposts/google-business/locations/select", {
+        body: compact(args as Record<string, unknown>),
+      })
+    )
+  );
+
+  server.registerTool(
+    "get_reddit_detailed_posts",
+    {
+      title: "Get detailed Reddit posts",
+      description:
+        "Recent Reddit posts published from a profile, with the platform-side metadata (subreddit, flair, score, …).",
+      inputSchema: {
+        profile: z.string().optional(),
+        limit: z.number().int().positive().max(200).optional(),
+      },
+    },
+    safe(async (args) =>
+      client.request("GET", "/uploadposts/reddit/detailed-posts/", {
+        query: compact(args as Record<string, unknown>),
+      })
+    )
   );
 }
