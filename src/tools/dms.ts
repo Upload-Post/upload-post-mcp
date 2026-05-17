@@ -49,7 +49,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
     {
       title: "Manage automatic DM monitoring",
       description:
-        "Control the autoDMs background worker for a profile. Choose `action` from: 'start', 'stop', 'pause', 'resume', 'delete', 'status', 'logs'. The body fields you need depend on the action — pass any extra config under `config`.",
+        "Control the autoDMs background worker for a profile. Choose `action` from: 'start', 'stop', 'pause', 'resume', 'delete', 'status', 'logs'. The body fields you need depend on the action — pass any extra config under `config`. For `status`, pass `include_inactive: true` in `config` to also return stopped and expired monitors.",
       inputSchema: {
         action: z.enum(["start", "stop", "pause", "resume", "delete", "status", "logs"]),
         user: z.string().optional(),
@@ -57,7 +57,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
           .record(z.unknown())
           .optional()
           .describe(
-            "Free-form config / filters body. For 'start' typically includes triggers, reply templates, target accounts."
+            "Free-form config / filters. For 'start' typically includes triggers, reply templates, target accounts. For 'status'/'logs' (GET actions) the fields are passed as query params — e.g. {include_inactive: true} to list stopped monitors."
           ),
       },
     },
@@ -70,7 +70,9 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
       const isGet = action === "status" || action === "logs";
       const path = `/uploadposts/autodms/${action}`;
       if (isGet) {
-        return client.request("GET", path, { query: compact({ user }) });
+        return client.request("GET", path, {
+          query: compact({ user, ...(config ?? {}) }),
+        });
       }
       return client.request("POST", path, {
         body: compact({ user, ...(config ?? {}) }),
