@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import UploadPost from "upload-post";
 
-export const PACKAGE_VERSION = "0.1.0";
+export const PACKAGE_VERSION = "0.1.1";
 export const DEFAULT_BASE_URL = "https://api.upload-post.com/api";
 
 export interface UploadPostMcpClientOptions {
