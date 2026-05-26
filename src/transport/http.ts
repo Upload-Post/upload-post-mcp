@@ -4,6 +4,19 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { UploadPostMcpClient } from "../client.js";
 
+import { loadOAuthConfig } from "../oauth/config.js";
+import {
+  authorizationServerMetadata,
+  protectedResourceMetadata,
+  serveJson,
+} from "../oauth/metadata.js";
+import { handleRegistration } from "../oauth/registration.js";
+import { handleAuthorize } from "../oauth/authorize.js";
+import { handleToken, handleRevoke } from "../oauth/tokens.js";
+import { UpstreamOAuthClient } from "../oauth/upstream_client.js";
+import { IntrospectCache } from "../oauth/introspect_cache.js";
+import { resolveAuth } from "../oauth/auth_resolver.js";
+
 export interface HttpOptions {
   port: number;
   /** Optional override for upstream Upload-Post base URL. */
@@ -25,8 +38,9 @@ interface Session {
  * Multi-tenant streamable-HTTP host.
  *
  * Each MCP session owns:
- *   - one Upload-Post API key (taken from the very first request's
- *     `Authorization` header — `ApiKey <key>` or `Bearer <key>`),
+ *   - one Upload-Post API key (either pasted directly via `Authorization:
+ *     ApiKey/Bearer <key>`, or resolved from an OAuth `Bearer up_oauth_...`
+ *     access token via upstream introspection),
  *   - one `UploadPostMcpClient` bound to that key,
  *   - one `McpServer` with tools that close over that client.
  *
@@ -34,21 +48,54 @@ interface Session {
  * `mcp-session-id` header. Closing the transport drops the session from the
  * map so the per-user state can be GC'd.
  *
- * The server itself stores nothing — keys live only inside the in-memory
- * client of the session that received them.
+ * The server itself stores nothing permanently — keys live only inside the
+ * in-memory client of the session that received them. The OAuth introspection
+ * cache is a TTL'd lookup table keyed by SHA-256(token), not raw plaintexts.
  */
 export async function runHttp(opts: HttpOptions): Promise<void> {
   const sessions = new Map<string, Session>();
 
+  const oauthCfg = loadOAuthConfig();
+  const upstream = new UpstreamOAuthClient(oauthCfg);
+  const introspectCache = new IntrospectCache(oauthCfg.introspectCacheTtlMs);
+  const authDeps = { cfg: oauthCfg, upstream, cache: introspectCache };
+
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    if (req.method === "GET" && (req.url === "/healthz" || req.url === "/health")) {
+    const url = req.url ?? "";
+    const method = req.method ?? "GET";
+
+    // ----- Liveness ------------------------------------------------------
+    if (method === "GET" && (url === "/healthz" || url === "/health")) {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: true }));
+      res.end(JSON.stringify({ ok: true, oauth: oauthCfg.enabled }));
       return;
     }
 
-    if (req.url !== "/mcp") {
+    // ----- OAuth surface (only if configured) ----------------------------
+    if (oauthCfg.enabled) {
+      if (method === "GET" && url === "/.well-known/oauth-protected-resource") {
+        return serveJson(res, protectedResourceMetadata(oauthCfg));
+      }
+      if (method === "GET" && url === "/.well-known/oauth-authorization-server") {
+        return serveJson(res, authorizationServerMetadata(oauthCfg));
+      }
+      if (method === "POST" && url === "/register") {
+        return handleRegistration(req, res);
+      }
+      if (method === "GET" && url.startsWith("/authorize")) {
+        return handleAuthorize(req, res, oauthCfg);
+      }
+      if (method === "POST" && url === "/token") {
+        return handleToken(req, res, upstream);
+      }
+      if (method === "POST" && url === "/revoke") {
+        return handleRevoke(req, res, upstream, introspectCache);
+      }
+    }
+
+    // ----- MCP -----------------------------------------------------------
+    if (url !== "/mcp") {
       res.statusCode = 404;
       res.end("Not Found");
       return;
@@ -58,21 +105,12 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     let session = sessionId ? sessions.get(sessionId) : undefined;
 
     if (!session) {
-      const apiKey = extractApiKey(req.headers["authorization"]);
-      if (!apiKey) {
-        res.statusCode = 401;
-        res.setHeader("www-authenticate", 'ApiKey realm="upload-post"');
-        res.setHeader("content-type", "application/json");
-        res.end(
-          JSON.stringify({
-            error:
-              "Missing or malformed Authorization header. Send 'Authorization: ApiKey <your_upload_post_api_key>' (or 'Bearer <key>'). Get your key at https://app.upload-post.com",
-          })
-        );
-        return;
+      const resolution = await resolveAuth(req.headers["authorization"], authDeps);
+      if (!resolution) {
+        return sendUnauthorized(res, oauthCfg.enabled, oauthCfg.issuer);
       }
 
-      const client = new UploadPostMcpClient({ apiKey, baseUrl: opts.baseUrl });
+      const client = new UploadPostMcpClient({ apiKey: resolution.apiKey, baseUrl: opts.baseUrl });
       const server = opts.buildServer(client);
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
@@ -88,7 +126,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     }
 
     let body: unknown = undefined;
-    if (req.method === "POST") {
+    if (method === "POST") {
       const chunks: Buffer[] = [];
       for await (const chunk of req) chunks.push(chunk as Buffer);
       const raw = Buffer.concat(chunks).toString("utf8");
@@ -110,7 +148,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     httpServer.listen(opts.port, () => {
       process.stderr.write(
         `[upload-post-mcp] streamable HTTP listening on http://0.0.0.0:${opts.port}/mcp ` +
-          `(per-request API key from Authorization header)\n`
+          `(auth: ApiKey/Bearer header${oauthCfg.enabled ? " + OAuth 2.1 (PKCE+DCR)" : ""})\n`
       );
       resolve();
     });
@@ -118,14 +156,29 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
 }
 
 /**
- * Accept both `Authorization: ApiKey <key>` (preferred — matches the upstream
- * Upload-Post API) and `Authorization: Bearer <key>` (some MCP clients only
- * allow Bearer). Anything else is rejected.
+ * 401 with both a legacy `ApiKey` challenge and (when OAuth is enabled) the
+ * `Bearer resource_metadata=...` challenge that claude.ai needs to discover
+ * the authorization server. Sending BOTH keeps the existing API-key flow
+ * working and unlocks the OAuth Custom-Connector flow on the same endpoint.
  */
-function extractApiKey(header: string | string[] | undefined): string | null {
-  if (!header || Array.isArray(header)) return null;
-  const m = header.match(/^(?:ApiKey|Bearer)\s+(.+)$/i);
-  if (!m) return null;
-  const key = m[1].trim();
-  return key.length > 0 ? key : null;
+function sendUnauthorized(res: ServerResponse, oauthEnabled: boolean, issuer: string): void {
+  const challenges: string[] = [];
+  if (oauthEnabled) {
+    challenges.push(
+      `Bearer realm="upload-post", resource_metadata="${issuer}/.well-known/oauth-protected-resource"`
+    );
+  }
+  challenges.push('ApiKey realm="upload-post"');
+  res.statusCode = 401;
+  res.setHeader("www-authenticate", challenges.join(", "));
+  res.setHeader("content-type", "application/json");
+  res.end(
+    JSON.stringify({
+      error:
+        "Missing or malformed Authorization header. Send 'Authorization: ApiKey <your_upload_post_api_key>' (or 'Bearer <key>'). Get your key at https://app.upload-post.com" +
+        (oauthEnabled
+          ? " — or connect via OAuth from a Custom Connector–capable client (e.g. claude.ai)."
+          : ""),
+    })
+  );
 }

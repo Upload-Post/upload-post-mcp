@@ -1,6 +1,6 @@
-# Optional compose file — useful for local testing of the container or for
-# Coolify "Docker Compose" deployments. For Coolify "Dockerfile" deployments
-# you don't need this file at all.
+# Optional compose file — useful for local testing of the container or as
+# a template for any Docker Compose-based deployment. PaaS that build from
+# the Dockerfile directly don't need this file at all.
 #
 # In HTTP mode (the only mode that makes sense in a container) the server is
 # multi-tenant: each MCP client sends its own Upload-Post API key in the

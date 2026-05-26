@@ -30,13 +30,13 @@ Get your API key at <https://app.upload-post.com> → *API Keys*. Restart the cl
 
 ### B) Hosted HTTP (multi-tenant) — share one server with many users
 
-Run the server somewhere (Coolify / Fly / Railway / your own box) and let each user connect with **their own** Upload-Post API key. The server stores nothing per user.
+Run the server on any Docker-capable host (Fly, Railway, Cloud Run, your own box…) and let each user connect with **their own** Upload-Post API key. The server stores nothing per user.
 
 ```jsonc
 {
   "mcpServers": {
     "upload-post": {
-      "url": "https://mcp.tu-dominio.com/mcp",
+      "url": "https://mcp.your-domain.com/mcp",
       "headers": {
         "Authorization": "ApiKey YOUR_OWN_UPLOAD_POST_API_KEY"
       }
@@ -115,16 +115,15 @@ Auth model in `--http` mode is the same pattern Resend, Tavily, Brave Search and
 
 ---
 
-## Deploy on Coolify (Docker)
+## Deploy with Docker
 
-The repo ships with a multi-stage `Dockerfile` and a `.dockerignore`. In Coolify:
+The repo ships with a multi-stage `Dockerfile` and a `.dockerignore`. On any Docker-capable PaaS (Fly.io, Railway, Render, Cloud Run, fly machines, your own box…):
 
-1. **New Resource → Application → Public/Private Git Repository**, point it at this repo.
-2. **Build Pack: Dockerfile**. Coolify auto-detects `Dockerfile` at the root.
-3. **Port: 8080** (matches `EXPOSE 8080`).
-4. **Environment variables**: none are required. Optionally set `UPLOAD_POST_BASE_URL` if you point at staging.
-5. **Health check path**: `/healthz` (HTTP, port 8080).
-6. **Domain**: attach a domain, e.g. `mcp.tu-dominio.com`. Coolify provisions TLS via Let's Encrypt automatically.
+1. Point the PaaS at this repo and select **Dockerfile** as the build pack.
+2. **Port: 8080** (matches `EXPOSE 8080`).
+3. **Environment variables**: none are required. Optionally set `UPLOAD_POST_BASE_URL` if you point at staging.
+4. **Health check path**: `/healthz` (HTTP, port 8080).
+5. **Domain**: attach a domain, e.g. `mcp.your-domain.com`, and provision TLS (most PaaS do this automatically via Let's Encrypt).
 
 Deploy. The server is now ready for any number of users. Each user adds the endpoint to their MCP client config with **their own** Upload-Post API key:
 
@@ -132,7 +131,7 @@ Deploy. The server is now ready for any number of users. Each user adds the endp
 {
   "mcpServers": {
     "upload-post": {
-      "url": "https://mcp.tu-dominio.com/mcp",
+      "url": "https://mcp.your-domain.com/mcp",
       "headers": {
         "Authorization": "ApiKey USER_OWN_UPLOAD_POST_API_KEY"
       }
