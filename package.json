@@ -1,6 +1,6 @@
 {
   "name": "@upload-post/mcp",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Official Model Context Protocol (MCP) server for Upload-Post — publish, schedule, analyze and manage social media across TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X and more from any MCP-compatible AI agent (Claude Desktop, Claude Code, Cursor, ...).",
   "license": "MIT",
   "type": "module",
