@@ -58,7 +58,7 @@
     "@modelcontextprotocol/sdk": "^1.0.4",
     "axios": "^1.7.7",
     "form-data": "^4.0.1",
-    "upload-post": "^2.2.1",
+    "upload-post": "^2.2.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
