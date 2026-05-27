@@ -163,6 +163,32 @@ curl -i -X POST http://localhost:8080/mcp \
 
 ---
 
+## Privacy & data handling
+
+This server is a **stateless proxy** to the Upload-Post API. Per request, the only data it processes is the user's API key (or OAuth access token resolved to one) and the arguments of the tool call being executed. No user data is persisted by the MCP container itself.
+
+- **What we receive per request**: the `Authorization` header, the MCP tool name + arguments, and any media URLs/paths the agent passes.
+- **What we forward**: the tool arguments to the Upload-Post API on behalf of the authenticated user.
+- **What we store**: nothing per-user. OAuth tokens are stored upstream in the Upload-Post backend, hashed (SHA-256), so a breach of token storage cannot impersonate users.
+- **What we log**: HTTP method, path, status code, and an opaque request ID. No tool arguments, no API keys, no tokens.
+
+Full Upload-Post privacy policy (data collection, retention, third-party sharing, contact, GDPR/CCPA): **https://upload-post.com/privacy**
+
+To revoke a connector's access at any time, open **Connected Apps** in [app.upload-post.com](https://app.upload-post.com).
+
+---
+
+## Security
+
+- All traffic is TLS-terminated at the edge (HTTPS only).
+- `/mcp` requires a valid `Authorization` header on every request; OAuth access tokens are short-lived (1 h access + 90 d refresh with rotation per RFC 6749 §10.4).
+- The server validates the `Origin` header against an allow-list (`claude.ai`, `claude.com`, `app.upload-post.com`, `localhost`) to mitigate DNS-rebinding attacks from browser-based clients. Extend with `OAUTH_EXTRA_ALLOWED_ORIGINS` (comma-separated) when self-hosting behind a custom dashboard.
+- All 40 tools declare MCP `readOnlyHint`/`destructiveHint` annotations so clients can surface confirmation prompts for destructive operations.
+
+Report a security issue: **info@upload-post.com** (encrypted PGP available on request).
+
+---
+
 ## License
 
 MIT © Upload-Post

@@ -14,6 +14,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
       inputSchema: {
         requestId: z.string(),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async ({ requestId }) => client.sdk.getStatus(requestId as string))
   );
@@ -27,6 +28,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
       inputSchema: {
         jobId: z.string(),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async ({ jobId }) => client.sdk.getJobStatus(jobId as string))
   );
@@ -40,6 +42,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
         page: z.number().int().positive().optional(),
         limit: z.number().int().positive().max(200).optional(),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async (args) =>
       client.sdk.getHistory(compact(args as Record<string, unknown>) as { page?: number; limit?: number })
@@ -63,6 +66,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
           ),
         limit: z.number().int().positive().max(200).optional(),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async (args) =>
       client.request("GET", "/uploadposts/media", {

@@ -18,6 +18,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
         recipientUsername: z.string().optional(),
         message: z.string(),
       },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     safe(async (args) =>
       client.request("POST", "/uploadposts/dms/send", {
@@ -36,6 +37,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
         platform: z.string().optional(),
         limit: z.number().int().positive().max(200).optional(),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async (args) =>
       client.request("GET", "/uploadposts/dms/conversations", {
@@ -60,6 +62,9 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
             "Free-form config / filters. For 'start' typically includes triggers, reply templates, target accounts. For 'status'/'logs' (GET actions) the fields are passed as query params — e.g. {include_inactive: true} to list stopped monitors."
           ),
       },
+      // `action` can be read-only (status/logs) or destructive (stop/delete). We
+      // report the worst case (destructive) so callers default to confirmation.
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     safe(async (args) => {
       const { action, user, config } = args as {

@@ -64,6 +64,19 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     const url = req.url ?? "";
     const method = req.method ?? "GET";
 
+    // ----- Defense-in-depth: Origin validation --------------------------
+    // The MCP spec recommends rejecting requests whose `Origin` header (when
+    // present) is not on a known allow-list, to prevent DNS-rebinding attacks
+    // against agents that connect from a browser. Server-to-server callers
+    // (claude.ai backend, curl, etc.) typically omit the header — those pass
+    // through unchanged. Bearer/ApiKey auth on /mcp remains the primary gate.
+    if (!isOriginAllowed(req.headers["origin"])) {
+      res.statusCode = 403;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "origin_not_allowed" }));
+      return;
+    }
+
     // ----- Liveness ------------------------------------------------------
     if (method === "GET" && (url === "/healthz" || url === "/health")) {
       res.statusCode = 200;
@@ -181,4 +194,40 @@ function sendUnauthorized(res: ServerResponse, oauthEnabled: boolean, issuer: st
           : ""),
     })
   );
+}
+
+/**
+ * Allow-list of Origins permitted to call this server from a browser context.
+ * Augmented via the OAUTH_EXTRA_ALLOWED_ORIGINS env var (comma-separated)
+ * for self-hosters that front the server with their own dashboard origin.
+ *
+ * Requests WITHOUT an Origin header (server-to-server: claude.ai backend,
+ * curl, MCP stdio bridges, etc.) are allowed through — Origin only ships
+ * from browsers, where the DNS-rebinding risk lives.
+ */
+function isOriginAllowed(origin: string | string[] | undefined): boolean {
+  if (!origin || Array.isArray(origin)) return true;
+  const value = origin.trim();
+  if (!value) return true;
+  const defaults = new Set([
+    "https://claude.ai",
+    "https://claude.com",
+    "https://www.claude.ai",
+    "https://app.upload-post.com",
+    "http://localhost",
+    "http://127.0.0.1",
+  ]);
+  for (const extra of (process.env.OAUTH_EXTRA_ALLOWED_ORIGINS ?? "").split(",")) {
+    const trimmed = extra.trim();
+    if (trimmed) defaults.add(trimmed);
+  }
+  if (defaults.has(value)) return true;
+  // Allow any localhost / 127.0.0.1 port combination for local dev.
+  try {
+    const url = new URL(value);
+    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return true;
+  } catch {
+    return false;
+  }
+  return false;
 }

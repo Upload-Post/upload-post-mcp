@@ -13,6 +13,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
       inputSchema: {
         profile_username: z.string().optional(),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async (args) =>
       client.request("GET", "/uploadposts/queue/settings", {
@@ -31,6 +32,9 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
         profile_username: z.string().optional(),
         settings: z.record(z.unknown()),
       },
+      // Replaces the existing config wholesale → mark as destructive so callers
+      // confirm before overwriting.
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     safe(async (args) =>
       client.request("POST", "/uploadposts/queue/settings", {
@@ -49,6 +53,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
         profile_username: z.string().optional(),
         nextSlot: z.boolean().optional(),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async (args) => {
       const { nextSlot, ...rest } = args as { nextSlot?: boolean; [k: string]: unknown };

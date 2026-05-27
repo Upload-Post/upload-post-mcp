@@ -16,6 +16,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         postId: z.string().optional(),
         postUrl: z.string().optional(),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async (args) =>
       client.request("GET", "/uploadposts/comments", {
@@ -35,6 +36,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         commentId: z.string(),
         message: z.string(),
       },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     safe(async (args) =>
       client.request("POST", "/uploadposts/comments/reply", {
@@ -53,6 +55,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         commentId: z.string(),
         message: z.string(),
       },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     safe(async (args) =>
       client.request("POST", "/uploadposts/comments/public-reply", {

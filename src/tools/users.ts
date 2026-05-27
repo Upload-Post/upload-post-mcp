@@ -12,6 +12,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       description:
         "Validate the current API key and return account information. Useful as a first call to confirm credentials before doing real work.",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
     },
     safe(async () => client.request("GET", "/uploadposts/me"))
   );
@@ -22,6 +23,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       title: "List profiles",
       description: "List all Upload-Post profiles in the account, with their connected social accounts.",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
     },
     safe(async () => client.sdk.listUsers())
   );
@@ -34,6 +36,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       inputSchema: {
         username: z.string(),
       },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     safe(async ({ username }) => client.sdk.createUser(username as string))
   );
@@ -46,6 +49,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       inputSchema: {
         username: z.string(),
       },
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
     safe(async ({ username }) => client.sdk.deleteUser(username as string))
   );
@@ -67,6 +71,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
         connectTitle: z.string().optional(),
         connectDescription: z.string().optional(),
       },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     safe(async (args) => {
       const { username, ...rest } = args as { username: string; [k: string]: unknown };
@@ -82,6 +87,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       inputSchema: {
         jwt: z.string(),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async ({ jwt }) => client.sdk.validateJwt(jwt as string))
   );
