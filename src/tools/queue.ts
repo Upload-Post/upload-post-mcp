@@ -11,7 +11,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
       title: "Get queue settings",
       description: "Posting queue configuration (slots per day, time windows, timezone).",
       inputSchema: {
-        username: z.string().optional(),
+        profile_username: z.string().optional(),
       },
     },
     safe(async (args) =>
@@ -28,7 +28,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
       description:
         "Replace the posting-queue configuration. Pass the full desired settings object under `settings`.",
       inputSchema: {
-        username: z.string().optional(),
+        profile_username: z.string().optional(),
         settings: z.record(z.unknown()),
       },
     },
@@ -46,7 +46,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
       description:
         "Preview the upcoming queue slots and what would land in them. Optionally `nextSlot=true` returns just the next available slot timestamp.",
       inputSchema: {
-        username: z.string().optional(),
+        profile_username: z.string().optional(),
         nextSlot: z.boolean().optional(),
       },
     },
