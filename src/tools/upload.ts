@@ -39,6 +39,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
             "Platform-specific overrides as a flat object (camelCase keys), e.g. { tiktokPrivacyLevel: 'PUBLIC_TO_EVERYONE', youtubePrivacyStatus: 'public', youtubePlaylistId: 'PLxxxxxxxxxxxx', facebookPageId: '123' }. `youtubePlaylistId` may also be an array or a comma-separated list of playlist IDs to add the uploaded video to."
           ),
       },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     safe(async (args) => {
       const { videoPathOrUrl, platformOptions, ...rest } = args as {
@@ -70,6 +71,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
         ...schedulingFields,
         platformOptions: z.record(z.unknown()).optional(),
       },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     safe(async (args) => {
       const { photosPathsOrUrls, platformOptions, ...rest } = args as {
@@ -101,6 +103,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
         ...schedulingFields,
         platformOptions: z.record(z.unknown()).optional(),
       },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     safe(async (args) => {
       const { platformOptions, ...rest } = args as {
@@ -131,6 +134,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
         targetLinkedinPageId: z.string().optional(),
         ...schedulingFields,
       },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
     safe(async (args) => {
       const { documentPathOrUrl, ...rest } = args as {

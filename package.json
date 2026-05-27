@@ -53,7 +53,7 @@
   "bugs": {
     "url": "https://github.com/Upload-Post/upload-post-mcp/issues"
   },
-  "author": "Upload-Post <hi@upload-post.com>",
+  "author": "Upload-Post <info@upload-post.com>",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
     "axios": "^1.7.7",

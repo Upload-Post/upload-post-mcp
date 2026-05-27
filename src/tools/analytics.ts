@@ -17,6 +17,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
         pageId: z.string().optional().describe("Facebook page ID, if filtering by page."),
         pageUrn: z.string().optional().describe("LinkedIn page URN, if filtering by company page."),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async (args) => {
       const { profileUsername, ...rest } = args as {
@@ -45,6 +46,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
         breakdown: z.boolean().optional(),
         metrics: z.array(z.string()).optional(),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async (args) => {
       const { profileUsername, ...rest } = args as {
@@ -63,6 +65,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
       inputSchema: {
         requestId: z.string(),
       },
+      annotations: { readOnlyHint: true },
     },
     safe(async ({ requestId }) => client.sdk.getPostAnalytics(requestId as string))
   );
@@ -74,6 +77,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
       description:
         "Reference: which metrics are available per platform (impressions, likes, …) and their human labels.",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
     },
     safe(async () => client.sdk.getPlatformMetrics())
   );
