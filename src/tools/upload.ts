@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
+import { writeFile, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import {
@@ -8,6 +12,44 @@ import {
   safe,
   schedulingFields,
 } from "../schemas.js";
+
+/**
+ * Max decoded size accepted for inline (base64) video bytes, in MB.
+ * Caps memory use of the MCP process; override with UPLOAD_POST_MAX_INLINE_MB.
+ * Big videos should still be passed as a public URL, not inlined.
+ */
+const MAX_INLINE_MB = Number(process.env.UPLOAD_POST_MAX_INLINE_MB ?? 100);
+
+/** Strip a leading `data:<mime>;base64,` prefix if present. */
+function stripDataUri(input: string): string {
+  const match = /^data:[^;,]*;base64,/i.exec(input);
+  return match ? input.slice(match[0].length) : input;
+}
+
+/**
+ * Decode inline base64 video bytes to a uniquely-named temp file and return its
+ * path. Throws before allocating the full buffer is impossible, so we decode
+ * then enforce the size cap. Caller is responsible for unlinking the path.
+ */
+async function writeInlineVideo(
+  videoBase64: string,
+  filename?: string
+): Promise<string> {
+  const buf = Buffer.from(stripDataUri(videoBase64), "base64");
+  if (buf.length === 0) {
+    throw new Error("videoBase64 decoded to 0 bytes (not valid base64?).");
+  }
+  const maxBytes = MAX_INLINE_MB * 1024 * 1024;
+  if (buf.length > maxBytes) {
+    throw new Error(
+      `Inline video is ${(buf.length / 1024 / 1024).toFixed(1)} MB, over the ${MAX_INLINE_MB} MB limit. Pass a public URL in videoPathOrUrl instead.`
+    );
+  }
+  const ext = filename?.match(/\.[a-z0-9]+$/i)?.[0] ?? ".mp4";
+  const tmpPath = join(tmpdir(), `uppost-${randomUUID()}${ext}`);
+  await writeFile(tmpPath, buf);
+  return tmpPath;
+}
 
 /**
  * The 4 publish endpoints exposed by the official SDK. We deliberately keep
@@ -21,11 +63,26 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
     {
       title: "Upload video",
       description:
-        "Publish a video to one or more platforms. Pass either a public URL or a local path in `videoPathOrUrl`. Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, facebookPageId, instagramMediaType, etc.).",
+        "Publish a video to one or more platforms. Provide the video as EITHER `videoPathOrUrl` (a public URL or absolute local path) OR `videoBase64` (raw base64 or a data URI for clients that hold the bytes directly). Inline base64 is capped (default 100 MB) and is best for small/medium clips — prefer a public URL for large videos. Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, facebookPageId, instagramMediaType, etc.).",
       inputSchema: {
         videoPathOrUrl: z
           .string()
-          .describe("Public URL of the video, or absolute local path."),
+          .optional()
+          .describe(
+            "Public URL of the video, or absolute local path. Provide this OR videoBase64."
+          ),
+        videoBase64: z
+          .string()
+          .optional()
+          .describe(
+            "Video bytes as base64 (or a data: URI). Provide this OR videoPathOrUrl. The server writes it to a temp file, uploads, then deletes it. Capped by UPLOAD_POST_MAX_INLINE_MB (default 100)."
+          ),
+        videoFilename: z
+          .string()
+          .optional()
+          .describe(
+            "Optional filename (e.g. 'clip.mp4') used only to pick the temp file extension when videoBase64 is given. Defaults to .mp4."
+          ),
         user: z.string().describe("Profile name (Upload-Post user)."),
         platforms: z.array(VideoPlatform).min(1),
         title: z.string().optional().describe("Caption / title."),
@@ -42,15 +99,37 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     safe(async (args) => {
-      const { videoPathOrUrl, platformOptions, ...rest } = args as {
-        videoPathOrUrl: string;
-        platformOptions?: Record<string, unknown>;
-        [k: string]: unknown;
-      };
-      return client.sdk.upload(videoPathOrUrl, {
+      const { videoPathOrUrl, videoBase64, videoFilename, platformOptions, ...rest } =
+        args as {
+          videoPathOrUrl?: string;
+          videoBase64?: string;
+          videoFilename?: string;
+          platformOptions?: Record<string, unknown>;
+          [k: string]: unknown;
+        };
+      if (!videoPathOrUrl && !videoBase64) {
+        throw new Error("Provide either videoPathOrUrl or videoBase64.");
+      }
+      if (videoPathOrUrl && videoBase64) {
+        throw new Error(
+          "Provide only one of videoPathOrUrl or videoBase64, not both."
+        );
+      }
+
+      const options = {
         ...(rest as Record<string, unknown>),
         ...(platformOptions ?? {}),
-      } as never);
+      } as never;
+
+      if (videoBase64) {
+        const tmpPath = await writeInlineVideo(videoBase64, videoFilename);
+        try {
+          return await client.sdk.upload(tmpPath, options);
+        } finally {
+          await unlink(tmpPath).catch(() => {});
+        }
+      }
+      return client.sdk.upload(videoPathOrUrl as string, options);
     })
   );
 
