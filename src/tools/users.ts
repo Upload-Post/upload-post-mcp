@@ -70,6 +70,12 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
         readonlyCalendar: z.boolean().optional(),
         connectTitle: z.string().optional(),
         connectDescription: z.string().optional(),
+        language: z
+          .enum(["en", "es", "de", "fr", "pt"])
+          .optional()
+          .describe(
+            "Force the connection page language for this profile. When omitted, the page auto-detects the visitor's browser language and falls back to English."
+          ),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
