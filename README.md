@@ -77,7 +77,21 @@ The staging object is deleted after 24 hours whether it is used or not. Schedule
 
 Claude and other MCP clients can use the same flow without the ChatGPT UI: call `create_media_upload`, PUT the file to `upload_url`, call `complete_media_upload`, then pass `media_url` to `upload_video`.
 
-Set `UPLOAD_POST_R2_CONNECT_DOMAIN` on the MCP host to the same origin used by the backend's R2 signed URLs (for example `https://<account>.r2.cloudflarestorage.com`) so the ChatGPT component CSP allows the browser PUT. The R2 bucket CORS policy must also allow PUT from the app origins you support.
+Set `UPLOAD_POST_R2_CONNECT_DOMAINS` on the MCP host to the comma-separated origins used by the backend's R2 signed URLs when they differ from the defaults (for example `https://<account>.r2.cloudflarestorage.com,https://<bucket>.<account>.r2.cloudflarestorage.com`) so the ChatGPT component CSP allows the browser PUT.
+
+The R2 bucket CORS policy must allow browser uploads. A restrictive policy can include your actual widget origin; for fastest validation, use:
+
+```json
+[
+  {
+    "AllowedOrigins": ["*"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
 
 ---
 

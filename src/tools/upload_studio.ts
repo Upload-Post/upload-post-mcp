@@ -8,10 +8,18 @@ const WIDGET_DOMAIN = (
   process.env.OAUTH_ISSUER ??
   "https://mcp.upload-post.com"
 ).replace(/\/$/, "");
-const R2_CONNECT_DOMAIN = (
+const DEFAULT_R2_CONNECT_DOMAINS = [
+  "https://0de16d5f5e344fe4757ecd62640a9ea3.r2.cloudflarestorage.com",
+  "https://upload-post-schedulers-eu3.0de16d5f5e344fe4757ecd62640a9ea3.r2.cloudflarestorage.com",
+];
+const R2_CONNECT_DOMAINS = (
+  process.env.UPLOAD_POST_R2_CONNECT_DOMAINS ??
   process.env.UPLOAD_POST_R2_CONNECT_DOMAIN ??
-  "https://0de16d5f5e344fe4757ecd62640a9ea3.r2.cloudflarestorage.com"
-).replace(/\/$/, "");
+  DEFAULT_R2_CONNECT_DOMAINS.join(",")
+)
+  .split(",")
+  .map((domain) => domain.trim().replace(/\/$/, ""))
+  .filter(Boolean);
 
 const InstagramVideoMediaType = z.enum(["REELS", "STORIES"]);
 
@@ -20,7 +28,7 @@ const resourceMeta = {
     prefersBorder: true,
     domain: WIDGET_DOMAIN,
     csp: {
-      connectDomains: [R2_CONNECT_DOMAIN],
+      connectDomains: R2_CONNECT_DOMAINS,
       resourceDomains: [],
     },
   },
@@ -29,7 +37,7 @@ const resourceMeta = {
   "openai/widgetPrefersBorder": true,
   "openai/widgetDomain": WIDGET_DOMAIN,
   "openai/widgetCSP": {
-    connect_domains: [R2_CONNECT_DOMAIN],
+    connect_domains: R2_CONNECT_DOMAINS,
     resource_domains: [],
   },
 };
@@ -651,6 +659,26 @@ const uploadStudioHtml = `<!doctype html>
           return result;
         }
 
+        function originFromUrl(value) {
+          try {
+            return new URL(value).origin;
+          } catch (error) {
+            return "unknown upload origin";
+          }
+        }
+
+        function explainBrowserUploadFailure(error, uploadUrl) {
+          var detail = error && error.message ? error.message : String(error || "Failed to fetch");
+          var browserOrigin = window.location && window.location.origin ? window.location.origin : "unknown browser origin";
+          var uploadOrigin = originFromUrl(uploadUrl);
+          return new Error(
+            "Browser could not upload the file to Upload-Post/R2 staging (" + detail + "). " +
+            "This is usually R2 CORS or widget CSP. Allow the R2 bucket origin " + uploadOrigin +
+            " to receive PUT requests from " + browserOrigin +
+            " (or use AllowedOrigins '*'), with methods PUT, GET, HEAD and headers Content-Type or '*'."
+          );
+        }
+
         async function uploadLocalFileToStaging(file) {
           var contentType = state.mimeType || file.type || "video/mp4";
           setStatus("Creating Upload-Post upload URL…", "warn");
@@ -668,11 +696,17 @@ const uploadStudioHtml = `<!doctype html>
           setStatus("Uploading video to Upload-Post staging…", "warn");
           var putHeaders = Object.assign({}, created.headers || {});
           if (!putHeaders["Content-Type"]) putHeaders["Content-Type"] = contentType;
-          var put = await fetch(created.upload_url, {
-            method: created.method || "PUT",
-            headers: putHeaders,
-            body: file
-          });
+          var put;
+          try {
+            put = await fetch(created.upload_url, {
+              method: created.method || "PUT",
+              mode: "cors",
+              headers: putHeaders,
+              body: file
+            });
+          } catch (error) {
+            throw explainBrowserUploadFailure(error, created.upload_url);
+          }
           if (!put.ok) {
             throw new Error("R2 upload failed with HTTP " + put.status + ".");
           }
