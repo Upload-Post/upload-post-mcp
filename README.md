@@ -125,6 +125,7 @@ npx @modelcontextprotocol/inspector node dist/index.js
 | `UPLOAD_POST_API_KEY`     | stdio   | — (required)                       | Single user's Upload-Post API key. **Ignored in `--http` mode** — keys come per request. |
 | `UPLOAD_POST_BASE_URL`    | both    | `https://api.upload-post.com/api`  | Override for self-hosted / staging.      |
 | `UPLOAD_POST_MCP_PORT`    | http    | `8080`                             | Port for `--http` mode.                  |
+| `OPENAI_APPS_CHALLENGE_TOKEN` | http | Current Upload-Post challenge token | Optional override for ChatGPT Apps domain verification at `/.well-known/openai-apps-challenge`. |
 
 CLI flags:
 

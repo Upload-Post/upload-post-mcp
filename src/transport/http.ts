@@ -34,6 +34,9 @@ interface Session {
   server: McpServer;
 }
 
+const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
+const DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN = "900B9c5XudnvLv1et2HdZ9WG2_H85jGPciJ7c8QBHjY";
+
 /**
  * Multi-tenant streamable-HTTP host.
  *
@@ -82,6 +85,18 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ ok: true, oauth: oauthCfg.enabled }));
+      return;
+    }
+
+    // ----- ChatGPT Apps domain verification -----------------------------
+    if (method === "GET" && requestPath(url) === OPENAI_APPS_CHALLENGE_PATH) {
+      const token =
+        process.env.OPENAI_APPS_CHALLENGE_TOKEN?.trim() ||
+        DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN;
+      res.statusCode = 200;
+      res.setHeader("content-type", "text/plain; charset=utf-8");
+      res.setHeader("cache-control", "no-store");
+      res.end(token);
       return;
     }
 
@@ -194,6 +209,11 @@ function sendUnauthorized(res: ServerResponse, oauthEnabled: boolean, issuer: st
           : ""),
     })
   );
+}
+
+function requestPath(url: string): string {
+  const queryStart = url.indexOf("?");
+  return queryStart >= 0 ? url.slice(0, queryStart) : url;
 }
 
 /**
