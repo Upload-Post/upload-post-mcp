@@ -778,7 +778,7 @@ const uploadStudioHtml = `<!doctype html>
           var result = await openai.callTool("upload_video", payload);
           els.result.style.display = "block";
           els.result.textContent = resultText(result);
-          setStatus("Upload started. Poll status with request_id.", "ok");
+          setStatus("Upload queued. You can close this window; request_id is only for optional status checks.", "ok");
         }
 
         els.pickButton.addEventListener("click", function () {
