@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
-import { safe } from "../schemas.js";
+import { genericResultOutputSchema, safe } from "../schemas.js";
 
 export function registerUserTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
@@ -12,6 +12,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       description:
         "Validate the current API key and return account information. Useful as a first call to confirm credentials before doing real work.",
       inputSchema: {},
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -27,6 +28,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       title: "List profiles",
       description: "List all Upload-Post profiles in the account, with their connected social accounts.",
       inputSchema: {},
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -44,6 +46,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       inputSchema: {
         username: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: false,
@@ -61,6 +64,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       inputSchema: {
         username: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: false,
@@ -93,6 +97,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
             "Force the connection page language for this profile. When omitted, the page auto-detects the visitor's browser language and falls back to English."
           ),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: false,
@@ -113,6 +118,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       inputSchema: {
         jwt: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,

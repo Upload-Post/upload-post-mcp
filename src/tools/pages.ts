@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
-import { safe } from "../schemas.js";
+import { genericResultOutputSchema, safe } from "../schemas.js";
 
 export function registerPagesTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
@@ -13,6 +13,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       inputSchema: {
         profile: z.string().optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -30,6 +31,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       inputSchema: {
         profile: z.string().optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -47,6 +49,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       inputSchema: {
         profile: z.string().optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -64,6 +67,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       inputSchema: {
         profile: z.string().optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -87,6 +91,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
         profile: z.string(),
         locationId: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: true,
@@ -110,6 +115,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
         profile: z.string().optional(),
         limit: z.number().int().positive().max(200).optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,

@@ -75,9 +75,14 @@ export const schedulingFields = {
     .describe("Return immediately with request_id (default true)."),
 };
 
+export const genericResultOutputSchema = {
+  result: z.unknown(),
+};
+
 /** Standard MCP-style content envelope. */
 export type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
+  structuredContent?: { result: unknown };
   isError?: boolean;
 };
 
@@ -92,6 +97,7 @@ export function ok(payload: unknown): ToolResult {
             : JSON.stringify(payload, null, 2),
       },
     ],
+    structuredContent: { result: payload },
   };
 }
 

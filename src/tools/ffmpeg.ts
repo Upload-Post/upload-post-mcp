@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
-import { safe } from "../schemas.js";
+import { genericResultOutputSchema, safe } from "../schemas.js";
 
 /**
  * FFmpeg editor endpoints. Note the path is `/ffmpeg-editor` (sibling of the
@@ -27,6 +27,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
           .describe("Operation-specific parameters (start/end seconds, output format, …)."),
         outputFilename: z.string().optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: false,
@@ -49,6 +50,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       inputSchema: {
         jobId: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -68,6 +70,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       inputSchema: {
         jobId: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -85,6 +88,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       title: "Get FFmpeg quota usage",
       description: "Monthly FFmpeg processing minutes used vs. plan allowance.",
       inputSchema: {},
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,

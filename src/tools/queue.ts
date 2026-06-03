@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
-import { safe } from "../schemas.js";
+import { genericResultOutputSchema, safe } from "../schemas.js";
 
 export function registerQueueTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
@@ -13,6 +13,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
       inputSchema: {
         profile_username: z.string().optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -36,6 +37,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
         profile_username: z.string().optional(),
         settings: z.record(z.unknown()),
       },
+      outputSchema: genericResultOutputSchema,
       // Replaces the existing config wholesale → mark as destructive so callers
       // confirm before overwriting.
       annotations: {
@@ -61,6 +63,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
         profile_username: z.string().optional(),
         nextSlot: z.boolean().optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,

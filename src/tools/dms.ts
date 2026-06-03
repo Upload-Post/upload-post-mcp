@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
-import { safe } from "../schemas.js";
+import { genericResultOutputSchema, safe } from "../schemas.js";
 
 export function registerDmTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
@@ -18,6 +18,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
         recipientUsername: z.string().optional(),
         message: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: true,
@@ -41,6 +42,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
         platform: z.string().optional(),
         limit: z.number().int().positive().max(200).optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -70,6 +72,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
             "Free-form config / filters. For 'start' typically includes triggers, reply templates, target accounts. For 'status'/'logs' (GET actions) the fields are passed as query params — e.g. {include_inactive: true} to list stopped monitors."
           ),
       },
+      outputSchema: genericResultOutputSchema,
       // `action` can be read-only (status/logs) or destructive (stop/delete). We
       // report the worst case (destructive) so callers default to confirmation.
       annotations: {

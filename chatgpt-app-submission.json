@@ -1,0 +1,652 @@
+{
+  "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "Upload-Post",
+    "subtitle": "Manage social posts",
+    "description": "Upload-Post helps users publish, schedule, analyze, and manage social media posts from ChatGPT. It supports video, photo, text, and document publishing; scheduling and queue management; analytics; profile management; Instagram comments and DMs; browser-based media staging; and FFmpeg media processing across connected social platforms.",
+    "category": "BUSINESS"
+  },
+  "tools": {
+    "get_analytics": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves aggregated analytics for a profile without creating or updating records.",
+        "open_world_justification": "Only returns existing analytics data and does not post to social platforms or external systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, publish, or cancel anything."
+      }
+    },
+    "get_total_impressions": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves impression totals and optional metric breakdowns without changing account data.",
+        "open_world_justification": "Only reads stored metrics and does not affect public or third-party state.",
+        "destructive_justification": "Does not remove, overwrite, send, publish, or cancel any content."
+      }
+    },
+    "get_post_analytics": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves metrics for an existing post request without modifying the post.",
+        "open_world_justification": "Only reads analytics data and does not write to connected platforms.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or publish anything."
+      }
+    },
+    "get_platform_metrics": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Returns reference information about available metrics without changing any user data.",
+        "open_world_justification": "Does not interact with public platforms or external write endpoints.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "get_post_comments": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists comments for an Instagram post without replying or changing the post.",
+        "open_world_justification": "Only reads comments and does not create public replies or messages.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "reply_to_comment": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Sends a private DM reply to an Instagram commenter, which changes conversation state.",
+        "open_world_justification": "Sends a message through a connected external social platform.",
+        "destructive_justification": "The sent message is user-visible and cannot be reliably undone after delivery."
+      }
+    },
+    "public_reply_to_comment": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Posts a public reply under an Instagram comment, changing platform state.",
+        "open_world_justification": "Creates visible content on a connected social platform.",
+        "destructive_justification": "The public reply is externally visible and may not be reversible through this tool."
+      }
+    },
+    "send_dm": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Sends a direct message to a recipient, which changes external conversation state.",
+        "open_world_justification": "Transmits a message through a connected social platform.",
+        "destructive_justification": "The delivered DM is user-visible and cannot be reliably undone after sending."
+      }
+    },
+    "list_dm_conversations": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists recent DM conversations without sending, editing, or deleting messages.",
+        "open_world_justification": "Only reads conversation metadata and does not write to external platforms.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "manage_autodms": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Can start, pause, resume, stop, or delete AutoDM monitors, which changes automation state.",
+        "open_world_justification": "Controls automations that can send messages on connected social platforms.",
+        "destructive_justification": "Can stop or delete active DM automations and can enable irreversible outgoing messages."
+      }
+    },
+    "submit_ffmpeg_job": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a private media processing job and consumes processing resources.",
+        "open_world_justification": "Processes media in Upload-Post infrastructure without publishing to public platforms.",
+        "destructive_justification": "Does not delete or overwrite source media and only creates a derived processing job."
+      }
+    },
+    "get_ffmpeg_job": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Polls an existing FFmpeg job status without modifying it.",
+        "open_world_justification": "Only reads private processing status and does not publish or message externally.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "download_ffmpeg_result": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Returns a download URL for an existing processing result without changing it.",
+        "open_world_justification": "Only retrieves private result metadata and does not create public platform content.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or publish anything."
+      }
+    },
+    "get_ffmpeg_consumption": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads monthly FFmpeg usage and quota information without changing resources.",
+        "open_world_justification": "Only returns private account usage and does not affect external systems.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "create_media_upload": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a temporary staging upload record and signed R2 upload URL.",
+        "open_world_justification": "Allocates temporary media staging in external storage for later publishing.",
+        "destructive_justification": "Does not delete existing media or publish content; it only creates a temporary upload target."
+      }
+    },
+    "complete_media_upload": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Validates a staged upload and marks the temporary media object as uploaded.",
+        "open_world_justification": "Completes temporary external storage state so the media can be passed to publishing tools.",
+        "destructive_justification": "Does not delete or overwrite existing media and does not publish by itself."
+      }
+    },
+    "get_media_upload": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads status for an existing temporary media upload without changing it.",
+        "open_world_justification": "Only retrieves private staging metadata and does not publish externally.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "delete_media_upload": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes a temporary staged media object and updates its staging status.",
+        "open_world_justification": "Deletes an object from external storage used for browser media staging.",
+        "destructive_justification": "Removes the staged upload object before its automatic expiration."
+      }
+    },
+    "get_facebook_pages": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists connected Facebook pages without changing account or page settings.",
+        "open_world_justification": "Only reads available page metadata and does not post to Facebook.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "get_linkedin_pages": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists connected LinkedIn pages without changing them.",
+        "open_world_justification": "Only reads page metadata and does not publish to LinkedIn.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "get_pinterest_boards": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists Pinterest boards available to a profile without modifying them.",
+        "open_world_justification": "Only reads board metadata and does not create Pins.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "get_google_business_locations": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists Google Business locations available for posting without changing selection.",
+        "open_world_justification": "Only reads location metadata and does not publish externally.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "select_google_business_location": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Updates which Google Business location a profile will use for future posts.",
+        "open_world_justification": "Changes posting configuration for a connected external Google Business account.",
+        "destructive_justification": "Does not delete or overwrite posted content and only changes an active location setting."
+      }
+    },
+    "get_reddit_detailed_posts": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves metadata for recent Reddit posts without changing them.",
+        "open_world_justification": "Only reads existing Reddit post details and does not post or reply.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "get_queue_settings": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves queue configuration without changing any settings.",
+        "open_world_justification": "Only reads private scheduling configuration and does not publish externally.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "update_queue_settings": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Replaces the posting queue configuration for a profile.",
+        "open_world_justification": "Changes scheduling behavior that controls future public posts.",
+        "destructive_justification": "Overwrites the previous queue configuration with the supplied settings."
+      }
+    },
+    "preview_queue": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Previews upcoming queue slots without adding or changing queued posts.",
+        "open_world_justification": "Only reads scheduling projections and does not affect external platforms.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "list_scheduled": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists currently scheduled posts without modifying them.",
+        "open_world_justification": "Only reads private scheduled-post data and does not publish externally.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "cancel_scheduled": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Cancels a scheduled post, changing the user's posting plan.",
+        "open_world_justification": "Prevents a planned public social post from being published.",
+        "destructive_justification": "Removes a scheduled publishing job before it runs."
+      }
+    },
+    "edit_scheduled": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Changes the date or timezone of a scheduled post.",
+        "open_world_justification": "Alters when content will be published to an external platform.",
+        "destructive_justification": "Overwrites the existing schedule for a queued publishing job."
+      }
+    },
+    "get_status": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Checks an async upload status by request ID without changing the upload.",
+        "open_world_justification": "Only reads private job status and does not publish or message externally.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "get_job_status": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Checks a scheduled or queued job status without changing it.",
+        "open_world_justification": "Only reads private job status and does not affect external platforms.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "get_history": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves paginated upload history without changing any records.",
+        "open_world_justification": "Only reads account history and does not publish or message externally.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "get_media": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves recent media from connected accounts without changing it.",
+        "open_world_justification": "Only reads media metadata and does not publish, reply, or send messages.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
+    "upload_video": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Uploads, schedules, or queues a video post, changing Upload-Post and platform state.",
+        "open_world_justification": "Can publish or schedule video content on connected social platforms.",
+        "destructive_justification": "Creates or queues content but does not delete or overwrite existing posts."
+      }
+    },
+    "upload_photos": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Uploads, schedules, or queues photo posts, changing Upload-Post and platform state.",
+        "open_world_justification": "Can publish or schedule image content on connected social platforms.",
+        "destructive_justification": "Creates or queues content but does not delete or overwrite existing posts."
+      }
+    },
+    "upload_text": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Uploads, schedules, or queues a text post, changing Upload-Post and platform state.",
+        "open_world_justification": "Can publish or schedule text content on connected social platforms.",
+        "destructive_justification": "Creates or queues content but does not delete or overwrite existing posts."
+      }
+    },
+    "upload_document": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Uploads, schedules, or queues a LinkedIn document post.",
+        "open_world_justification": "Can publish or schedule document content on LinkedIn.",
+        "destructive_justification": "Creates or queues content but does not delete or overwrite existing posts."
+      }
+    },
+    "open_upload_studio": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Opens a browser UI with prefilled values and does not publish until the user acts in the widget.",
+        "open_world_justification": "The launcher itself does not write to external systems; publishing happens through separate widget-triggered tools.",
+        "destructive_justification": "Opening the UI does not delete, overwrite, revoke, send, publish, or cancel anything."
+      }
+    },
+    "get_account_info": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Validates credentials and returns account information without changing account state.",
+        "open_world_justification": "Only reads private account metadata and does not interact with public platforms.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, publish, or cancel anything."
+      }
+    },
+    "list_users": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists Upload-Post profiles without creating, updating, or deleting them.",
+        "open_world_justification": "Only reads private profile metadata and does not publish externally.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, publish, or cancel anything."
+      }
+    },
+    "create_user": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a new private Upload-Post profile in the user's account.",
+        "open_world_justification": "Creates internal profile state and does not publish to public platforms.",
+        "destructive_justification": "Adds a profile and does not delete or overwrite existing profiles."
+      }
+    },
+    "delete_user": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes an Upload-Post profile and disconnects its social accounts.",
+        "open_world_justification": "Changes private Upload-Post account state without publishing public content.",
+        "destructive_justification": "Permanently removes a profile and its connected social-account links."
+      }
+    },
+    "generate_jwt": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a JWT and connection URL for an embedded social-account connection flow.",
+        "open_world_justification": "Generates private connection credentials and does not publish to external platforms.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, publish, or cancel anything."
+      }
+    },
+    "validate_jwt": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Validates an existing JWT and returns its status without changing it.",
+        "open_world_justification": "Only reads token validity and does not publish or message externally.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, publish, or cancel anything."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "Publish a provided video URL to Instagram Reels with an optimized caption.",
+      "user_prompt": "Publish this video URL to Instagram Reels using profile marketing and write a concise caption for launch week.",
+      "file_attachment_urls": null,
+      "tools_triggered": "upload_video",
+      "expected_output": "Queues or starts an async Instagram video upload and returns a request ID or job status summary.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Open the browser upload flow for an attached video file.",
+      "user_prompt": "Upload the attached video to Instagram, generate a caption, and use the profile automated-tests.",
+      "file_attachment_urls": null,
+      "tools_triggered": "open_upload_studio",
+      "expected_output": "Opens the Upload Studio with profile, platform, format, and caption prefilled so the user can select the file and publish asynchronously.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Schedule a text post on LinkedIn for a future time.",
+      "user_prompt": "Schedule a LinkedIn text post for next Monday at 10:00 Europe/Madrid using profile founders with copy about our product launch.",
+      "file_attachment_urls": null,
+      "tools_triggered": "upload_text",
+      "expected_output": "Creates a scheduled LinkedIn text post and returns scheduling status or a job identifier.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Inspect account profiles and connected pages before posting.",
+      "user_prompt": "Show my Upload-Post profiles and list the LinkedIn company pages available for the marketing profile.",
+      "file_attachment_urls": null,
+      "tools_triggered": "list_users, get_linkedin_pages",
+      "expected_output": "Returns available profiles and LinkedIn pages so the user can choose the correct posting target.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Review analytics for a profile and a specific post.",
+      "user_prompt": "Show analytics for profile marketing over the last month and then get the metrics for request abc123.",
+      "file_attachment_urls": null,
+      "tools_triggered": "get_analytics, get_post_analytics",
+      "expected_output": "Summarizes profile performance and the specific post metrics without modifying posts.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Reply to an Instagram comment by DM after reading comments.",
+      "user_prompt": "Find comments on this Instagram post and privately send the guide link to the commenter with comment ID 179999.",
+      "file_attachment_urls": null,
+      "tools_triggered": "get_post_comments, reply_to_comment",
+      "expected_output": "Lists relevant comments and sends the requested private reply only after the user identifies the target comment.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Create a short media-processing job and retrieve the result.",
+      "user_prompt": "Trim this public video URL from second 3 to 47, generate a processed file, and give me the download URL when ready.",
+      "file_attachment_urls": null,
+      "tools_triggered": "submit_ffmpeg_job, get_ffmpeg_job, download_ffmpeg_result",
+      "expected_output": "Creates a private FFmpeg job, polls until complete, and returns the processed media download details.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Preview and update queue settings for a profile.",
+      "user_prompt": "Show the next available queue slot for profile marketing, then update its posting queue to weekdays at 10:00 and 16:00.",
+      "file_attachment_urls": null,
+      "tools_triggered": "preview_queue, update_queue_settings",
+      "expected_output": "Shows upcoming queue availability and, after confirmation, updates the profile queue configuration.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Do not trigger for unrelated calendar management.",
+      "user_prompt": "Move my 3pm calendar meeting to tomorrow and invite the sales team.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because it does not manage calendars or meeting invitations.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for paid advertising or campaign spend.",
+      "user_prompt": "Boost my latest Instagram post with a $500 ad budget and target founders in Spain.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should explain that paid ad buying and budget management are outside its supported posting workflows.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for credential recovery or secret extraction.",
+      "user_prompt": "Find and show me the API keys or passwords for my connected Instagram account.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not retrieve or expose secrets and should direct the user to official account-management flows.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for unsupported inbox access outside social DM tools.",
+      "user_prompt": "Read my Gmail inbox and reply to the latest customer email.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because it does not access Gmail or email inboxes.",
+      "expected_output_url": null
+    }
+  ]
+}

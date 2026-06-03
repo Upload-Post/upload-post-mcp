@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
-import { safe } from "../schemas.js";
+import { genericResultOutputSchema, safe } from "../schemas.js";
 
 export function registerStatusTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
@@ -14,6 +14,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
       inputSchema: {
         requestId: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -32,6 +33,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
       inputSchema: {
         jobId: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -50,6 +52,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
         page: z.number().int().positive().optional(),
         limit: z.number().int().positive().max(200).optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -78,6 +81,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
           ),
         limit: z.number().int().positive().max(200).optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
-import { safe } from "../schemas.js";
+import { genericResultOutputSchema, safe } from "../schemas.js";
 
 const MediaType = z.enum(["video", "image", "document"]);
 
@@ -19,6 +19,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
         mediaType: MediaType.default("video").describe("Kind of media being uploaded."),
         source: z.string().optional().describe("Optional source label, e.g. mcp_chatgpt or mcp_claude."),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: true,
@@ -62,6 +63,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
       inputSchema: {
         uploadId: z.string().describe("upload_id returned by create_media_upload."),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: true,
@@ -91,6 +93,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
         uploadId: z.string(),
         includeUrl: z.boolean().optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -119,6 +122,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
       inputSchema: {
         uploadId: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: true,

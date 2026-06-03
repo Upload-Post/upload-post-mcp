@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
-import { safe } from "../schemas.js";
+import { genericResultOutputSchema, safe } from "../schemas.js";
 
 export function registerScheduleTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
@@ -11,6 +11,7 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
       title: "List scheduled posts",
       description: "List all currently scheduled (not-yet-published) posts.",
       inputSchema: {},
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -28,6 +29,7 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
       inputSchema: {
         jobId: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: true,
@@ -47,6 +49,7 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
         scheduledDate: z.string().optional(),
         timezone: z.string().optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: true,

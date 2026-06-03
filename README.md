@@ -26,7 +26,7 @@ The server runs on your machine, spawned by the MCP client. Add to `~/.claude/mc
 }
 ```
 
-Get your API key at <https://app.upload-post.com> → *API Keys*. Restart the client — you should see 51 `upload-post` tools.
+Get your API key at <https://app.upload-post.com> → *API Keys*. Restart the client — you should see 45 `upload-post` tools.
 
 ### B) Hosted HTTP (multi-tenant) — share one server with many users
 

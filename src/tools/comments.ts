@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
-import { safe } from "../schemas.js";
+import { genericResultOutputSchema, safe } from "../schemas.js";
 
 export function registerCommentTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
@@ -16,6 +16,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         postId: z.string().optional(),
         postUrl: z.string().optional(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: false,
@@ -40,6 +41,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         commentId: z.string(),
         message: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: true,
@@ -63,6 +65,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         commentId: z.string(),
         message: z.string(),
       },
+      outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
         openWorldHint: true,
