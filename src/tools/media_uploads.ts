@@ -11,7 +11,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
     {
       title: "Create media upload",
       description:
-        "Create a short-lived signed R2 upload URL for a local media file. Use this before publishing files from ChatGPT/Claude that are not already available at a public URL. The returned upload_url accepts one HTTP PUT with the exact Content-Type header. Staging media is deleted after 24 hours; scheduled posts are safe because upload_video copies the media into durable scheduler storage.",
+        "Internal/app staging helper for clients that can directly PUT file bytes to the returned upload_url. Do NOT use this directly from the ChatGPT/claude.ai model for attached files: the model/server environment cannot read or upload ChatGPT attachment bytes. For ChatGPT attached video uploads, call open_upload_studio first; the Studio browser component will call this tool after the user selects the file. Use this directly only in MCP clients that truly hold the file bytes and can perform the HTTP PUT themselves. Staging media is deleted after 24 hours; scheduled posts are safe because upload_video copies the media into durable scheduler storage.",
       inputSchema: {
         filename: z.string().describe("Original filename, e.g. clip.mp4."),
         contentType: z.string().describe("MIME type, e.g. video/mp4."),
@@ -25,6 +25,9 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
         destructiveHint: false,
       },
       _meta: {
+        ui: {
+          visibility: ["app"],
+        },
         "openai/widgetAccessible": true,
         "openai/toolInvocation/invoking": "Creating upload URL…",
         "openai/toolInvocation/invoked": "Upload URL created",
@@ -55,7 +58,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
     {
       title: "Complete media upload",
       description:
-        "Validate a previously-created media upload after the client PUTs the file to upload_url. Returns a temporary media_url that can be passed to upload_video/upload_photos immediately.",
+        "Internal/app staging helper. Validate a media upload only after the browser/client has successfully PUT the actual file bytes to upload_url. Do NOT call this immediately after create_media_upload from the model; without the intervening PUT, completion will fail or produce no publishable media. Returns a temporary media_url that can be passed to upload_video/upload_photos immediately.",
       inputSchema: {
         uploadId: z.string().describe("upload_id returned by create_media_upload."),
       },
@@ -65,6 +68,9 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
         destructiveHint: false,
       },
       _meta: {
+        ui: {
+          visibility: ["app"],
+        },
         "openai/widgetAccessible": true,
         "openai/toolInvocation/invoking": "Completing media upload…",
         "openai/toolInvocation/invoked": "Media upload completed",
@@ -79,7 +85,8 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
     "get_media_upload",
     {
       title: "Get media upload",
-      description: "Get status for a short-lived MCP media upload. Optionally returns a fresh temporary media_url.",
+      description:
+        "Internal/app staging helper. Get status for a short-lived MCP media upload. Optionally returns a fresh temporary media_url for an already-uploaded staging object.",
       inputSchema: {
         uploadId: z.string(),
         includeUrl: z.boolean().optional(),
@@ -90,6 +97,9 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
         destructiveHint: false,
       },
       _meta: {
+        ui: {
+          visibility: ["app"],
+        },
         "openai/widgetAccessible": true,
       },
     },
@@ -105,7 +115,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
     {
       title: "Delete media upload",
       description:
-        "Delete a short-lived MCP staging media upload from R2. This does not delete scheduler durable copies created later by upload_video.",
+        "Internal/app staging helper. Delete a short-lived MCP staging media upload from R2. This does not delete scheduler durable copies created later by upload_video.",
       inputSchema: {
         uploadId: z.string(),
       },
@@ -115,6 +125,9 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
         destructiveHint: true,
       },
       _meta: {
+        ui: {
+          visibility: ["app"],
+        },
         "openai/widgetAccessible": true,
         "openai/toolInvocation/invoking": "Deleting media upload…",
         "openai/toolInvocation/invoked": "Media upload deleted",
@@ -125,4 +138,3 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
     )
   );
 }
-
