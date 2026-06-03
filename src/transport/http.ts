@@ -67,6 +67,20 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     const url = req.url ?? "";
     const method = req.method ?? "GET";
 
+    // ----- ChatGPT Apps domain verification -----------------------------
+    // This must be reachable publicly before Origin validation because the
+    // OpenAI verifier may include its own browser/developer-console Origin.
+    if (method === "GET" && requestPath(url) === OPENAI_APPS_CHALLENGE_PATH) {
+      const token =
+        process.env.OPENAI_APPS_CHALLENGE_TOKEN?.trim() ||
+        DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN;
+      res.statusCode = 200;
+      res.setHeader("content-type", "text/plain; charset=utf-8");
+      res.setHeader("cache-control", "no-store");
+      res.end(token);
+      return;
+    }
+
     // ----- Defense-in-depth: Origin validation --------------------------
     // The MCP spec recommends rejecting requests whose `Origin` header (when
     // present) is not on a known allow-list, to prevent DNS-rebinding attacks
@@ -85,18 +99,6 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ ok: true, oauth: oauthCfg.enabled }));
-      return;
-    }
-
-    // ----- ChatGPT Apps domain verification -----------------------------
-    if (method === "GET" && requestPath(url) === OPENAI_APPS_CHALLENGE_PATH) {
-      const token =
-        process.env.OPENAI_APPS_CHALLENGE_TOKEN?.trim() ||
-        DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN;
-      res.statusCode = 200;
-      res.setHeader("content-type", "text/plain; charset=utf-8");
-      res.setHeader("cache-control", "no-store");
-      res.end(token);
       return;
     }
 
