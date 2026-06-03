@@ -10,13 +10,14 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
     {
       title: "Send a direct message",
       description:
-        "Send a DM to a recipient on a connected platform. The exact required fields depend on the platform (e.g. Instagram needs `recipientId`).",
+        "Send an Instagram DM to a recipient from a connected Upload-Post profile. Use a recipient_id returned by Instagram comments or DM conversation tools.",
       inputSchema: {
-        user: z.string(),
-        platform: z.string().describe("'instagram', 'x', 'tiktok', …"),
-        recipientId: z.string().optional(),
-        recipientUsername: z.string().optional(),
-        message: z.string(),
+        user: z.string().describe("Upload-Post profile name that owns the connected Instagram account."),
+        platform: z.literal("instagram").describe("DM platform. Currently only Instagram DMs are supported."),
+        recipient_id: z
+          .string()
+          .describe("Instagram recipient/commenter ID. Required by the Upload-Post API."),
+        message: z.string().min(1).describe("DM body to send."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -61,16 +62,39 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
     {
       title: "Manage automatic DM monitoring",
       description:
-        "Control the autoDMs background worker for a profile. Choose `action` from: 'start', 'stop', 'pause', 'resume', 'delete', 'status', 'logs'. The body fields you need depend on the action — pass any extra config under `config`. For `status`, pass `include_inactive: true` in `config` to also return stopped and expired monitors.",
+        "Control Instagram AutoDM monitors. For action='start', provide post_url, reply_message, and profile_username. For stop/pause/resume/delete/logs, provide monitor_id. For status, optionally set include_inactive=true.",
       inputSchema: {
         action: z.enum(["start", "stop", "pause", "resume", "delete", "status", "logs"]),
-        user: z.string().optional(),
-        config: z
-          .record(z.unknown())
+        profile_username: z
+          .string()
           .optional()
-          .describe(
-            "Free-form config / filters. For 'start' typically includes triggers, reply templates, target accounts. For 'status'/'logs' (GET actions) the fields are passed as query params — e.g. {include_inactive: true} to list stopped monitors."
-          ),
+          .describe("Upload-Post profile name. Required when action='start'."),
+        post_url: z
+          .string()
+          .optional()
+          .describe("Instagram post URL to monitor. Required when action='start'."),
+        reply_message: z
+          .string()
+          .optional()
+          .describe("DM text sent to matching commenters. Required when action='start'."),
+        monitoring_interval: z
+          .number()
+          .int()
+          .min(15)
+          .optional()
+          .describe("Polling interval in minutes for action='start'. Minimum is 15."),
+        trigger_keywords: z
+          .union([z.string(), z.array(z.string())])
+          .optional()
+          .describe("Optional keyword or keywords; only comments containing these terms receive a DM."),
+        monitor_id: z
+          .string()
+          .optional()
+          .describe("AutoDM monitor ID. Required for stop, pause, resume, delete, and logs."),
+        include_inactive: z
+          .boolean()
+          .optional()
+          .describe("For action='status', include stopped and expired monitors when true."),
       },
       outputSchema: genericResultOutputSchema,
       // `action` can be read-only (status/logs) or destructive (stop/delete). We
@@ -82,20 +106,19 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
       },
     },
     safe(async (args) => {
-      const { action, user, config } = args as {
+      const { action, ...rest } = args as {
         action: string;
-        user?: string;
-        config?: Record<string, unknown>;
+        [key: string]: unknown;
       };
       const isGet = action === "status" || action === "logs";
       const path = `/uploadposts/autodms/${action}`;
       if (isGet) {
         return client.request("GET", path, {
-          query: compact({ user, ...(config ?? {}) }),
+          query: compact(rest),
         });
       }
       return client.request("POST", path, {
-        body: compact({ user, ...(config ?? {}) }),
+        body: compact(rest),
       });
     })
   );

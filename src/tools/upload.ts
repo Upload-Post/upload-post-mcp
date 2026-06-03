@@ -21,6 +21,37 @@ import {
  */
 const MAX_INLINE_MB = Number(process.env.UPLOAD_POST_MAX_INLINE_MB ?? 100);
 
+const VideoPlatformOptions = z
+  .object({
+    instagramMediaType: z
+      .enum(["REELS", "STORIES"])
+      .optional()
+      .describe("Instagram video placement. Use REELS for Reels, STORIES for Stories."),
+    tiktokPrivacyLevel: z
+      .string()
+      .optional()
+      .describe("TikTok privacy value, e.g. PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, SELF_ONLY."),
+    youtubePrivacyStatus: z
+      .enum(["public", "private", "unlisted"])
+      .optional()
+      .describe("YouTube visibility for the uploaded video."),
+    youtubePlaylistId: z
+      .union([z.string(), z.array(z.string())])
+      .optional()
+      .describe("One YouTube playlist ID, or an array of playlist IDs, to add the uploaded video to."),
+    facebookPageId: z.string().optional().describe("Facebook Page ID to publish to."),
+    linkedinPageId: z.string().optional().describe("LinkedIn organization/page ID to publish to."),
+    pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to."),
+    googleBusinessLocationId: z
+      .string()
+      .optional()
+      .describe("Google Business location ID to publish to."),
+  })
+  .passthrough()
+  .describe(
+    "Flat platform-specific override object. Use the documented camelCase keys directly; unknown keys are forwarded unchanged for newer platform options."
+  );
+
 /** Strip a leading `data:<mime>;base64,` prefix if present. */
 function stripDataUri(input: string): string {
   const match = /^data:[^;,]*;base64,/i.exec(input);
@@ -96,13 +127,15 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
             "Optional filename (e.g. 'clip.mp4') used only to pick the temp file extension when videoBase64 is given. Defaults to .mp4."
           ),
         user: z.string().describe("Profile name (Upload-Post user)."),
-        platforms: z.array(VideoPlatform).min(1),
+        platforms: z
+          .array(VideoPlatform)
+          .min(1)
+          .describe("Required array of platform identifiers, e.g. ['instagram']. Never pass a single string."),
         title: z.string().optional().describe("Caption / title."),
         description: z.string().optional(),
         firstComment: z.string().optional(),
         ...schedulingFields,
-        platformOptions: z
-          .record(z.unknown())
+        platformOptions: VideoPlatformOptions
           .optional()
           .describe(
             "Platform-specific overrides as a flat object (camelCase keys), e.g. { tiktokPrivacyLevel: 'PUBLIC_TO_EVERYONE', youtubePrivacyStatus: 'public', youtubePlaylistId: 'PLxxxxxxxxxxxx', facebookPageId: '123' }. `youtubePlaylistId` may also be an array or a comma-separated list of playlist IDs to add the uploaded video to."

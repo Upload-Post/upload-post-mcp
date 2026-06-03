@@ -32,10 +32,34 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
     {
       title: "Update queue settings",
       description:
-        "Replace the posting-queue configuration. Pass the full desired settings object under `settings`.",
+        "Update posting queue configuration for a profile. Fields are flat, not nested: timezone, slots, days_of_week, and max_posts_per_slot.",
       inputSchema: {
-        profile_username: z.string().optional(),
-        settings: z.record(z.unknown()),
+        profile_username: z.string().describe("Upload-Post profile name to update."),
+        timezone: z
+          .string()
+          .optional()
+          .describe("IANA timezone, e.g. Europe/Madrid or America/New_York."),
+        slots: z
+          .array(
+            z.object({
+              hour: z.number().int().min(0).max(23).describe("Hour in 24-hour local time."),
+              minute: z.number().int().min(0).max(59).optional().describe("Minute. Defaults to 0."),
+            })
+          )
+          .max(24)
+          .optional()
+          .describe("Posting slots sorted by local time, e.g. [{hour: 10, minute: 0}, {hour: 16, minute: 0}]."),
+        days_of_week: z
+          .array(z.number().int().min(0).max(6))
+          .optional()
+          .describe("Allowed posting days where 0=Monday and 6=Sunday."),
+        max_posts_per_slot: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Maximum posts allowed in the same queue slot."),
       },
       outputSchema: genericResultOutputSchema,
       // Replaces the existing config wholesale → mark as destructive so callers

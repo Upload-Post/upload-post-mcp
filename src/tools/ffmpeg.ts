@@ -4,28 +4,31 @@ import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
 import { genericResultOutputSchema, safe } from "../schemas.js";
 
-/**
- * FFmpeg editor endpoints. Note the path is `/ffmpeg-editor` (sibling of the
- * other `/uploadposts/*` resources), as documented at
- * https://docs.upload-post.com/llm.txt — Media Processing.
- */
 export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
     "submit_ffmpeg_job",
     {
       title: "Submit FFmpeg processing job",
       description:
-        "Submit an FFmpeg job (transcode, trim, watermark, generate thumbnail, …). Returns a `job_id` you can poll with `get_ffmpeg_job`.",
+        "Submit a private FFmpeg processing job through Upload-Post. Provide `input_url` for one input, or `files` for multiple public URLs. Optionally provide `full_command` beginning with ffmpeg for explicit trim/transcode/watermark/thumbnail commands. Returns a `job_id` you can poll with `get_ffmpeg_job`.",
       inputSchema: {
-        sourceUrl: z.string().describe("Public URL of the input media."),
-        operation: z
+        input_url: z
           .string()
-          .describe("Operation name: 'transcode', 'trim', 'watermark', 'thumbnail', etc."),
-        params: z
-          .record(z.unknown())
           .optional()
-          .describe("Operation-specific parameters (start/end seconds, output format, …)."),
-        outputFilename: z.string().optional(),
+          .describe("Public URL of the input media. Use this for a single source file."),
+        files: z
+          .array(z.string())
+          .min(1)
+          .optional()
+          .describe("Public URLs of multiple input media files, when the job needs more than one source."),
+        full_command: z
+          .string()
+          .optional()
+          .describe("Optional explicit command. Must start with `ffmpeg`; shell metacharacters are rejected by the API."),
+        output_filename: z
+          .string()
+          .optional()
+          .describe("Optional preferred output filename, e.g. clip.mp4 or thumbnail.jpg."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -34,11 +37,20 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
         destructiveHint: false,
       },
     },
-    safe(async (args) =>
-      client.request("POST", "/ffmpeg-editor", {
-        body: compact(args as Record<string, unknown>),
-      })
-    )
+    safe(async (args) => {
+      const { sourceUrl, outputFilename, ...rest } = args as {
+        sourceUrl?: string;
+        outputFilename?: string;
+        [key: string]: unknown;
+      };
+      return client.request("POST", "/uploadposts/ffmpeg/jobs/upload", {
+        body: compact({
+          ...rest,
+          input_url: rest.input_url ?? sourceUrl,
+          output_filename: rest.output_filename ?? outputFilename,
+        }),
+      });
+    })
   );
 
   server.registerTool(
@@ -58,7 +70,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       },
     },
     safe(async ({ jobId }) =>
-      client.request("GET", "/ffmpeg-editor/status", { query: { job_id: jobId } })
+      client.request("GET", `/uploadposts/ffmpeg/jobs/${encodeURIComponent(jobId as string)}`)
     )
   );
 
@@ -78,7 +90,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       },
     },
     safe(async ({ jobId }) =>
-      client.request("GET", "/ffmpeg-editor/download", { query: { job_id: jobId } })
+      client.request("GET", `/uploadposts/ffmpeg/jobs/${encodeURIComponent(jobId as string)}/download`)
     )
   );
 
@@ -95,6 +107,6 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
         destructiveHint: false,
       },
     },
-    safe(async () => client.request("GET", "/ffmpeg-editor/consumption"))
+    safe(async () => client.request("GET", "/uploadposts/ffmpeg/consumption"))
   );
 }
