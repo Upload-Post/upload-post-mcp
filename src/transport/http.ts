@@ -35,7 +35,7 @@ interface Session {
 }
 
 const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
-const DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN = "900B9c5XudnvLv1et2HdZ9WG2_H85jGPciJ7c8QBHjY";
+const DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN = "9O0B9c5XudnvLv1et2HdZ9WG2_H85jGPciJ7c8QBHjY";
 
 /**
  * Multi-tenant streamable-HTTP host.
