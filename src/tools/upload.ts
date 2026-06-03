@@ -26,6 +26,17 @@ function stripDataUri(input: string): string {
   return match ? input.slice(match[0].length) : input;
 }
 
+function looksLikeHostedAttachmentPath(input: string): boolean {
+  const value = input.trim().toLowerCase();
+  return (
+    value.startsWith("/mnt/data/") ||
+    value.includes("/mnt/data/") ||
+    value.startsWith("sandbox:/") ||
+    value.startsWith("attachment:") ||
+    value.startsWith("openai-file:")
+  );
+}
+
 /**
  * Decode inline base64 video bytes to a uniquely-named temp file and return its
  * path. Throws before allocating the full buffer is impossible, so we decode
@@ -63,13 +74,13 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
     {
       title: "Upload video",
       description:
-        "Publish a video to one or more platforms. Provide the video as EITHER `videoPathOrUrl` (a public/signed HTTPS URL or absolute local path) OR `videoBase64` (raw base64 or a data URI for clients that hold the bytes directly). In ChatGPT Apps, prefer `open_upload_studio` when the user needs to select a local ChatGPT file. Inline base64 is capped (default 100 MB) and is best for small/medium clips — prefer a URL for large videos. Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, facebookPageId, instagramMediaType, etc.).",
+        "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. Hosted clients such as ChatGPT and claude.ai cannot publish attached files by passing `/mnt/data`, sandbox, or mounted local paths; for those files, ALWAYS call `open_upload_studio` first so the browser stages the video to Upload-Post/R2, then publishes it. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, facebookPageId, instagramMediaType, etc.).",
       inputSchema: {
         videoPathOrUrl: z
           .string()
           .optional()
           .describe(
-            "Public/signed HTTPS URL of the video, or absolute local path. Provide this OR videoBase64."
+            "Public/signed HTTPS URL of the video. Absolute local paths are supported only for local/self-hosted MCP clients sharing the same filesystem. Do not pass ChatGPT `/mnt/data` or sandbox paths; use open_upload_studio instead."
           ),
         videoBase64: z
           .string()
@@ -125,6 +136,11 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
       if (videoPathOrUrl && videoBase64) {
         throw new Error(
           "Provide only one of videoPathOrUrl or videoBase64, not both."
+        );
+      }
+      if (videoPathOrUrl && looksLikeHostedAttachmentPath(videoPathOrUrl)) {
+        throw new Error(
+          "This looks like a hosted ChatGPT/Claude attachment path. The MCP server cannot read mounted paths such as /mnt/data. Use open_upload_studio so the user can select the file in the browser and stage it through Upload-Post/R2, then publish from the returned media URL."
         );
       }
 

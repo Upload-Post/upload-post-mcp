@@ -61,7 +61,7 @@ export function registerUploadStudio(server: McpServer): void {
     {
       title: "Open upload studio",
       description:
-        "Open a ChatGPT UI for selecting a local video file, staging it in short-lived Upload-Post/R2 storage, and publishing it through Upload-Post. Use this when the user wants to upload a file from ChatGPT instead of providing a public URL.",
+        "Open the ChatGPT UI for local/attached video uploads. Use this FIRST when the user attaches a video in ChatGPT or claude.ai and does not provide a public HTTPS URL. Do not try upload_video with /mnt/data, sandbox, or mounted local paths first: hosted MCP servers cannot read those files. The Studio lets the user select the file in the browser, stages it in short-lived Upload-Post/R2 storage, and publishes it through Upload-Post.",
       inputSchema: {
         user: z.string().optional().describe("Optional Upload-Post profile name to prefill."),
         platforms: z.array(VideoPlatform).optional().describe("Optional platforms to preselect."),
