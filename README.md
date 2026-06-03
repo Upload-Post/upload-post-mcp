@@ -56,6 +56,7 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Group         | Tools |
 |---------------|-------|
 | Upload        | `upload_video`, `upload_photos`, `upload_text`, `upload_document`, `open_upload_studio` |
+| Media staging | `create_media_upload`, `complete_media_upload`, `get_media_upload`, `delete_media_upload` |
 | Status        | `get_status`, `get_job_status`, `get_history`, `get_media` |
 | Schedule      | `list_scheduled`, `cancel_scheduled`, `edit_scheduled` |
 | Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_platform_metrics` |
@@ -70,9 +71,13 @@ Async uploads return a `request_id`. The agent should poll `get_status` until `s
 
 ### ChatGPT video upload UI
 
-`open_upload_studio` renders a ChatGPT Apps component for file-based video publishing. The widget lets the user choose a local ChatGPT file or ChatGPT file-library item, gets a temporary ChatGPT download URL via the component bridge, then calls `upload_video` immediately with that signed URL.
+`open_upload_studio` renders a ChatGPT Apps component for file-based video publishing. The widget creates a short-lived Upload-Post/R2 staging upload, PUTs the local video directly to R2, completes the upload, then calls `upload_video` with the returned temporary media URL.
 
-Use it when a ChatGPT user says they want to upload a video file from the chat. For scheduled posts or long-lived media reuse, prefer a durable Upload-Post/R2 URL once the media has been ingested by your backend.
+The staging object is deleted after 24 hours whether it is used or not. Scheduled/queued posts remain safe because `upload_video` copies the temporary URL into the existing durable scheduler storage before execution.
+
+Claude and other MCP clients can use the same flow without the ChatGPT UI: call `create_media_upload`, PUT the file to `upload_url`, call `complete_media_upload`, then pass `media_url` to `upload_video`.
+
+Set `UPLOAD_POST_R2_CONNECT_DOMAIN` on the MCP host to the same origin used by the backend's R2 signed URLs (for example `https://<account>.r2.cloudflarestorage.com`) so the ChatGPT component CSP allows the browser PUT. The R2 bucket CORS policy must also allow PUT from the app origins you support.
 
 ---
 
@@ -164,7 +169,7 @@ curl -i -X POST http://localhost:8080/mcp \
 ## Tips for prompting the agent
 
 - Prefer **public URLs** over local paths when uploading — local paths only work if the MCP server runs on the user's machine.
-- In ChatGPT Apps, prefer `open_upload_studio` for user-selected video files. It avoids local-path handoff issues by using ChatGPT's file upload bridge and passing a temporary signed URL to `upload_video`.
+- In ChatGPT Apps, prefer `open_upload_studio` for user-selected video files. It avoids local-path handoff issues by uploading to short-lived Upload-Post/R2 staging, then passing a temporary media URL to `upload_video`.
 - To send video **bytes directly** (a client that holds the file rather than a URL), pass `videoBase64` to `upload_video` instead of `videoPathOrUrl`. The server writes it to a temp file, uploads, then deletes it. Inline bytes are capped at `UPLOAD_POST_MAX_INLINE_MB` (default 100 MB) — for larger videos use a public URL.
 - Always create the profile first (`create_user`) and connect socials in the Upload-Post dashboard before publishing.
 - For scheduled posts, pass ISO 8601 dates with timezone, e.g. `"2026-12-25T10:00:00Z"` + `"timezone": "Europe/Madrid"`.

@@ -8,6 +8,10 @@ const WIDGET_DOMAIN = (
   process.env.OAUTH_ISSUER ??
   "https://mcp.upload-post.com"
 ).replace(/\/$/, "");
+const R2_CONNECT_DOMAIN = (
+  process.env.UPLOAD_POST_R2_CONNECT_DOMAIN ??
+  "https://0de16d5f5e344fe4757ecd62640a9ea3.r2.cloudflarestorage.com"
+).replace(/\/$/, "");
 
 const InstagramVideoMediaType = z.enum(["REELS", "STORIES"]);
 
@@ -16,16 +20,16 @@ const resourceMeta = {
     prefersBorder: true,
     domain: WIDGET_DOMAIN,
     csp: {
-      connectDomains: [],
+      connectDomains: [R2_CONNECT_DOMAIN],
       resourceDomains: [],
     },
   },
   "openai/widgetDescription":
-    "A compact Upload-Post video uploader that lets the user select a ChatGPT file, set profile/platform/caption fields, and publish through upload_video.",
+    "A compact Upload-Post video uploader that stages a local video in Upload-Post/R2, then publishes through upload_video.",
   "openai/widgetPrefersBorder": true,
   "openai/widgetDomain": WIDGET_DOMAIN,
   "openai/widgetCSP": {
-    connect_domains: [],
+    connect_domains: [R2_CONNECT_DOMAIN],
     resource_domains: [],
   },
 };
@@ -57,7 +61,7 @@ export function registerUploadStudio(server: McpServer): void {
     {
       title: "Open upload studio",
       description:
-        "Open a ChatGPT UI for selecting a local or library video file and publishing it through Upload-Post. Use this when the user wants to upload a file from ChatGPT instead of providing a public URL.",
+        "Open a ChatGPT UI for selecting a local video file, staging it in short-lived Upload-Post/R2 storage, and publishing it through Upload-Post. Use this when the user wants to upload a file from ChatGPT instead of providing a public URL.",
       inputSchema: {
         user: z.string().optional().describe("Optional Upload-Post profile name to prefill."),
         platforms: z.array(VideoPlatform).optional().describe("Optional platforms to preselect."),
@@ -389,7 +393,7 @@ const uploadStudioHtml = `<!doctype html>
           <div id="dropTarget" class="dropTarget">
             <div>
               <p class="dropTitle">Select a video</p>
-              <p class="dropHint">MP4/MOV recommended. The upload starts only when you publish.</p>
+              <p class="dropHint">MP4/MOV recommended. The file uploads to Upload-Post staging only when you publish.</p>
             </div>
           </div>
           <input id="fileInput" type="file" accept="video/*" hidden />
@@ -569,7 +573,7 @@ const uploadStudioHtml = `<!doctype html>
             el.addEventListener("input", saveState);
             el.addEventListener("change", saveState);
           });
-          if (!openai.uploadFile || !openai.getFileDownloadUrl || !openai.callTool) {
+          if (!openai.callTool) {
             setStatus("This widget must run inside ChatGPT Apps.", "bad");
             els.publishButton.disabled = true;
           }
@@ -590,7 +594,11 @@ const uploadStudioHtml = `<!doctype html>
 
         function setLocalFile(file) {
           if (!file) return;
-          if (!file.type || file.type.indexOf("video/") !== 0) {
+          var name = file.name || "";
+          var looksLikeVideo =
+            (file.type && file.type.indexOf("video/") === 0) ||
+            /\\.(mp4|mov|m4v|webm|mpeg|mpg|avi|mkv)$/i.test(name);
+          if (!looksLikeVideo) {
             setStatus("Select a video file.", "bad");
             return;
           }
@@ -602,7 +610,7 @@ const uploadStudioHtml = `<!doctype html>
           state.previewUrl = URL.createObjectURL(file);
           els.preview.src = state.previewUrl;
           els.preview.hidden = false;
-          els.fileMeta.textContent = state.fileName + " · " + formatBytes(file.size) + " · local file";
+          els.fileMeta.textContent = state.fileName + " · " + formatBytes(file.size) + " · Upload-Post staging";
           setStatus("Video selected. Ready to publish.", "ok");
           saveState();
         }
@@ -625,14 +633,69 @@ const uploadStudioHtml = `<!doctype html>
           saveState();
         }
 
+        function parseToolJson(result) {
+          if (!result) throw new Error("Tool returned no response.");
+          if (result.structuredContent) return result.structuredContent;
+          if (Array.isArray(result.content)) {
+            var text = result.content.map(function (item) {
+              return item && item.text ? item.text : "";
+            }).join("\\n").trim();
+            if (text) {
+              try {
+                return JSON.parse(text);
+              } catch (error) {
+                throw new Error(text);
+              }
+            }
+          }
+          return result;
+        }
+
+        async function uploadLocalFileToStaging(file) {
+          var contentType = state.mimeType || file.type || "video/mp4";
+          setStatus("Creating Upload-Post upload URL…", "warn");
+          var created = parseToolJson(await openai.callTool("create_media_upload", {
+            filename: state.fileName || file.name || "chatgpt-video-upload.mp4",
+            contentType: contentType,
+            contentLength: file.size,
+            mediaType: "video",
+            source: "mcp_chatgpt"
+          }));
+          if (!created.success || !created.upload_url || !created.upload_id) {
+            throw new Error(created.message || "Could not create media upload.");
+          }
+
+          setStatus("Uploading video to Upload-Post staging…", "warn");
+          var putHeaders = Object.assign({}, created.headers || {});
+          if (!putHeaders["Content-Type"]) putHeaders["Content-Type"] = contentType;
+          var put = await fetch(created.upload_url, {
+            method: created.method || "PUT",
+            headers: putHeaders,
+            body: file
+          });
+          if (!put.ok) {
+            throw new Error("R2 upload failed with HTTP " + put.status + ".");
+          }
+
+          setStatus("Validating staged media…", "warn");
+          var completed = parseToolJson(await openai.callTool("complete_media_upload", {
+            uploadId: created.upload_id
+          }));
+          if (!completed.success || !completed.media_url) {
+            throw new Error(completed.message || "Could not complete media upload.");
+          }
+          return completed.media_url;
+        }
+
         async function ensureDownloadUrl() {
           if (state.file) {
-            setStatus("Uploading video into ChatGPT…", "warn");
-            var upload = await openai.uploadFile(state.file, { library: false });
-            state.fileId = typeof upload === "string" ? upload : upload.fileId;
+            return uploadLocalFileToStaging(state.file);
           }
           if (!state.fileId) {
             throw new Error("Select a video first.");
+          }
+          if (!openai.getFileDownloadUrl) {
+            throw new Error("ChatGPT file download URLs are not available in this session.");
           }
           setStatus("Preparing temporary download URL…", "warn");
           var ref = await openai.getFileDownloadUrl({ fileId: state.fileId });
