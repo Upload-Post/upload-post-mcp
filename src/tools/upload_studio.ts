@@ -11,6 +11,8 @@ const WIDGET_DOMAIN = (
 const DEFAULT_R2_CONNECT_DOMAINS = [
   "https://0de16d5f5e344fe4757ecd62640a9ea3.r2.cloudflarestorage.com",
   "https://upload-post-schedulers-eu3.0de16d5f5e344fe4757ecd62640a9ea3.r2.cloudflarestorage.com",
+  "https://346a933178393d200f7a17065933e0bd.r2.cloudflarestorage.com",
+  "https://upload-post-schedulers-eu3.346a933178393d200f7a17065933e0bd.r2.cloudflarestorage.com",
 ];
 const R2_CONNECT_DOMAINS = (
   process.env.UPLOAD_POST_R2_CONNECT_DOMAINS ??
