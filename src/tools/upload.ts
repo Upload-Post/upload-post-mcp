@@ -63,13 +63,13 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
     {
       title: "Upload video",
       description:
-        "Publish a video to one or more platforms. Provide the video as EITHER `videoPathOrUrl` (a public URL or absolute local path) OR `videoBase64` (raw base64 or a data URI for clients that hold the bytes directly). Inline base64 is capped (default 100 MB) and is best for small/medium clips — prefer a public URL for large videos. Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, facebookPageId, instagramMediaType, etc.).",
+        "Publish a video to one or more platforms. Provide the video as EITHER `videoPathOrUrl` (a public/signed HTTPS URL or absolute local path) OR `videoBase64` (raw base64 or a data URI for clients that hold the bytes directly). In ChatGPT Apps, prefer `open_upload_studio` when the user needs to select a local ChatGPT file. Inline base64 is capped (default 100 MB) and is best for small/medium clips — prefer a URL for large videos. Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, facebookPageId, instagramMediaType, etc.).",
       inputSchema: {
         videoPathOrUrl: z
           .string()
           .optional()
           .describe(
-            "Public URL of the video, or absolute local path. Provide this OR videoBase64."
+            "Public/signed HTTPS URL of the video, or absolute local path. Provide this OR videoBase64."
           ),
         videoBase64: z
           .string()
@@ -100,6 +100,14 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: false,
+      },
+      _meta: {
+        ui: {
+          visibility: ["model", "app"],
+        },
+        "openai/widgetAccessible": true,
+        "openai/toolInvocation/invoking": "Uploading video…",
+        "openai/toolInvocation/invoked": "Upload started",
       },
     },
     safe(async (args) => {

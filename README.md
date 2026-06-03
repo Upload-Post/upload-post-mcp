@@ -51,11 +51,11 @@ Run the server on any Docker-capable host (Fly, Railway, Cloud Run, your own box
 
 ## What can the agent do?
 
-The server exposes **40 tools** — every one maps 1:1 to an endpoint documented at <https://docs.upload-post.com/llm.txt>.
+The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 
 | Group         | Tools |
 |---------------|-------|
-| Upload        | `upload_video`, `upload_photos`, `upload_text`, `upload_document` |
+| Upload        | `upload_video`, `upload_photos`, `upload_text`, `upload_document`, `open_upload_studio` |
 | Status        | `get_status`, `get_job_status`, `get_history`, `get_media` |
 | Schedule      | `list_scheduled`, `cancel_scheduled`, `edit_scheduled` |
 | Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_platform_metrics` |
@@ -67,6 +67,12 @@ The server exposes **40 tools** — every one maps 1:1 to an endpoint documented
 | Queue         | `get_queue_settings`, `update_queue_settings`, `preview_queue` |
 
 Async uploads return a `request_id`. The agent should poll `get_status` until `success: true`.
+
+### ChatGPT video upload UI
+
+`open_upload_studio` renders a ChatGPT Apps component for file-based video publishing. The widget lets the user choose a local ChatGPT file or ChatGPT file-library item, gets a temporary ChatGPT download URL via the component bridge, then calls `upload_video` immediately with that signed URL.
+
+Use it when a ChatGPT user says they want to upload a video file from the chat. For scheduled posts or long-lived media reuse, prefer a durable Upload-Post/R2 URL once the media has been ingested by your backend.
 
 ---
 
@@ -158,6 +164,7 @@ curl -i -X POST http://localhost:8080/mcp \
 ## Tips for prompting the agent
 
 - Prefer **public URLs** over local paths when uploading — local paths only work if the MCP server runs on the user's machine.
+- In ChatGPT Apps, prefer `open_upload_studio` for user-selected video files. It avoids local-path handoff issues by using ChatGPT's file upload bridge and passing a temporary signed URL to `upload_video`.
 - To send video **bytes directly** (a client that holds the file rather than a URL), pass `videoBase64` to `upload_video` instead of `videoPathOrUrl`. The server writes it to a temp file, uploads, then deletes it. Inline bytes are capped at `UPLOAD_POST_MAX_INLINE_MB` (default 100 MB) — for larger videos use a public URL.
 - Always create the profile first (`create_user`) and connect socials in the Upload-Post dashboard before publishing.
 - For scheduled posts, pass ISO 8601 dates with timezone, e.g. `"2026-12-25T10:00:00Z"` + `"timezone": "Europe/Madrid"`.
@@ -185,7 +192,7 @@ To revoke a connector's access at any time, open **Connected Apps** in [app.uplo
 - `/mcp` requires a valid `Authorization` header on every request; OAuth access tokens are short-lived (1 h access + 90 d refresh with rotation per RFC 6749 §10.4).
 - The server validates the `Origin` header against an allow-list (`claude.ai`, `claude.com`, `chatgpt.com`, `chat.openai.com`, `app.upload-post.com`, `localhost`) to mitigate DNS-rebinding attacks from browser-based clients. Extend with `OAUTH_EXTRA_ALLOWED_ORIGINS` (comma-separated) when self-hosting behind a custom dashboard.
 - If ChatGPT shows `redirect_uri not on allow-list` during OAuth, add the exact `redirect_uri` from the failing authorize request to the Upload-Post backend OAuth redirect allow-list. For ChatGPT clients this is typically on `https://chatgpt.com/.../oauth/callback` or `https://chat.openai.com/.../oauth/callback`.
-- All 40 tools declare MCP `readOnlyHint`/`destructiveHint` annotations so clients can surface confirmation prompts for destructive operations.
+- All tools declare MCP `readOnlyHint`/`destructiveHint` annotations so clients can surface confirmation prompts for destructive operations.
 
 Report a security issue: **info@upload-post.com** (encrypted PGP available on request).
 

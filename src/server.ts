@@ -10,6 +10,7 @@ import { registerCommentTools } from "./tools/comments.js";
 import { registerDmTools } from "./tools/dms.js";
 import { registerFfmpegTools } from "./tools/ffmpeg.js";
 import { registerQueueTools } from "./tools/queue.js";
+import { registerUploadStudio } from "./tools/upload_studio.js";
 
 export function buildServer(client: UploadPostMcpClient): McpServer {
   const server = new McpServer(
@@ -33,6 +34,7 @@ export function buildServer(client: UploadPostMcpClient): McpServer {
   registerDmTools(server, client);
   registerFfmpegTools(server, client);
   registerQueueTools(server, client);
+  registerUploadStudio(server);
 
   return server;
 }
