@@ -70,14 +70,16 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     // ----- ChatGPT Apps domain verification -----------------------------
     // This must be reachable publicly before Origin validation because the
     // OpenAI verifier may include its own browser/developer-console Origin.
-    if (method === "GET" && requestPath(url) === OPENAI_APPS_CHALLENGE_PATH) {
-      const token =
-        process.env.OPENAI_APPS_CHALLENGE_TOKEN?.trim() ||
-        DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN;
-      res.statusCode = 200;
-      res.setHeader("content-type", "text/plain; charset=utf-8");
-      res.setHeader("cache-control", "no-store");
-      res.end(token);
+    if (isOpenAiAppsChallengePath(url)) {
+      if (method === "OPTIONS") {
+        return sendOpenAiAppsChallengeOptions(res);
+      }
+      if (method === "GET" || method === "HEAD") {
+        return sendOpenAiAppsChallenge(res, method);
+      }
+      res.statusCode = 405;
+      res.setHeader("allow", "GET, HEAD, OPTIONS");
+      res.end("Method Not Allowed");
       return;
     }
 
@@ -216,6 +218,41 @@ function sendUnauthorized(res: ServerResponse, oauthEnabled: boolean, issuer: st
 function requestPath(url: string): string {
   const queryStart = url.indexOf("?");
   return queryStart >= 0 ? url.slice(0, queryStart) : url;
+}
+
+function isOpenAiAppsChallengePath(url: string): boolean {
+  const path = requestPath(url).replace(/\/+$/, "");
+  return path === OPENAI_APPS_CHALLENGE_PATH;
+}
+
+function openAiAppsChallengeToken(): string {
+  return (
+    process.env.OPENAI_APPS_CHALLENGE_TOKEN?.trim() ||
+    DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN
+  );
+}
+
+function setOpenAiAppsChallengeHeaders(res: ServerResponse): void {
+  res.setHeader("access-control-allow-origin", "*");
+  res.setHeader("access-control-allow-methods", "GET, HEAD, OPTIONS");
+  res.setHeader("access-control-allow-headers", "*");
+  res.setHeader("cache-control", "no-store");
+  res.setHeader("vary", "Origin");
+}
+
+function sendOpenAiAppsChallengeOptions(res: ServerResponse): void {
+  res.statusCode = 204;
+  setOpenAiAppsChallengeHeaders(res);
+  res.end();
+}
+
+function sendOpenAiAppsChallenge(res: ServerResponse, method: string): void {
+  const token = openAiAppsChallengeToken();
+  res.statusCode = 200;
+  setOpenAiAppsChallengeHeaders(res);
+  res.setHeader("content-type", "text/plain; charset=utf-8");
+  res.setHeader("content-length", Buffer.byteLength(token));
+  res.end(method === "HEAD" ? undefined : token);
 }
 
 /**
