@@ -13,7 +13,11 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       inputSchema: {
         profile: z.string().optional(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async ({ profile }) => client.sdk.getFacebookPages(profile as string | undefined))
   );
@@ -26,7 +30,11 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       inputSchema: {
         profile: z.string().optional(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async ({ profile }) => client.sdk.getLinkedinPages(profile as string | undefined))
   );
@@ -39,7 +47,11 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       inputSchema: {
         profile: z.string().optional(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async ({ profile }) => client.sdk.getPinterestBoards(profile as string | undefined))
   );
@@ -52,7 +64,11 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       inputSchema: {
         profile: z.string().optional(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async (args) =>
       client.request("GET", "/uploadposts/google-business/locations", {
@@ -71,7 +87,11 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
         profile: z.string(),
         locationId: z.string(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: false,
+      },
     },
     safe(async (args) =>
       client.request("POST", "/uploadposts/google-business/locations/select", {
@@ -90,7 +110,11 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
         profile: z.string().optional(),
         limit: z.number().int().positive().max(200).optional(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async (args) =>
       client.request("GET", "/uploadposts/reddit/detailed-posts/", {

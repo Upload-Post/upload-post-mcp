@@ -27,7 +27,11 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
           .describe("Operation-specific parameters (start/end seconds, output format, …)."),
         outputFilename: z.string().optional(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async (args) =>
       client.request("POST", "/ffmpeg-editor", {
@@ -45,7 +49,11 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       inputSchema: {
         jobId: z.string(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async ({ jobId }) =>
       client.request("GET", "/ffmpeg-editor/status", { query: { job_id: jobId } })
@@ -60,7 +68,11 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       inputSchema: {
         jobId: z.string(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async ({ jobId }) =>
       client.request("GET", "/ffmpeg-editor/download", { query: { job_id: jobId } })
@@ -73,7 +85,11 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       title: "Get FFmpeg quota usage",
       description: "Monthly FFmpeg processing minutes used vs. plan allowance.",
       inputSchema: {},
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async () => client.request("GET", "/ffmpeg-editor/consumption"))
   );

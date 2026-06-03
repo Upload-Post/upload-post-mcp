@@ -18,7 +18,11 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
         recipientUsername: z.string().optional(),
         message: z.string(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
     },
     safe(async (args) =>
       client.request("POST", "/uploadposts/dms/send", {
@@ -37,7 +41,11 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
         platform: z.string().optional(),
         limit: z.number().int().positive().max(200).optional(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async (args) =>
       client.request("GET", "/uploadposts/dms/conversations", {
@@ -64,7 +72,11 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
       },
       // `action` can be read-only (status/logs) or destructive (stop/delete). We
       // report the worst case (destructive) so callers default to confirmation.
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
     },
     safe(async (args) => {
       const { action, user, config } = args as {

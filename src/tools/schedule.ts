@@ -11,7 +11,11 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
       title: "List scheduled posts",
       description: "List all currently scheduled (not-yet-published) posts.",
       inputSchema: {},
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async () => client.sdk.listScheduled())
   );
@@ -24,7 +28,11 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
       inputSchema: {
         jobId: z.string(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
     },
     safe(async ({ jobId }) => client.sdk.cancelScheduled(jobId as string))
   );
@@ -39,7 +47,11 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
         scheduledDate: z.string().optional(),
         timezone: z.string().optional(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
     },
     safe(async (args) => {
       const { jobId, ...rest } = args as { jobId: string; [k: string]: unknown };

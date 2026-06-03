@@ -213,6 +213,8 @@ function isOriginAllowed(origin: string | string[] | undefined): boolean {
     "https://claude.ai",
     "https://claude.com",
     "https://www.claude.ai",
+    "https://chatgpt.com",
+    "https://chat.openai.com",
     "https://app.upload-post.com",
     "http://localhost",
     "http://127.0.0.1",

@@ -12,7 +12,11 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       description:
         "Validate the current API key and return account information. Useful as a first call to confirm credentials before doing real work.",
       inputSchema: {},
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async () => client.request("GET", "/uploadposts/me"))
   );
@@ -23,7 +27,11 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       title: "List profiles",
       description: "List all Upload-Post profiles in the account, with their connected social accounts.",
       inputSchema: {},
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async () => client.sdk.listUsers())
   );
@@ -36,7 +44,11 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       inputSchema: {
         username: z.string(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async ({ username }) => client.sdk.createUser(username as string))
   );
@@ -49,7 +61,11 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       inputSchema: {
         username: z.string(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: true,
+      },
     },
     safe(async ({ username }) => client.sdk.deleteUser(username as string))
   );
@@ -77,7 +93,11 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
             "Force the connection page language for this profile. When omitted, the page auto-detects the visitor's browser language and falls back to English."
           ),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async (args) => {
       const { username, ...rest } = args as { username: string; [k: string]: unknown };
@@ -93,7 +113,11 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       inputSchema: {
         jwt: z.string(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
     },
     safe(async ({ jwt }) => client.sdk.validateJwt(jwt as string))
   );

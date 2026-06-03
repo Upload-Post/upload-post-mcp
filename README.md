@@ -183,7 +183,8 @@ To revoke a connector's access at any time, open **Connected Apps** in [app.uplo
 
 - All traffic is TLS-terminated at the edge (HTTPS only).
 - `/mcp` requires a valid `Authorization` header on every request; OAuth access tokens are short-lived (1 h access + 90 d refresh with rotation per RFC 6749 §10.4).
-- The server validates the `Origin` header against an allow-list (`claude.ai`, `claude.com`, `app.upload-post.com`, `localhost`) to mitigate DNS-rebinding attacks from browser-based clients. Extend with `OAUTH_EXTRA_ALLOWED_ORIGINS` (comma-separated) when self-hosting behind a custom dashboard.
+- The server validates the `Origin` header against an allow-list (`claude.ai`, `claude.com`, `chatgpt.com`, `chat.openai.com`, `app.upload-post.com`, `localhost`) to mitigate DNS-rebinding attacks from browser-based clients. Extend with `OAUTH_EXTRA_ALLOWED_ORIGINS` (comma-separated) when self-hosting behind a custom dashboard.
+- If ChatGPT shows `redirect_uri not on allow-list` during OAuth, add the exact `redirect_uri` from the failing authorize request to the Upload-Post backend OAuth redirect allow-list. For ChatGPT clients this is typically on `https://chatgpt.com/.../oauth/callback` or `https://chat.openai.com/.../oauth/callback`.
 - All 40 tools declare MCP `readOnlyHint`/`destructiveHint` annotations so clients can surface confirmation prompts for destructive operations.
 
 Report a security issue: **info@upload-post.com** (encrypted PGP available on request).
