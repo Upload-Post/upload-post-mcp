@@ -645,7 +645,13 @@ const uploadStudioHtml = `<!doctype html>
 
         function parseToolJson(result) {
           if (!result) throw new Error("Tool returned no response.");
-          if (result.structuredContent) return result.structuredContent;
+          if (result.structuredContent) {
+            // Tools wrap payloads via ok() as { result: <payload> }. Unwrap so
+            // callers read fields (success, upload_url, …) at the top level,
+            // matching the unwrapped JSON we'd get from the text branch below.
+            var sc = result.structuredContent;
+            return sc && typeof sc === "object" && "result" in sc ? sc.result : sc;
+          }
           if (Array.isArray(result.content)) {
             var text = result.content.map(function (item) {
               return item && item.text ? item.text : "";
