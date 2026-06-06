@@ -112,7 +112,9 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       description:
         "Recent Reddit posts published from a profile, with the platform-side metadata (subreddit, flair, score, …).",
       inputSchema: {
-        profile: z.string().optional(),
+        profile: z
+          .string()
+          .describe("Upload-Post profile name. Required by the API."),
         limit: z.number().int().positive().max(200).optional(),
       },
       outputSchema: genericResultOutputSchema,
@@ -122,10 +124,12 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
         destructiveHint: false,
       },
     },
-    safe(async (args) =>
-      client.request("GET", "/uploadposts/reddit/detailed-posts/", {
-        query: compact(args as Record<string, unknown>),
-      })
-    )
+    safe(async (args) => {
+      const { profile, ...rest } = args as { profile?: string; [k: string]: unknown };
+      // The API requires the param to be named `profile_username`, not `profile`.
+      return client.request("GET", "/uploadposts/reddit/detailed-posts/", {
+        query: compact({ ...rest, profile_username: profile }),
+      });
+    })
   );
 }
