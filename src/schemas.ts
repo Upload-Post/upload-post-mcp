@@ -11,6 +11,8 @@ export const VideoPlatform = z.enum([
   "bluesky",
   "x",
   "google_business",
+  "discord",
+  "telegram",
 ]);
 
 export const PhotoPlatform = z.enum([
@@ -24,6 +26,8 @@ export const PhotoPlatform = z.enum([
   "bluesky",
   "x",
   "google_business",
+  "discord",
+  "telegram",
 ]);
 
 export const TextPlatform = z.enum([
@@ -34,6 +38,8 @@ export const TextPlatform = z.enum([
   "reddit",
   "bluesky",
   "google_business",
+  "discord",
+  "telegram",
 ]);
 
 export const AnalyticsPlatform = z.enum([

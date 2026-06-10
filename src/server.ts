@@ -21,7 +21,7 @@ export function buildServer(client: UploadPostMcpClient): McpServer {
     },
     {
       instructions:
-        "Tools for publishing, scheduling, analyzing and managing social media posts via Upload-Post (TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X, Google Business). Async uploads return a request_id — poll get_status until success.",
+        "Tools for publishing, scheduling, analyzing and managing social media posts via Upload-Post (TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X, Google Business, Discord, Telegram). Async uploads return a request_id — poll get_status until success.",
     }
   );
 

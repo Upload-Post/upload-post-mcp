@@ -467,7 +467,9 @@ const uploadStudioHtml = `<!doctype html>
           ["threads", "Threads"],
           ["bluesky", "Bluesky"],
           ["x", "X"],
-          ["google_business", "Google Business"]
+          ["google_business", "Google Business"],
+          ["discord", "Discord"],
+          ["telegram", "Telegram"]
         ];
         var state = {
           file: null,
