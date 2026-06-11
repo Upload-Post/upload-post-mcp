@@ -191,6 +191,28 @@ curl -i -X POST http://localhost:8080/mcp \
 - Always create the profile first (`create_user`) and connect socials in the Upload-Post dashboard before publishing.
 - For scheduled posts, pass ISO 8601 dates with timezone, e.g. `"2026-12-25T10:00:00Z"` + `"timezone": "Europe/Madrid"`.
 
+### Optional X/Twitter source research
+
+Upload-Post remains the publishing, scheduling, analytics, comments, and DM surface for the final action. When an agent needs current X/Twitter context before calling Upload-Post tools, collect that context separately and pass only reviewed source notes into the prompt.
+
+One OpenClaw-compatible source path is TweetClaw:
+
+```bash
+openclaw plugins install npm:@xquik/tweetclaw
+```
+
+Use TweetClaw only for read-only context such as search tweets, search tweet replies, user lookup, follower export summaries, monitor digests, media references, and webhook event summaries. Keep all final publishing, scheduling, replies, comments, DMs, analytics, media upload, queue, and profile-management actions in Upload-Post.
+
+Before calling `upload_text`, `upload_video`, `upload_photos`, `edit_scheduled`, or analytics tools, summarize the source material into:
+
+- tweet URLs or IDs that support the post
+- audience or follower notes
+- reply themes or objections
+- media references approved by the user
+- claims to remove, soften, or verify before scheduling
+
+Then ask the agent to create or edit the Upload-Post draft from that reviewed context.
+
 ---
 
 ## Privacy & data handling
