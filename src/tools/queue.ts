@@ -66,7 +66,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
       // confirm before overwriting.
       annotations: {
         readOnlyHint: false,
-        openWorldHint: true,
+        openWorldHint: false,
         destructiveHint: true,
       },
     },

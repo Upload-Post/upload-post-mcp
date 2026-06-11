@@ -22,7 +22,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
       outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
-        openWorldHint: true,
+        openWorldHint: false,
         destructiveHint: false,
       },
       _meta: {
@@ -66,7 +66,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
       outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
-        openWorldHint: true,
+        openWorldHint: false,
         destructiveHint: false,
       },
       _meta: {
@@ -125,7 +125,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
       outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
-        openWorldHint: true,
+        openWorldHint: false,
         destructiveHint: true,
       },
       _meta: {

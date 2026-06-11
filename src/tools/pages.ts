@@ -94,7 +94,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
-        openWorldHint: true,
+        openWorldHint: false,
         destructiveHint: false,
       },
     },

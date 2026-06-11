@@ -32,7 +32,7 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
       outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
-        openWorldHint: true,
+        openWorldHint: false,
         destructiveHint: true,
       },
     },
@@ -52,7 +52,7 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
       outputSchema: genericResultOutputSchema,
       annotations: {
         readOnlyHint: false,
-        openWorldHint: true,
+        openWorldHint: false,
         destructiveHint: true,
       },
     },

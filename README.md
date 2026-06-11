@@ -69,6 +69,8 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 
 Async uploads return a `request_id`. The agent should poll `get_status` until `success: true`.
 
+FFmpeg jobs accept one public URL through `input_url` or multiple URLs through `files`. Poll `get_ffmpeg_job` until completion, then call `download_ffmpeg_result`; it returns the result URL without streaming the processed binary through MCP.
+
 ### ChatGPT video upload UI
 
 `open_upload_studio` renders a ChatGPT Apps component for file-based video publishing. The widget creates a short-lived Upload-Post/R2 staging upload, PUTs the local video directly to R2, completes the upload, then calls `upload_video` with the returned temporary media URL.

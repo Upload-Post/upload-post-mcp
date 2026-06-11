@@ -38,15 +38,18 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       },
     },
     safe(async (args) => {
-      const { sourceUrl, outputFilename, ...rest } = args as {
+      const { sourceUrl, outputFilename, input_url, files, ...rest } = args as {
         sourceUrl?: string;
         outputFilename?: string;
+        input_url?: string;
+        files?: string[];
         [key: string]: unknown;
       };
+      const inputUrl = input_url ?? sourceUrl;
       return client.request("POST", "/uploadposts/ffmpeg/jobs/upload", {
         body: compact({
           ...rest,
-          input_url: rest.input_url ?? sourceUrl,
+          files: files ?? (inputUrl ? [inputUrl] : undefined),
           output_filename: rest.output_filename ?? outputFilename,
         }),
       });
@@ -78,7 +81,8 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
     "download_ffmpeg_result",
     {
       title: "Get FFmpeg result download URL",
-      description: "Returns the download URL (and metadata) for the processed file of a completed FFmpeg job.",
+      description:
+        "Returns the download URL and metadata for a completed FFmpeg job without streaming the processed file through MCP.",
       inputSchema: {
         jobId: z.string(),
       },
@@ -89,9 +93,25 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
         destructiveHint: false,
       },
     },
-    safe(async ({ jobId }) =>
-      client.request("GET", `/uploadposts/ffmpeg/jobs/${encodeURIComponent(jobId as string)}/download`)
-    )
+    safe(async ({ jobId }) => {
+      const status = await client.request<Record<string, unknown>>(
+        "GET",
+        `/uploadposts/ffmpeg/jobs/${encodeURIComponent(jobId as string)}`
+      );
+      const result =
+        status.result && typeof status.result === "object"
+          ? (status.result as Record<string, unknown>)
+          : undefined;
+      const downloadUrl = result?.download_url ?? status.download_url;
+      if (typeof downloadUrl !== "string" || !downloadUrl) {
+        throw new Error("FFmpeg result is not ready or has no download URL.");
+      }
+      return {
+        job_id: jobId,
+        status: status.status,
+        download_url: downloadUrl,
+      };
+    })
   );
 
   server.registerTool(
