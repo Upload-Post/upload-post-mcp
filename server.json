@@ -1,0 +1,81 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.upload-post/mcp",
+  "title": "Upload-Post",
+  "description": "Social media MCP: publish, schedule & analyze posts on TikTok, Instagram, YouTube, LinkedIn & X",
+  "version": "0.3.2",
+  "websiteUrl": "https://www.upload-post.com",
+  "repository": {
+    "url": "https://github.com/Upload-Post/upload-post-mcp",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://www.upload-post.com/uploadpost-80.jpeg",
+      "mimeType": "image/jpeg",
+      "sizes": ["80x80"]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.upload-post.com/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Optional. Your Upload-Post API key as 'ApiKey <key>' (or 'Bearer <key>'). Omit to use the OAuth flow instead.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "categories": ["social-media", "marketing", "content-creation", "automation"],
+      "keywords": [
+        "social media",
+        "social media api",
+        "publishing",
+        "scheduling",
+        "content automation",
+        "tiktok",
+        "instagram",
+        "youtube",
+        "youtube shorts",
+        "reels",
+        "linkedin",
+        "facebook",
+        "x",
+        "twitter",
+        "threads",
+        "pinterest",
+        "reddit",
+        "bluesky",
+        "google business",
+        "discord",
+        "telegram",
+        "cross-posting",
+        "analytics",
+        "auto dm"
+      ],
+      "supportedPlatforms": [
+        "TikTok",
+        "Instagram",
+        "YouTube",
+        "LinkedIn",
+        "Facebook",
+        "X (Twitter)",
+        "Threads",
+        "Pinterest",
+        "Reddit",
+        "Bluesky",
+        "Google Business",
+        "Discord",
+        "Telegram"
+      ],
+      "documentationUrl": "https://docs.upload-post.com",
+      "authentication": "OAuth (Dynamic Client Registration) or Upload-Post API key via Authorization header"
+    }
+  }
+}
