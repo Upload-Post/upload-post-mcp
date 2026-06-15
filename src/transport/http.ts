@@ -35,6 +35,12 @@ interface Session {
 }
 
 const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
+
+// Glama directory ownership verification. Glama claims a connector by fetching
+// /.well-known/glama.json from the server's domain and matching a maintainer
+// email. Override the email via GLAMA_MAINTAINER_EMAIL if needed.
+const GLAMA_WELL_KNOWN_PATH = "/.well-known/glama.json";
+const GLAMA_MAINTAINER_EMAIL = process.env.GLAMA_MAINTAINER_EMAIL ?? "jc.caverogracia@gmail.com";
 const DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN = "9O0B9c5XudnvLv1et2HdZ9WG2_H85jGPciJ7c8QBHjY";
 
 /**
@@ -81,6 +87,16 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       res.setHeader("allow", "GET, HEAD, OPTIONS");
       res.end("Method Not Allowed");
       return;
+    }
+
+    // ----- Glama directory ownership verification -----------------------
+    // Served publicly (before Origin validation) so Glama's verifier can fetch
+    // it. Static file matching the connector.json schema with our maintainer.
+    if (method === "GET" && url === GLAMA_WELL_KNOWN_PATH) {
+      return serveJson(res, {
+        $schema: "https://glama.ai/mcp/schemas/connector.json",
+        maintainers: [{ email: GLAMA_MAINTAINER_EMAIL }],
+      });
     }
 
     // ----- Defense-in-depth: Origin validation --------------------------
