@@ -39,6 +39,36 @@ const VideoPlatformOptions = z
       .union([z.string(), z.array(z.string())])
       .optional()
       .describe("One YouTube playlist ID, or an array of playlist IDs, to add the uploaded video to."),
+    youtubeThumbnailUrl: z
+      .string()
+      .optional()
+      .describe("Custom thumbnail image URL for the YouTube video."),
+    youtubeTags: z
+      .union([z.string(), z.array(z.string())])
+      .optional()
+      .describe("YouTube video tags, as an array or comma-separated string."),
+    youtubeCategoryId: z
+      .string()
+      .optional()
+      .describe("YouTube category ID, e.g. '22' for People & Blogs."),
+    youtubeSelfDeclaredMadeForKids: z
+      .boolean()
+      .optional()
+      .describe("YouTube made-for-kids flag (COPPA)."),
+    youtubeContainsSyntheticMedia: z
+      .boolean()
+      .optional()
+      .describe("YouTube AI/synthetic content disclosure."),
+    youtubeSubtitles: z
+      .array(
+        z.object({
+          language: z.string().describe("BCP-47 language code, e.g. 'en', 'es'."),
+          name: z.string().optional().describe("Display name of the subtitle track."),
+          url: z.string().optional().describe("URL of the subtitle file (SRT, VTT, SBV, SUB, ASS, SSA, TTML)."),
+        })
+      )
+      .optional()
+      .describe("Subtitle/caption tracks to attach to the YouTube video."),
     facebookPageId: z.string().optional().describe("Facebook Page ID to publish to."),
     linkedinPageId: z.string().optional().describe("LinkedIn organization/page ID to publish to."),
     pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to."),
@@ -106,7 +136,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
     {
       title: "Upload video",
       description:
-        "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. Hosted clients such as ChatGPT and claude.ai cannot publish attached files by passing `/mnt/data`, sandbox, or mounted local paths; for those files, ALWAYS call `open_upload_studio` first so the browser stages the video to Upload-Post/R2, then publishes it. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, facebookPageId, instagramMediaType, etc.).",
+        "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. Hosted clients such as ChatGPT and claude.ai cannot publish attached files by passing `/mnt/data`, sandbox, or mounted local paths; for those files, ALWAYS call `open_upload_studio` first so the browser stages the video to Upload-Post/R2, then publishes it. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.).",
       inputSchema: {
         videoPathOrUrl: z
           .string()
