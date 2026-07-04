@@ -98,11 +98,12 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
         destructiveHint: false,
       },
     },
-    safe(async (args) =>
-      client.request("POST", "/uploadposts/google-business/locations/select", {
-        body: compact(args as Record<string, unknown>),
-      })
-    )
+    safe(async (args) => {
+      const { profile, locationId } = args as { profile: string; locationId: string };
+      return client.request("POST", "/uploadposts/google-business/locations/select", {
+        body: compact({ profile, location_id: locationId }),
+      });
+    })
   );
 
   server.registerTool(

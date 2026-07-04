@@ -21,16 +21,66 @@ import {
  */
 const MAX_INLINE_MB = Number(process.env.UPLOAD_POST_MAX_INLINE_MB ?? 100);
 
+/** Keys shared by video, photo and text posts. */
+const commonPlatformOptionFields = {
+  facebookPageId: z.string().optional().describe("Facebook Page ID to publish to (see get_facebook_pages)."),
+  linkedinPageId: z
+    .string()
+    .optional()
+    .describe("Alias of targetLinkedinPageId: LinkedIn organization/page ID to publish to."),
+  targetLinkedinPageId: z
+    .string()
+    .optional()
+    .describe("LinkedIn organization/page ID to publish to (see get_linkedin_pages)."),
+  linkedinVisibility: z
+    .enum(["PUBLIC", "CONNECTIONS", "LOGGED_IN", "CONTAINER"])
+    .optional()
+    .describe("LinkedIn post visibility."),
+  googleBusinessLocationId: z
+    .string()
+    .optional()
+    .describe(
+      "Google Business location ID (see get_google_business_locations). Selected on the profile before publishing."
+    ),
+  xReplySettings: z
+    .enum(["everyone", "following", "mentionedUsers", "subscribers", "verified"])
+    .optional()
+    .describe("Who can reply on X."),
+  xCommunityId: z.string().optional().describe("X community ID to post into."),
+  xLongTextAsPost: z.boolean().optional().describe("Post long X text as a single post instead of a thread."),
+  threadsLongTextAsPost: z.boolean().optional().describe("Post long Threads text as a single post instead of a thread."),
+  threadsTopicTag: z.string().optional().describe("Threads topic tag."),
+  brandContentToggle: z.boolean().optional().describe("TikTok branded content disclosure."),
+  brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure."),
+};
+
 const VideoPlatformOptions = z
   .object({
+    ...commonPlatformOptionFields,
+    // TikTok
+    tiktokPrivacyLevel: z
+      .string()
+      .optional()
+      .describe("TikTok privacy value, e.g. PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY."),
+    tiktokDisableDuet: z.boolean().optional().describe("Disable duets on TikTok."),
+    tiktokDisableComment: z.boolean().optional().describe("Disable comments on TikTok."),
+    tiktokDisableStitch: z.boolean().optional().describe("Disable stitch on TikTok."),
+    tiktokCoverTimestamp: z.number().optional().describe("Cover frame timestamp in ms."),
+    tiktokIsAigc: z.boolean().optional().describe("TikTok AI-generated content flag."),
+    tiktokPostMode: z.enum(["DIRECT_POST", "MEDIA_UPLOAD"]).optional().describe("TikTok post mode."),
+    // Instagram
     instagramMediaType: z
       .enum(["REELS", "STORIES"])
       .optional()
       .describe("Instagram video placement. Use REELS for Reels, STORIES for Stories."),
-    tiktokPrivacyLevel: z
-      .string()
-      .optional()
-      .describe("TikTok privacy value, e.g. PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, SELF_ONLY."),
+    instagramShareToFeed: z.boolean().optional().describe("Also show the Reel in the feed."),
+    instagramCoverUrl: z.string().optional().describe("Custom cover image URL for the Reel."),
+    instagramThumbOffset: z.string().optional().describe("Frame offset for the auto-generated thumbnail."),
+    instagramCollaborators: z.string().optional().describe("Comma-separated collaborator usernames."),
+    instagramUserTags: z.string().optional().describe("Comma-separated user tags."),
+    instagramLocationId: z.string().optional().describe("Instagram location ID."),
+    instagramAudioName: z.string().optional().describe("Audio track name."),
+    // YouTube
     youtubePrivacyStatus: z
       .enum(["public", "private", "unlisted"])
       .optional()
@@ -39,26 +89,23 @@ const VideoPlatformOptions = z
       .union([z.string(), z.array(z.string())])
       .optional()
       .describe("One YouTube playlist ID, or an array of playlist IDs, to add the uploaded video to."),
-    youtubeThumbnailUrl: z
-      .string()
-      .optional()
-      .describe("Custom thumbnail image URL for the YouTube video."),
+    youtubeThumbnailUrl: z.string().optional().describe("Custom thumbnail image URL for the YouTube video."),
     youtubeTags: z
       .union([z.string(), z.array(z.string())])
       .optional()
       .describe("YouTube video tags, as an array or comma-separated string."),
-    youtubeCategoryId: z
-      .string()
-      .optional()
-      .describe("YouTube category ID, e.g. '22' for People & Blogs."),
-    youtubeSelfDeclaredMadeForKids: z
-      .boolean()
-      .optional()
-      .describe("YouTube made-for-kids flag (COPPA)."),
-    youtubeContainsSyntheticMedia: z
-      .boolean()
-      .optional()
-      .describe("YouTube AI/synthetic content disclosure."),
+    youtubeCategoryId: z.string().optional().describe("YouTube category ID, e.g. '22' for People & Blogs."),
+    youtubeEmbeddable: z.boolean().optional().describe("Allow embedding the video on other sites."),
+    youtubeLicense: z.enum(["youtube", "creativeCommon"]).optional().describe("YouTube video license."),
+    youtubePublicStatsViewable: z.boolean().optional().describe("Show public view stats on the video."),
+    youtubeSelfDeclaredMadeForKids: z.boolean().optional().describe("YouTube made-for-kids flag (COPPA)."),
+    youtubeContainsSyntheticMedia: z.boolean().optional().describe("YouTube AI/synthetic content disclosure."),
+    youtubeDefaultLanguage: z.string().optional().describe("BCP-47 language of title/description."),
+    youtubeDefaultAudioLanguage: z.string().optional().describe("BCP-47 language of the audio."),
+    youtubeAllowedCountries: z.string().optional().describe("Comma-separated allowed country codes."),
+    youtubeBlockedCountries: z.string().optional().describe("Comma-separated blocked country codes."),
+    youtubeHasPaidProductPlacement: z.boolean().optional().describe("Paid product placement flag."),
+    youtubeRecordingDate: z.string().optional().describe("Recording date, ISO 8601."),
     youtubeSubtitles: z
       .array(
         z.object({
@@ -69,18 +116,116 @@ const VideoPlatformOptions = z
       )
       .optional()
       .describe("Subtitle/caption tracks to attach to the YouTube video."),
-    facebookPageId: z.string().optional().describe("Facebook Page ID to publish to."),
-    linkedinPageId: z.string().optional().describe("LinkedIn organization/page ID to publish to."),
-    pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to."),
-    googleBusinessLocationId: z
+    // Facebook
+    facebookMediaType: z.enum(["REELS", "STORIES", "VIDEO"]).optional().describe("Facebook video placement."),
+    facebookVideoState: z.enum(["PUBLISHED", "DRAFT"]).optional().describe("Facebook video state."),
+    thumbnailUrl: z
       .string()
       .optional()
-      .describe("Google Business location ID to publish to."),
+      .describe("Thumbnail URL for normal Facebook page videos (facebookMediaType VIDEO)."),
+    // Pinterest
+    pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to (see get_pinterest_boards)."),
+    pinterestLink: z.string().optional().describe("Destination link for the pin."),
+    pinterestCoverImageUrl: z.string().optional().describe("Cover image URL for the video pin."),
+    pinterestCoverImageKeyFrameTime: z.number().optional().describe("Key frame time in ms for the cover."),
+    // X
+    xTaggedUserIds: z.union([z.string(), z.array(z.string())]).optional().describe("X user IDs to tag in the media."),
+    xPlaceId: z.string().optional().describe("X location place ID."),
   })
   .passthrough()
   .describe(
-    "Flat platform-specific override object. Use the documented camelCase keys directly; unknown keys are forwarded unchanged for newer platform options."
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (youtubeTitle, tiktokTitle, youtubeDescription, instagramFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
   );
+
+const PhotoPlatformOptions = z
+  .object({
+    ...commonPlatformOptionFields,
+    tiktokAutoAddMusic: z.boolean().optional().describe("Auto add music to TikTok photo posts."),
+    tiktokDisableComment: z.boolean().optional().describe("Disable comments on TikTok."),
+    tiktokPhotoCoverIndex: z.number().int().optional().describe("Index of the cover photo, 0-based."),
+    instagramMediaType: z
+      .enum(["IMAGE", "STORIES"])
+      .optional()
+      .describe("Instagram photo placement. Use IMAGE for feed, STORIES for Stories."),
+    instagramCollaborators: z.string().optional().describe("Comma-separated collaborator usernames."),
+    instagramUserTags: z.string().optional().describe("Comma-separated user tags."),
+    instagramLocationId: z.string().optional().describe("Instagram location ID."),
+    pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to (see get_pinterest_boards)."),
+    pinterestLink: z.string().optional().describe("Destination link for the pin."),
+    pinterestAltText: z.string().optional().describe("Pinterest-specific alt text."),
+    xTaggedUserIds: z.union([z.string(), z.array(z.string())]).optional().describe("X user IDs to tag in the media."),
+    xPlaceId: z.string().optional().describe("X location place ID."),
+    xThreadImageLayout: z
+      .string()
+      .optional()
+      .describe("Images per X thread post, e.g. '4,4' or '2,3,1'. Total must equal image count."),
+    threadsThreadMediaLayout: z
+      .string()
+      .optional()
+      .describe("Media items per Threads post, e.g. '5,5'. Total must equal file count."),
+    redditSubreddit: z.string().optional().describe("Subreddit name, without r/."),
+    redditFlairId: z.string().optional().describe("Reddit flair template ID."),
+  })
+  .passthrough()
+  .describe(
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (instagramTitle, xFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
+  );
+
+const TextPlatformOptions = z
+  .object({
+    ...commonPlatformOptionFields,
+    facebookLinkUrl: z.string().optional().describe("Link preview URL on Facebook."),
+    linkedinLinkUrl: z.string().optional().describe("Link preview URL on LinkedIn."),
+    blueskyLinkUrl: z.string().optional().describe("External embed link preview URL on Bluesky."),
+    xPostUrl: z.string().optional().describe("URL to attach to the X post."),
+    xQuoteTweetId: z.string().optional().describe("Tweet ID to quote."),
+    xPollOptions: z
+      .union([z.string(), z.array(z.string())])
+      .optional()
+      .describe("X poll options (2-4)."),
+    xPollDuration: z.number().int().optional().describe("X poll duration in minutes (5-10080)."),
+    xPollReplySettings: z
+      .enum(["everyone", "following", "mentionedUsers", "subscribers", "verified"])
+      .optional()
+      .describe("Who can reply to the X poll."),
+    xCardUri: z.string().optional().describe("Card URI for Twitter Cards."),
+    redditSubreddit: z.string().optional().describe("Subreddit name, without r/. Title is required for Reddit."),
+    redditFlairId: z.string().optional().describe("Reddit flair template ID."),
+    redditLinkUrl: z.string().optional().describe("Link to attach on Reddit."),
+  })
+  .passthrough()
+  .describe(
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (xTitle, linkedinTitle, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
+  );
+
+/**
+ * Normalize option names the SDK does not know and resolve routing that is
+ * profile state rather than an upload field:
+ * - `linkedinPageId` is an MCP-level alias of the SDK's `targetLinkedinPageId`.
+ * - `googleBusinessLocationId` is applied by selecting the location on the
+ *   profile (same call as the select_google_business_location tool) before
+ *   uploading, because /api/upload has no per-request location field.
+ */
+async function resolvePlatformRouting(
+  client: UploadPostMcpClient,
+  options: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const opts = { ...options };
+  if (opts.linkedinPageId && !opts.targetLinkedinPageId) {
+    opts.targetLinkedinPageId = opts.linkedinPageId;
+  }
+  delete opts.linkedinPageId;
+
+  const locationId = opts.googleBusinessLocationId;
+  delete opts.googleBusinessLocationId;
+  const platforms = Array.isArray(opts.platforms) ? (opts.platforms as string[]) : [];
+  if (locationId && platforms.includes("google_business")) {
+    await client.request("POST", "/uploadposts/google-business/locations/select", {
+      body: { location_id: String(locationId), profile: String(opts.user) },
+    });
+  }
+  return opts;
+}
 
 /** Strip a leading `data:<mime>;base64,` prefix if present. */
 function stripDataUri(input: string): string {
@@ -209,10 +354,10 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
         );
       }
 
-      const options = {
+      const options = (await resolvePlatformRouting(client, {
         ...(rest as Record<string, unknown>),
         ...(platformOptions ?? {}),
-      } as never;
+      })) as never;
 
       if (videoBase64) {
         const tmpPath = await writeInlineVideo(videoBase64, videoFilename);
@@ -241,7 +386,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
         firstComment: z.string().optional(),
         altText: z.string().optional(),
         ...schedulingFields,
-        platformOptions: z.record(z.unknown()).optional(),
+        platformOptions: PhotoPlatformOptions.optional(),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -256,10 +401,11 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
         platformOptions?: Record<string, unknown>;
         [k: string]: unknown;
       };
-      return client.sdk.uploadPhotos(photosPathsOrUrls, {
+      const options = (await resolvePlatformRouting(client, {
         ...(rest as Record<string, unknown>),
         ...(platformOptions ?? {}),
-      } as never);
+      })) as never;
+      return client.sdk.uploadPhotos(photosPathsOrUrls, options);
     })
   );
 
@@ -278,7 +424,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
           .optional()
           .describe("Generic link preview URL (LinkedIn, Bluesky, Facebook)."),
         ...schedulingFields,
-        platformOptions: z.record(z.unknown()).optional(),
+        platformOptions: TextPlatformOptions.optional(),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -292,10 +438,11 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
         platformOptions?: Record<string, unknown>;
         [k: string]: unknown;
       };
-      return client.sdk.uploadText({
+      const options = (await resolvePlatformRouting(client, {
         ...(rest as Record<string, unknown>),
         ...(platformOptions ?? {}),
-      } as never);
+      })) as never;
+      return client.sdk.uploadText(options);
     })
   );
 
