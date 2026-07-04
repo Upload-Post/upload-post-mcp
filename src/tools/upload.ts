@@ -220,9 +220,18 @@ async function resolvePlatformRouting(
   delete opts.googleBusinessLocationId;
   const platforms = Array.isArray(opts.platforms) ? (opts.platforms as string[]) : [];
   if (locationId && platforms.includes("google_business")) {
-    await client.request("POST", "/uploadposts/google-business/locations/select", {
-      body: { location_id: String(locationId), profile: String(opts.user) },
-    });
+    try {
+      await client.request("POST", "/uploadposts/google-business/locations/select", {
+        body: { location_id: String(locationId), profile: String(opts.user) },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Could not select Google Business location '${locationId}': ${message}. ` +
+          "If the backend does not support location selection yet, omit googleBusinessLocationId — " +
+          "accounts with a single location publish to it automatically."
+      );
+    }
   }
   return opts;
 }
