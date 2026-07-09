@@ -24,14 +24,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
-      # Trusted publishing needs npm >= 11.5.1; Node 22 still ships npm 10.
-      - name: Upgrade npm
-        run: |
-          npm install -g npm@latest
-          npm --version
+      # Node 24 bundles npm 11, ready for trusted publishing once this package
+      # exists. Do NOT `npm install -g npm@latest`: it leaves npm's own tree
+      # short of `sigstore`, and `--provenance` then dies on it.
+      - name: Show npm version
+        run: npm --version
 
       - name: Verify tag matches package.json version
         if: startsWith(github.ref, 'refs/tags/v')
@@ -46,15 +46,21 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      # No NODE_AUTH_TOKEN: npm authenticates via the OIDC token, and the
-      # trusted publisher is configured on npmjs.com against this repo+workflow.
+      # npm cannot mint the first version of a package over OIDC: the trusted
+      # publisher setting only appears once the package exists (npm/cli#8544).
+      # This ships v0.3.0 with a token; switch to OIDC (drop NODE_AUTH_TOKEN)
+      # once the trusted publisher is configured on npmjs.com.
       - name: Publish to npm (dry-run)
         if: ${{ inputs.dry_run == true }}
         run: npm publish --access public --provenance --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish to npm
         if: ${{ inputs.dry_run != true }}
         run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         if: ${{ startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true }}
