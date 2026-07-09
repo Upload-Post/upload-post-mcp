@@ -9,12 +9,11 @@ jobs:
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-      - name: Inspect package state
+      - name: Inspect staged publishes
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          echo "--- whoami ---";        npm whoami || true
-          echo "--- view (auth) ---";   npm view @upload-post/mcp version || true
-          echo "--- access status ---"; npm access get status @upload-post/mcp || true
-          echo "--- visibility ---";    npm access get visibility @upload-post/mcp || true
-          echo "--- ls-packages ---";   npm access list packages 2>/dev/null | head -20 || true
+          echo "--- npm version ---"; npm --version
+          echo "--- stage ls ---";    npm stage ls @upload-post/mcp || true
+          echo "--- stage list ---";  npm stage list || true
+          echo "--- view again ---";  npm view @upload-post/mcp version || true
