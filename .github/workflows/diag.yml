@@ -1,0 +1,20 @@
+name: Diagnose npm package state
+on: { workflow_dispatch: }
+permissions: { contents: read, id-token: write }
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Inspect package state
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "--- whoami ---";        npm whoami || true
+          echo "--- view (auth) ---";   npm view @upload-post/mcp version || true
+          echo "--- access status ---"; npm access get status @upload-post/mcp || true
+          echo "--- visibility ---";    npm access get visibility @upload-post/mcp || true
+          echo "--- ls-packages ---";   npm access list packages 2>/dev/null | head -20 || true
