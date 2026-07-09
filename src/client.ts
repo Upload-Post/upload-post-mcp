@@ -1,7 +1,12 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import UploadPost from "upload-post";
 
-export const PACKAGE_VERSION = "0.1.1";
+import { createRequire } from "module";
+
+// Read from package.json so the version reported to the MCP host and sent in
+// X-Upload-Post-Source cannot drift from what was actually published.
+const require_ = createRequire(import.meta.url);
+export const PACKAGE_VERSION: string = require_("../package.json").version;
 export const DEFAULT_BASE_URL = "https://api.upload-post.com/api";
 
 export interface UploadPostMcpClientOptions {
@@ -32,6 +37,10 @@ export class UploadPostMcpClient {
     }
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
     this.sdk = new UploadPost(opts.apiKey);
+    // The SDK defaults to the public API; without this, a custom baseUrl
+    // applied only to the raw-HTTP endpoints and silently not to uploads.
+    // `baseUrl` exists at runtime but upload-post does not declare it.
+    (this.sdk as unknown as { baseUrl: string }).baseUrl = this.baseUrl;
     this.http = axios.create({
       baseURL: this.baseUrl,
       headers: {

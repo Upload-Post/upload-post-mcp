@@ -50,10 +50,8 @@ export const AnalyticsPlatform = z.enum([
   "facebook",
   "pinterest",
   "threads",
-  "bluesky",
   "x",
   "reddit",
-  "google_business",
 ]);
 
 /**

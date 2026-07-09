@@ -202,9 +202,9 @@ const TextPlatformOptions = z
  * Normalize option names the SDK does not know and resolve routing that is
  * profile state rather than an upload field:
  * - `linkedinPageId` is an MCP-level alias of the SDK's `targetLinkedinPageId`.
- * - `googleBusinessLocationId` is applied by selecting the location on the
- *   profile (same call as the select_google_business_location tool) before
- *   uploading, because /api/upload has no per-request location field.
+ * - `googleBusinessLocationId` is an alias of the SDK's `gbpLocationId`, which
+ *   the API reads from the upload form. There is no persistent location
+ *   selection: /uploadposts/google-business/locations/select does not exist.
  */
 async function resolvePlatformRouting(
   client: UploadPostMcpClient,
@@ -218,20 +218,8 @@ async function resolvePlatformRouting(
 
   const locationId = opts.googleBusinessLocationId;
   delete opts.googleBusinessLocationId;
-  const platforms = Array.isArray(opts.platforms) ? (opts.platforms as string[]) : [];
-  if (locationId && platforms.includes("google_business")) {
-    try {
-      await client.request("POST", "/uploadposts/google-business/locations/select", {
-        body: { location_id: String(locationId), profile: String(opts.user) },
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(
-        `Could not select Google Business location '${locationId}': ${message}. ` +
-          "If the backend does not support location selection yet, omit googleBusinessLocationId — " +
-          "accounts with a single location publish to it automatically."
-      );
-    }
+  if (locationId && !opts.gbpLocationId) {
+    opts.gbpLocationId = String(locationId);
   }
   return opts;
 }

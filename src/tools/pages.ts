@@ -82,31 +82,6 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
   );
 
   server.registerTool(
-    "select_google_business_location",
-    {
-      title: "Select Google Business location",
-      description:
-        "Pick the active Google Business location for a profile. Subsequent posts to `google_business` will publish there.",
-      inputSchema: {
-        profile: z.string(),
-        locationId: z.string(),
-      },
-      outputSchema: genericResultOutputSchema,
-      annotations: {
-        readOnlyHint: false,
-        openWorldHint: false,
-        destructiveHint: false,
-      },
-    },
-    safe(async (args) => {
-      const { profile, locationId } = args as { profile: string; locationId: string };
-      return client.request("POST", "/uploadposts/google-business/locations/select", {
-        body: compact({ profile, location_id: locationId }),
-      });
-    })
-  );
-
-  server.registerTool(
     "get_reddit_detailed_posts",
     {
       title: "Get detailed Reddit posts",
