@@ -469,7 +469,16 @@ const uploadStudioHtml = `<!doctype html>
           ["x", "X"],
           ["google_business", "Google Business"],
           ["discord", "Discord"],
-          ["telegram", "Telegram"]
+          ["telegram", "Telegram"],
+          ["slack", "Slack"],
+          ["mastodon", "Mastodon"],
+          ["nostr", "Nostr"],
+          ["lemmy", "Lemmy"],
+          ["devto", "Dev.to"],
+          ["hashnode", "Hashnode"],
+          ["wordpress", "WordPress"],
+          ["whop", "Whop"],
+          ["listmonk", "Listmonk"]
         ];
         var state = {
           file: null,

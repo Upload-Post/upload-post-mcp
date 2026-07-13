@@ -13,6 +13,8 @@ export const VideoPlatform = z.enum([
   "google_business",
   "discord",
   "telegram",
+  "mastodon",
+  "wordpress",
 ]);
 
 export const PhotoPlatform = z.enum([
@@ -28,6 +30,9 @@ export const PhotoPlatform = z.enum([
   "google_business",
   "discord",
   "telegram",
+  "mastodon",
+  "lemmy",
+  "wordpress",
 ]);
 
 export const TextPlatform = z.enum([
@@ -40,6 +45,15 @@ export const TextPlatform = z.enum([
   "google_business",
   "discord",
   "telegram",
+  "slack",
+  "mastodon",
+  "nostr",
+  "lemmy",
+  "devto",
+  "hashnode",
+  "wordpress",
+  "whop",
+  "listmonk",
 ]);
 
 export const AnalyticsPlatform = z.enum([
