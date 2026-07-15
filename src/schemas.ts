@@ -8,6 +8,7 @@ export const VideoPlatform = z.enum([
   "facebook",
   "pinterest",
   "threads",
+  "reddit",
   "bluesky",
   "x",
   "google_business",

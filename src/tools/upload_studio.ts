@@ -465,20 +465,14 @@ const uploadStudioHtml = `<!doctype html>
           ["facebook", "Facebook"],
           ["pinterest", "Pinterest"],
           ["threads", "Threads"],
+          ["reddit", "Reddit"],
           ["bluesky", "Bluesky"],
           ["x", "X"],
           ["google_business", "Google Business"],
           ["discord", "Discord"],
           ["telegram", "Telegram"],
-          ["slack", "Slack"],
           ["mastodon", "Mastodon"],
-          ["nostr", "Nostr"],
-          ["lemmy", "Lemmy"],
-          ["devto", "Dev.to"],
-          ["hashnode", "Hashnode"],
-          ["wordpress", "WordPress"],
-          ["whop", "Whop"],
-          ["listmonk", "Listmonk"]
+          ["wordpress", "WordPress"]
         ];
         var state = {
           file: null,
