@@ -67,7 +67,12 @@ const VideoPlatformOptions = z
     tiktokDisableStitch: z.boolean().optional().describe("Disable stitch on TikTok."),
     tiktokCoverTimestamp: z.number().optional().describe("Cover frame timestamp in ms."),
     tiktokIsAigc: z.boolean().optional().describe("TikTok AI-generated content flag."),
-    tiktokPostMode: z.enum(["DIRECT_POST", "MEDIA_UPLOAD"]).optional().describe("TikTok post mode."),
+    tiktokPostMode: z
+      .enum(["DIRECT_POST", "MEDIA_UPLOAD"])
+      .optional()
+      .describe(
+        "TikTok post mode. DIRECT_POST publishes straight to the account. MEDIA_UPLOAD (Draft) sends the video to the user's TikTok inbox/drafts to publish from the app — RECOMMENDED for TikTok, as publishing natively from the app tends to get more organic reach. Note: in Draft mode TikTok ignores the title/caption and other metadata sent via API; the user adds them in the app before publishing. Defaults to DIRECT_POST."
+      ),
     // Instagram
     instagramMediaType: z
       .enum(["REELS", "STORIES"])
