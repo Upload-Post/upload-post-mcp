@@ -465,11 +465,14 @@ const uploadStudioHtml = `<!doctype html>
           ["facebook", "Facebook"],
           ["pinterest", "Pinterest"],
           ["threads", "Threads"],
+          ["reddit", "Reddit"],
           ["bluesky", "Bluesky"],
           ["x", "X"],
           ["google_business", "Google Business"],
           ["discord", "Discord"],
-          ["telegram", "Telegram"]
+          ["telegram", "Telegram"],
+          ["mastodon", "Mastodon"],
+          ["wordpress", "WordPress"]
         ];
         var state = {
           file: null,
