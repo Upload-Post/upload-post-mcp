@@ -7,6 +7,7 @@ import { registerAnalyticsTools } from "./tools/analytics.js";
 import { registerUserTools } from "./tools/users.js";
 import { registerPagesTools } from "./tools/pages.js";
 import { registerCommentTools } from "./tools/comments.js";
+import { registerPostTools } from "./tools/posts.js";
 import { registerDmTools } from "./tools/dms.js";
 import { registerFfmpegTools } from "./tools/ffmpeg.js";
 import { registerQueueTools } from "./tools/queue.js";
@@ -32,6 +33,7 @@ export function buildServer(client: UploadPostMcpClient): McpServer {
   registerUserTools(server, client);
   registerPagesTools(server, client);
   registerCommentTools(server, client);
+  registerPostTools(server, client);
   registerDmTools(server, client);
   registerFfmpegTools(server, client);
   registerQueueTools(server, client);

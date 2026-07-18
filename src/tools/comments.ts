@@ -8,16 +8,19 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
   server.registerTool(
     "get_post_comments",
     {
-      title: "Get Instagram post comments",
+      title: "Get post comments",
       description:
-        "List comments on an Instagram post. Identify the post by either `postId` or `postUrl`.",
+        "List comments on a post. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn). TikTok is not supported.",
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         platform: z
-          .string()
+          .enum(["instagram", "facebook", "youtube", "linkedin"])
           .default("instagram")
-          .describe("Social platform. Only 'instagram' is currently supported."),
-        postId: z.string().optional().describe("Platform media/post ID."),
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin. TikTok is unsupported."),
+        postId: z
+          .string()
+          .optional()
+          .describe("Platform media/post ID. YouTube: the videoId. LinkedIn: the post urn."),
         postUrl: z.string().optional().describe("Public URL of the post."),
         after: z
           .string()
@@ -145,6 +148,101 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           user: a.user,
           comment_id: a.commentId,
           message: a.message,
+        }),
+      });
+    })
+  );
+
+  server.registerTool(
+    "create_comment",
+    {
+      title: "Create a comment or reply",
+      description:
+        "Post a top-level comment or a reply on a post. Provide exactly ONE of `commentId` (reply to a comment), `postId`, or `postUrl` (top-level). LinkedIn: postId=the post urn. Instagram requires `commentId` (replies only).",
+      inputSchema: {
+        user: z.string().describe("Upload-Post profile name."),
+        message: z.string().min(1).describe("Comment text to post."),
+        platform: z
+          .enum(["instagram", "facebook", "youtube", "linkedin"])
+          .default("instagram")
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin."),
+        commentId: z
+          .string()
+          .optional()
+          .describe("Reply to this comment. Required by Instagram."),
+        postId: z
+          .string()
+          .optional()
+          .describe("Top-level comment on this post ID. LinkedIn: the post urn."),
+        postUrl: z.string().optional().describe("Top-level comment on this post URL."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
+    },
+    safe(async (args) => {
+      const a = args as {
+        user: string;
+        message: string;
+        platform?: string;
+        commentId?: string;
+        postId?: string;
+        postUrl?: string;
+      };
+      return client.request("POST", "/uploadposts/comments/create", {
+        body: compact({
+          platform: a.platform ?? "instagram",
+          user: a.user,
+          message: a.message,
+          comment_id: a.commentId,
+          post_id: a.postId,
+          post_url: a.postUrl,
+        }),
+      });
+    })
+  );
+
+  server.registerTool(
+    "delete_comment",
+    {
+      title: "Delete a comment",
+      description:
+        "Delete a comment by `commentId`. LinkedIn also requires `postId` (the post urn).",
+      inputSchema: {
+        user: z.string().describe("Upload-Post profile name."),
+        commentId: z.string().describe("ID of the comment to delete."),
+        platform: z
+          .enum(["instagram", "facebook", "youtube", "linkedin"])
+          .default("instagram")
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin."),
+        postId: z
+          .string()
+          .optional()
+          .describe("LinkedIn only: the post urn the comment belongs to."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
+    },
+    safe(async (args) => {
+      const a = args as {
+        user: string;
+        commentId: string;
+        platform?: string;
+        postId?: string;
+      };
+      return client.request("DELETE", "/uploadposts/comments/delete", {
+        body: compact({
+          platform: a.platform ?? "instagram",
+          user: a.user,
+          comment_id: a.commentId,
+          post_id: a.postId,
         }),
       });
     })
