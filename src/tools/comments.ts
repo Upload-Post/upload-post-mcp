@@ -76,6 +76,13 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           .string()
           .default("instagram")
           .describe("Social platform. Only 'instagram' is currently supported."),
+        buttons: z
+          .array(z.object({ title: z.string(), url: z.string().url() }))
+          .max(3)
+          .optional()
+          .describe(
+            "Up to 3 web_url buttons rendered in the DM. Each item is { title, url }."
+          ),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -90,6 +97,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         commentId: string;
         message: string;
         platform?: string;
+        buttons?: Array<{ title: string; url: string }>;
       };
       return client.request("POST", "/uploadposts/comments/reply", {
         body: compact({
@@ -97,6 +105,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           user: a.user,
           comment_id: a.commentId,
           message: a.message,
+          buttons: a.buttons,
         }),
       });
     })
