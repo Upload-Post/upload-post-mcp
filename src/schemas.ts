@@ -92,10 +92,6 @@ export const schedulingFields = {
     .boolean()
     .optional()
     .describe("Return immediately with request_id (default true)."),
-    .describe(
-      "If true, AI generates native per-platform title/description from the media and fills any field left empty."
-    ),
-    .describe("Force the AI output language (ISO code); omit to auto-detect from the media."),
 };
 
 export const genericResultOutputSchema = {
