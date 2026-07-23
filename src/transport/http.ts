@@ -69,7 +69,24 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
   const introspectCache = new IntrospectCache(oauthCfg.introspectCacheTtlMs);
   const authDeps = { cfg: oauthCfg, upstream, cache: introspectCache };
 
+  // ----- Last-resort process guards -----------------------------------------
+  // A single request-scoped throw/rejection (transient upstream error, a client
+  // that aborts mid-body, an SDK edge case) must never take the whole
+  // multi-tenant server down. Node's default on an unhandled rejection /
+  // uncaught exception is to terminate the process; we log and keep serving.
+  process.on("unhandledRejection", (reason) => {
+    process.stderr.write(
+      `[upload-post-mcp] unhandledRejection: ${(reason as Error)?.stack ?? reason}\n`
+    );
+  });
+  process.on("uncaughtException", (err) => {
+    process.stderr.write(
+      `[upload-post-mcp] uncaughtException: ${err?.stack ?? err}\n`
+    );
+  });
+
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+   try {
     const url = req.url ?? "";
     const method = req.method ?? "GET";
 
@@ -190,6 +207,26 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     }
 
     await session.transport.handleRequest(req, res, body);
+   } catch (err) {
+    // Any throw/rejection from the request path lands here instead of becoming
+    // an unhandledRejection that crashes the process. Turn it into a 500 (or
+    // just close the socket if the response is already partially written).
+    process.stderr.write(
+      `[upload-post-mcp] request handler error (${req.method ?? "?"} ${req.url ?? "?"}): ` +
+        `${(err as Error)?.stack ?? err}\n`
+    );
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "internal_server_error" }));
+    } else {
+      try {
+        res.end();
+      } catch {
+        /* socket already gone — nothing to do */
+      }
+    }
+   }
   });
 
   await new Promise<void>((resolve) => {
