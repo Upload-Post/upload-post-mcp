@@ -159,6 +159,17 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       }
     }
 
+    // ----- Root: send browsers/crawlers to the marketing page -------------
+    // The MCP endpoint lives at /mcp (below); the bare domain used to 404.
+    // A 301 hands the exact-match domain's SEO weight to the landing page.
+    if ((method === "GET" || method === "HEAD") && (url === "/" || url.startsWith("/?"))) {
+      res.statusCode = 301;
+      res.setHeader("location", "https://www.upload-post.com/mcp");
+      res.setHeader("cache-control", "public, max-age=86400");
+      res.end();
+      return;
+    }
+
     // ----- MCP -----------------------------------------------------------
     if (url !== "/mcp") {
       res.statusCode = 404;
