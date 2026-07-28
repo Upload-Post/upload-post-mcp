@@ -90,7 +90,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
     {
       title: "Get cached post analytics",
       description:
-        "Per-post metrics served from Upload-Post's daily snapshot cache instead of live platform calls. Unlike `get_post_analytics` it never hits the platforms, so it is not subject to the live analytics rate limit (100 requests / 5 minutes) — prefer it when scanning many posts or paging through a profile's history. Paginated: pass `next_cursor` from the response back as `cursor` until `has_more` is false.",
+        "Replays per-post metrics Upload-Post already fetched, instead of calling the platforms again. ONLY contains posts previously fetched through `get_post_analytics`; there is no background refresh, so `captured_at` is the last time that post was read live and a post never queried live will be absent. Unlike `get_post_analytics` it never hits the platforms, so it is not subject to the live analytics rate limit (100 requests / 5 minutes) — prefer it when scanning many posts or paging through a profile's history. Paginated: pass `next_cursor` from the response back as `cursor` until `has_more` is false.",
       inputSchema: {
         user: z.string().describe("Profile username whose posts to read."),
         // Narrower than AnalyticsPlatform: the snapshot cache has no X/Twitter posts.

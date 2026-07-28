@@ -69,7 +69,7 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 
 Async uploads return a `request_id`. The agent should poll `get_status` until `success: true`.
 
-`get_media` and `get_cached_post_analytics` are cursor-paginated: feed the response's `next_cursor` back as `cursor` until `has_more` is false. LinkedIn, Discord and Telegram do not support media cursors and accept `limit` only. Prefer `get_cached_post_analytics` over `get_post_analytics` when scanning many posts — it reads the daily snapshot cache and so avoids the live analytics rate limit of 100 requests / 5 minutes.
+`get_media` and `get_cached_post_analytics` are cursor-paginated: feed the response's `next_cursor` back as `cursor` until `has_more` is false. LinkedIn, Discord and Telegram do not support media cursors and accept `limit` only. Prefer `get_cached_post_analytics` over `get_post_analytics` when scanning many posts — it replays previously fetched results and so avoids the live analytics rate limit of 100 requests / 5 minutes. Only contains posts previously fetched through a live per-post endpoint; there is no background refresh, so captured_at is the last time that post was read live.
 
 FFmpeg jobs accept one public URL through `input_url` or multiple URLs through `files`. Poll `get_ffmpeg_job` until completion, then call `download_ffmpeg_result`; it returns the result URL without streaming the processed binary through MCP.
 
