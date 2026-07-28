@@ -42,6 +42,30 @@ const commonPlatformOptionFields = {
     .describe(
       "Google Business location ID (see get_google_business_locations). Selected on the profile before publishing."
     ),
+  gbpPostType: z
+    .enum(["MEDIA", "PHOTO", "GALLERY"])
+    .optional()
+    .describe(
+      "Publish into the Google Business location's photo gallery instead of creating a Local Post. Omitting it keeps the Local Post behaviour."
+    ),
+  gbpMediaCategory: z
+    .enum([
+      "COVER",
+      "PROFILE",
+      "LOGO",
+      "EXTERIOR",
+      "INTERIOR",
+      "PRODUCT",
+      "AT_WORK",
+      "FOOD_AND_DRINK",
+      "MENU",
+      "COMMON_AREA",
+      "ROOMS",
+      "TEAMS",
+      "ADDITIONAL",
+    ])
+    .optional()
+    .describe("Google Business gallery category for the uploaded photo. Only used with gbpPostType. Defaults to ADDITIONAL."),
   xReplySettings: z
     .enum(["everyone", "following", "mentionedUsers", "subscribers", "verified"])
     .optional()

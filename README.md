@@ -59,7 +59,7 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Media staging | `create_media_upload`, `complete_media_upload`, `get_media_upload`, `delete_media_upload` |
 | Status        | `get_status`, `get_job_status`, `get_history`, `get_media` |
 | Schedule      | `list_scheduled`, `cancel_scheduled`, `edit_scheduled` |
-| Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_platform_metrics` |
+| Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_cached_post_analytics`, `get_platform_metrics` |
 | Users         | `get_account_info`, `list_users`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
 | Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `select_google_business_location`, `get_reddit_detailed_posts` |
 | Comments      | `get_post_comments`, `reply_to_comment`, `public_reply_to_comment` |
@@ -68,6 +68,8 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Queue         | `get_queue_settings`, `update_queue_settings`, `preview_queue` |
 
 Async uploads return a `request_id`. The agent should poll `get_status` until `success: true`.
+
+`get_media` and `get_cached_post_analytics` are cursor-paginated: feed the response's `next_cursor` back as `cursor` until `has_more` is false. LinkedIn, Discord and Telegram do not support media cursors and accept `limit` only. Prefer `get_cached_post_analytics` over `get_post_analytics` when scanning many posts — it reads the daily snapshot cache and so avoids the live analytics rate limit of 100 requests / 5 minutes.
 
 FFmpeg jobs accept one public URL through `input_url` or multiple URLs through `files`. Poll `get_ffmpeg_job` until completion, then call `download_ffmpeg_result`; it returns the result URL without streaming the processed binary through MCP.
 
