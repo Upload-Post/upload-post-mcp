@@ -10,7 +10,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
     {
       title: "Get profile analytics",
       description:
-        "Aggregated analytics for a profile across selected platforms (followers, views, engagement).",
+        "Aggregated analytics for a profile across selected platforms (followers, views, engagement). Instagram also returns two audience breakdowns with the same shape (age / gender / country / city): `follower_demographics` for the account's followers and `engaged_audience_demographics` for the accounts that engaged with its content.",
       inputSchema: {
         profileUsername: z.string(),
         platforms: z.array(AnalyticsPlatform).optional(),
@@ -83,6 +83,46 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
       },
     },
     safe(async ({ requestId }) => client.sdk.getPostAnalytics(requestId as string))
+  );
+
+  server.registerTool(
+    "get_cached_post_analytics",
+    {
+      title: "Get cached post analytics",
+      description:
+        "Replays per-post metrics Upload-Post already fetched, instead of calling the platforms again. ONLY contains posts previously fetched through `get_post_analytics`; there is no background refresh, so `captured_at` is the last time that post was read live and a post never queried live will be absent. Unlike `get_post_analytics` it never hits the platforms, so it is not subject to the live analytics rate limit (100 requests / 5 minutes) — prefer it when scanning many posts or paging through a profile's history. Paginated: pass `next_cursor` from the response back as `cursor` until `has_more` is false.",
+      inputSchema: {
+        user: z.string().describe("Profile username whose posts to read."),
+        // Narrower than AnalyticsPlatform: the snapshot cache has no X/Twitter posts.
+        platform: z
+          .enum(["instagram", "tiktok", "youtube", "facebook", "linkedin", "threads", "pinterest", "reddit"])
+          .optional()
+          .describe("Restrict to one platform. Omit for all platforms."),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(200)
+          .optional()
+          .describe("Posts per page. Defaults to 50, max 200."),
+        cursor: z.string().optional().describe("Opaque cursor from a previous response's `next_cursor`."),
+        since: z.string().optional().describe("Start date, YYYY-MM-DD. Defaults to 30 days ago."),
+        until: z.string().optional().describe("End date, YYYY-MM-DD. Defaults to today."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
+    },
+    // Raw HTTP rather than the SDK: this endpoint is newer than the `upload-post`
+    // version pinned in package.json, same as `get_media` in status.ts.
+    safe(async (args) =>
+      client.request("GET", "/uploadposts/post-analytics/cached", {
+        query: compact(args as Record<string, unknown>),
+      })
+    )
   );
 
   server.registerTool(

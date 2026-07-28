@@ -91,10 +91,16 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
         connectTitle: z.string().optional(),
         connectDescription: z.string().optional(),
         language: z
-          .enum(["en", "es", "de", "fr", "pt"])
+          .enum(["en", "es", "de", "fr", "pt", "pl", "tr"])
           .optional()
           .describe(
             "Force the connection page language for this profile. When omitted, the page auto-detects the visitor's browser language and falls back to English."
+          ),
+        uiLabels: z
+          .record(z.string().max(300))
+          .optional()
+          .describe(
+            "Flat map of i18n dot-path keys to replacement strings for the connection page, e.g. { 'connect.title': 'Link your accounts' }. Max 100 entries; keys must match ^[a-zA-Z0-9_.]+$ and values are at most 300 characters. Echoed back in the `profile` object of validate_jwt."
           ),
       },
       outputSchema: genericResultOutputSchema,
@@ -114,7 +120,8 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
     "validate_jwt",
     {
       title: "Validate platform-integration JWT",
-      description: "Verify a JWT previously issued by `generate_jwt`.",
+      description:
+        "Verify a JWT previously issued by `generate_jwt`. The returned `profile` object echoes the connection page settings, including `language` and any `ui_labels`.",
       inputSchema: {
         jwt: z.string(),
       },

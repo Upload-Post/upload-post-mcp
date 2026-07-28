@@ -69,7 +69,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
     {
       title: "Get recent media from connected accounts",
       description:
-        "Retrieve recent media (videos, photos, text posts) pulled directly from a profile's connected social accounts. Supports instagram, tiktok, youtube, linkedin, facebook, x, threads, pinterest, bluesky, reddit. Useful for browsing what already exists on a platform before posting more.",
+        "Retrieve recent media (videos, photos, text posts) pulled directly from a profile's connected social accounts. Supports instagram, tiktok, youtube, linkedin, facebook, x, threads, pinterest, bluesky, reddit. Useful for browsing what already exists on a platform before posting more. Paginated: the response carries `pagination` = { limit, next_cursor, has_more }; pass `next_cursor` back as `cursor` for the next page (the last page returns next_cursor null and has_more false).",
       inputSchema: {
         user: z.string().optional().describe("Profile username to scope the query to."),
         platform: z.string().optional().describe("Restrict to a single platform key."),
@@ -79,7 +79,21 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
           .describe(
             "LinkedIn only. Numeric organization ID (e.g. '12345'), full URN ('urn:li:organization:12345'), or 'me' to force the personal profile. When omitted, accounts linked as an organization admin auto-resolve to the first administered organization; otherwise the personal profile is used.",
           ),
-        limit: z.number().int().positive().max(200).optional(),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(100)
+          .optional()
+          .describe(
+            "Items per page. Defaults to 25 and is clamped to 1-100. Per-platform caps: TikTok 20, YouTube 50, everything else 100.",
+          ),
+        cursor: z
+          .string()
+          .optional()
+          .describe(
+            "Opaque cursor from a previous response's `pagination.next_cursor`. LinkedIn, Discord and Telegram do not support cursors — passing one there fails with HTTP 400; use `limit` alone on those platforms.",
+          ),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
