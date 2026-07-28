@@ -3,7 +3,7 @@
   "name": "com.upload-post/mcp",
   "title": "Upload-Post",
   "description": "Social media MCP: publish, schedule & analyze posts on TikTok, Instagram, YouTube, LinkedIn & X",
-  "version": "0.3.2",
+  "version": "0.6.1",
   "websiteUrl": "https://www.upload-post.com",
   "repository": {
     "url": "https://github.com/Upload-Post/upload-post-mcp",
