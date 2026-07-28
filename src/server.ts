@@ -7,6 +7,7 @@ import { registerAnalyticsTools } from "./tools/analytics.js";
 import { registerUserTools } from "./tools/users.js";
 import { registerPagesTools } from "./tools/pages.js";
 import { registerCommentTools } from "./tools/comments.js";
+import { registerPostTools } from "./tools/posts.js";
 import { registerDmTools } from "./tools/dms.js";
 import { registerFfmpegTools } from "./tools/ffmpeg.js";
 import { registerQueueTools } from "./tools/queue.js";
@@ -17,7 +18,30 @@ export function buildServer(client: UploadPostMcpClient): McpServer {
   const server = new McpServer(
     {
       name: "upload-post",
+      title: "Upload-Post",
       version: PACKAGE_VERSION,
+      websiteUrl: "https://www.upload-post.com",
+      description:
+        "Publish, schedule and analyze social media across TikTok, Instagram, YouTube, LinkedIn, Facebook, X, Threads, Pinterest, Reddit, Bluesky, Google Business, Discord and Telegram.",
+      // Branding over the protocol, so clients don't have to sniff the origin
+      // for a favicon and show whatever they cached for the host instead.
+      icons: [
+        {
+          src: "https://www.upload-post.com/favicon-32.png",
+          mimeType: "image/png",
+          sizes: ["32x32"],
+        },
+        {
+          src: "https://www.upload-post.com/favicon-192.png",
+          mimeType: "image/png",
+          sizes: ["192x192"],
+        },
+        {
+          src: "https://www.upload-post.com/favicon-512.png",
+          mimeType: "image/png",
+          sizes: ["512x512"],
+        },
+      ],
     },
     {
       instructions:
@@ -32,6 +56,7 @@ export function buildServer(client: UploadPostMcpClient): McpServer {
   registerUserTools(server, client);
   registerPagesTools(server, client);
   registerCommentTools(server, client);
+  registerPostTools(server, client);
   registerDmTools(server, client);
   registerFfmpegTools(server, client);
   registerQueueTools(server, client);

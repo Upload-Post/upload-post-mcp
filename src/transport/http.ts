@@ -43,6 +43,19 @@ const GLAMA_WELL_KNOWN_PATH = "/.well-known/glama.json";
 const GLAMA_MAINTAINER_EMAIL = process.env.GLAMA_MAINTAINER_EMAIL ?? "jc.caverogracia@gmail.com";
 const DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN = "9O0B9c5XudnvLv1et2HdZ9WG2_H85jGPciJ7c8QBHjY";
 
+// Icon paths clients probe on the bare origin, mapped to the canonical assets
+// on the marketing site. Keep in sync with upload-post-landing/public.
+const FAVICON_REDIRECTS: Record<string, string> = {
+  "/favicon.ico": "https://www.upload-post.com/favicon.ico",
+  "/favicon-16.png": "https://www.upload-post.com/favicon-16.png",
+  "/favicon-32.png": "https://www.upload-post.com/favicon-32.png",
+  "/favicon-48.png": "https://www.upload-post.com/favicon-48.png",
+  "/favicon-192.png": "https://www.upload-post.com/favicon-192.png",
+  "/favicon-512.png": "https://www.upload-post.com/favicon-512.png",
+  "/apple-touch-icon.png": "https://www.upload-post.com/apple-touch-icon.png",
+  "/apple-touch-icon-precomposed.png": "https://www.upload-post.com/apple-touch-icon.png",
+};
+
 /**
  * Multi-tenant streamable-HTTP host.
  *
@@ -69,7 +82,24 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
   const introspectCache = new IntrospectCache(oauthCfg.introspectCacheTtlMs);
   const authDeps = { cfg: oauthCfg, upstream, cache: introspectCache };
 
+  // ----- Last-resort process guards -----------------------------------------
+  // A single request-scoped throw/rejection (transient upstream error, a client
+  // that aborts mid-body, an SDK edge case) must never take the whole
+  // multi-tenant server down. Node's default on an unhandled rejection /
+  // uncaught exception is to terminate the process; we log and keep serving.
+  process.on("unhandledRejection", (reason) => {
+    process.stderr.write(
+      `[upload-post-mcp] unhandledRejection: ${(reason as Error)?.stack ?? reason}\n`
+    );
+  });
+  process.on("uncaughtException", (err) => {
+    process.stderr.write(
+      `[upload-post-mcp] uncaughtException: ${err?.stack ?? err}\n`
+    );
+  });
+
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+   try {
     const url = req.url ?? "";
     const method = req.method ?? "GET";
 
@@ -142,6 +172,31 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       }
     }
 
+    // ----- Root: send browsers/crawlers to the marketing page -------------
+    // The MCP endpoint lives at /mcp (below); the bare domain used to 404.
+    // A 301 hands the exact-match domain's SEO weight to the landing page.
+    if ((method === "GET" || method === "HEAD") && (url === "/" || url.startsWith("/?"))) {
+      res.statusCode = 301;
+      res.setHeader("location", "https://www.upload-post.com/mcp");
+      res.setHeader("cache-control", "public, max-age=86400");
+      res.end();
+      return;
+    }
+
+    // ----- Favicons -------------------------------------------------------
+    // Clients that add this server as a custom connector (claude.ai among
+    // them) brand it by probing the origin for a favicon before they ever
+    // speak MCP. Nothing was served here, so they fell back to whatever they
+    // had cached for the host — which is why the connector showed a stray
+    // logo. Point them at the landing's icons; 302 so a rebrand propagates.
+    if ((method === "GET" || method === "HEAD") && FAVICON_REDIRECTS[url]) {
+      res.statusCode = 302;
+      res.setHeader("location", FAVICON_REDIRECTS[url]);
+      res.setHeader("cache-control", "public, max-age=86400");
+      res.end();
+      return;
+    }
+
     // ----- MCP -----------------------------------------------------------
     if (url !== "/mcp") {
       res.statusCode = 404;
@@ -190,6 +245,26 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     }
 
     await session.transport.handleRequest(req, res, body);
+   } catch (err) {
+    // Any throw/rejection from the request path lands here instead of becoming
+    // an unhandledRejection that crashes the process. Turn it into a 500 (or
+    // just close the socket if the response is already partially written).
+    process.stderr.write(
+      `[upload-post-mcp] request handler error (${req.method ?? "?"} ${req.url ?? "?"}): ` +
+        `${(err as Error)?.stack ?? err}\n`
+    );
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ error: "internal_server_error" }));
+    } else {
+      try {
+        res.end();
+      } catch {
+        /* socket already gone — nothing to do */
+      }
+    }
+   }
   });
 
   await new Promise<void>((resolve) => {

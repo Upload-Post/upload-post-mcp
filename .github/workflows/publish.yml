@@ -60,6 +60,15 @@ jobs:
 
       - name: Create GitHub Release
         if: ${{ startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes
+        # Idempotent: when the release is cut from the GitHub UI (which creates the
+        # tag AND the release), the tag push still triggers this workflow, and a
+        # plain `gh release create` then 422s with "already exists". Skip if it's
+        # already there so publishing over a UI-made release no longer fails.
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists — skipping creation."
+          else
+            gh release create "$GITHUB_REF_NAME" --generate-notes
+          fi
         env:
           GH_TOKEN: ${{ github.token }}

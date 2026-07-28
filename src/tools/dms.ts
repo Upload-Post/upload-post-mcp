@@ -18,6 +18,11 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
           .string()
           .describe("Instagram recipient/commenter ID. Required by the Upload-Post API."),
         message: z.string().min(1).describe("DM body to send."),
+        buttons: z
+          .array(z.object({ title: z.string(), url: z.string().url() }))
+          .max(3)
+          .optional()
+          .describe("Up to 3 web_url buttons rendered in the DM. Each item is { title, url }."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -77,6 +82,11 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
           .string()
           .optional()
           .describe("DM text sent to matching commenters. Required when action='start'."),
+        buttons: z
+          .array(z.object({ title: z.string(), url: z.string().url() }))
+          .max(3)
+          .optional()
+          .describe("For action='start': up to 3 web_url buttons ({ title, url }) added to each auto-DM."),
         monitoring_interval: z
           .number()
           .int()

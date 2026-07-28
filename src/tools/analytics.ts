@@ -15,7 +15,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
         profileUsername: z.string(),
         platforms: z.array(AnalyticsPlatform).optional(),
         pageId: z.string().optional().describe("Facebook page ID, if filtering by page."),
-        pageUrn: z.string().optional().describe("LinkedIn page URN, if filtering by company page."),
+        pageUrn: z.string().optional().describe("LinkedIn organization/company page URN or numeric ID. LinkedIn analytics are only available for pages you administer — personal profiles are not supported. Defaults to the first administered page."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
