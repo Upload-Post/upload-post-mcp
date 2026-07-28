@@ -43,6 +43,19 @@ const GLAMA_WELL_KNOWN_PATH = "/.well-known/glama.json";
 const GLAMA_MAINTAINER_EMAIL = process.env.GLAMA_MAINTAINER_EMAIL ?? "jc.caverogracia@gmail.com";
 const DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN = "9O0B9c5XudnvLv1et2HdZ9WG2_H85jGPciJ7c8QBHjY";
 
+// Icon paths clients probe on the bare origin, mapped to the canonical assets
+// on the marketing site. Keep in sync with upload-post-landing/public.
+const FAVICON_REDIRECTS: Record<string, string> = {
+  "/favicon.ico": "https://www.upload-post.com/favicon.ico",
+  "/favicon-16.png": "https://www.upload-post.com/favicon-16.png",
+  "/favicon-32.png": "https://www.upload-post.com/favicon-32.png",
+  "/favicon-48.png": "https://www.upload-post.com/favicon-48.png",
+  "/favicon-192.png": "https://www.upload-post.com/favicon-192.png",
+  "/favicon-512.png": "https://www.upload-post.com/favicon-512.png",
+  "/apple-touch-icon.png": "https://www.upload-post.com/apple-touch-icon.png",
+  "/apple-touch-icon-precomposed.png": "https://www.upload-post.com/apple-touch-icon.png",
+};
+
 /**
  * Multi-tenant streamable-HTTP host.
  *
@@ -165,6 +178,20 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     if ((method === "GET" || method === "HEAD") && (url === "/" || url.startsWith("/?"))) {
       res.statusCode = 301;
       res.setHeader("location", "https://www.upload-post.com/mcp");
+      res.setHeader("cache-control", "public, max-age=86400");
+      res.end();
+      return;
+    }
+
+    // ----- Favicons -------------------------------------------------------
+    // Clients that add this server as a custom connector (claude.ai among
+    // them) brand it by probing the origin for a favicon before they ever
+    // speak MCP. Nothing was served here, so they fell back to whatever they
+    // had cached for the host — which is why the connector showed a stray
+    // logo. Point them at the landing's icons; 302 so a rebrand propagates.
+    if ((method === "GET" || method === "HEAD") && FAVICON_REDIRECTS[url]) {
+      res.statusCode = 302;
+      res.setHeader("location", FAVICON_REDIRECTS[url]);
       res.setHeader("cache-control", "public, max-age=86400");
       res.end();
       return;
