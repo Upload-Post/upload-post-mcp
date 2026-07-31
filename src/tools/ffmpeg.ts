@@ -32,6 +32,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Submit FFmpeg processing job",
         readOnlyHint: false,
         openWorldHint: false,
         destructiveHint: false,
@@ -67,6 +68,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Poll FFmpeg job status",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -88,6 +90,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get FFmpeg result download URL",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -122,6 +125,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       inputSchema: {},
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get FFmpeg quota usage",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,

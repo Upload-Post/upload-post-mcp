@@ -15,6 +15,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get queue settings",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -65,6 +66,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
       // Replaces the existing config wholesale → mark as destructive so callers
       // confirm before overwriting.
       annotations: {
+        title: "Update queue settings",
         readOnlyHint: false,
         openWorldHint: false,
         destructiveHint: true,
@@ -89,6 +91,7 @@ export function registerQueueTools(server: McpServer, client: UploadPostMcpClien
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Preview queue",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,

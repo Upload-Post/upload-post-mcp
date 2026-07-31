@@ -14,6 +14,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       inputSchema: {},
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Validate API key & get account",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -30,6 +31,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       inputSchema: {},
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "List profiles",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -48,6 +50,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Create profile",
         readOnlyHint: false,
         openWorldHint: false,
         destructiveHint: false,
@@ -66,6 +69,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Delete profile",
         readOnlyHint: false,
         openWorldHint: false,
         destructiveHint: true,
@@ -105,6 +109,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Generate platform-integration JWT",
         readOnlyHint: false,
         openWorldHint: false,
         destructiveHint: false,
@@ -127,6 +132,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Validate platform-integration JWT",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,

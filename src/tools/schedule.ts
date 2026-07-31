@@ -13,6 +13,7 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
       inputSchema: {},
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "List scheduled posts",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -31,6 +32,7 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Cancel scheduled post",
         readOnlyHint: false,
         openWorldHint: false,
         destructiveHint: true,
@@ -51,6 +53,7 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Edit scheduled post",
         readOnlyHint: false,
         openWorldHint: false,
         destructiveHint: true,

@@ -307,13 +307,13 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
     {
       title: "Upload video",
       description:
-        "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. Hosted clients such as ChatGPT and claude.ai cannot publish attached files by passing `/mnt/data`, sandbox, or mounted local paths; for those files, ALWAYS call `open_upload_studio` first so the browser stages the video to Upload-Post/R2, then publishes it. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.).",
+        "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. A hosted MCP server cannot publish attached files passed as `/mnt/data`, sandbox, or other mounted local paths; for those files, ALWAYS call `open_upload_studio` first so the browser stages the video, then publishes it. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.).",
       inputSchema: {
         videoPathOrUrl: z
           .string()
           .optional()
           .describe(
-            "Public/signed HTTPS URL of the video. Absolute local paths are supported only for local/self-hosted MCP clients sharing the same filesystem. Do not pass ChatGPT `/mnt/data` or sandbox paths; use open_upload_studio instead."
+            "Public/signed HTTPS URL of the video. Absolute local paths are supported only for local/self-hosted MCP clients sharing the same filesystem. Do not pass `/mnt/data`, sandbox, or other mounted attachment paths; use open_upload_studio instead."
           ),
         videoBase64: z
           .string()
@@ -344,6 +344,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Upload video",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: false,
@@ -376,7 +377,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
       }
       if (videoPathOrUrl && looksLikeHostedAttachmentPath(videoPathOrUrl)) {
         throw new Error(
-          "This looks like a hosted ChatGPT/Claude attachment path. The MCP server cannot read mounted paths such as /mnt/data. Use open_upload_studio so the user can select the file in the browser and stage it through Upload-Post/R2, then publish from the returned media URL."
+          "This looks like a hosted attachment path. The MCP server cannot read mounted paths such as /mnt/data. Use open_upload_studio so the user can select the file in the browser and stage it through Upload-Post, then publish from the returned media URL."
         );
       }
 
@@ -416,6 +417,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Upload photos / carousel",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: false,
@@ -454,6 +456,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Upload text post",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: false,
@@ -491,6 +494,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Upload document (LinkedIn)",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: false,

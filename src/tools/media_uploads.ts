@@ -11,16 +11,17 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
     {
       title: "Create media upload",
       description:
-        "Internal/app staging helper for clients that can directly PUT file bytes to the returned upload_url. Do NOT use this directly from the ChatGPT/claude.ai model for attached files: the model/server environment cannot read or upload ChatGPT attachment bytes. For ChatGPT attached video uploads, call open_upload_studio first; the Studio browser component will call this tool after the user selects the file. Use this directly only in MCP clients that truly hold the file bytes and can perform the HTTP PUT themselves. Staging media is deleted after 24 hours; scheduled posts are safe because upload_video copies the media into durable scheduler storage.",
+        "Internal/app staging helper for clients that can directly PUT file bytes to the returned upload_url. Do NOT call this for files the user attached in a hosted chat client: the model and server environment cannot read those attachment bytes. For attached video uploads, call open_upload_studio first; the Studio browser component calls this tool after the user selects the file. Use this directly only in MCP clients that truly hold the file bytes and can perform the HTTP PUT themselves. Staging media is deleted after 24 hours; scheduled posts are safe because upload_video copies the media into durable scheduler storage.",
       inputSchema: {
         filename: z.string().describe("Original filename, e.g. clip.mp4."),
         contentType: z.string().describe("MIME type, e.g. video/mp4."),
         contentLength: z.number().int().positive().describe("File size in bytes."),
         mediaType: MediaType.default("video").describe("Kind of media being uploaded."),
-        source: z.string().optional().describe("Optional source label, e.g. mcp_chatgpt or mcp_claude."),
+        source: z.string().optional().describe("Optional source label identifying the calling client, e.g. mcp_studio."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Create media upload",
         readOnlyHint: false,
         openWorldHint: false,
         destructiveHint: false,
@@ -65,6 +66,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Complete media upload",
         readOnlyHint: false,
         openWorldHint: false,
         destructiveHint: false,
@@ -95,6 +97,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get media upload",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -124,6 +127,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Delete media upload",
         readOnlyHint: false,
         openWorldHint: false,
         destructiveHint: true,

@@ -26,6 +26,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Send a direct message",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: true,
@@ -50,6 +51,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "List DM conversations",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -110,6 +112,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
       // `action` can be read-only (status/logs) or destructive (stop/delete). We
       // report the worst case (destructive) so callers default to confirmation.
       annotations: {
+        title: "Manage automatic DM monitoring",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: true,

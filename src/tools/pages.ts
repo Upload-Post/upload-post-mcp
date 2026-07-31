@@ -15,6 +15,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "List Facebook pages",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -33,6 +34,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "List LinkedIn pages",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -51,6 +53,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "List Pinterest boards",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -69,6 +72,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "List Google Business locations",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -99,6 +103,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "List Google Business reviews",
         readOnlyHint: true,
         openWorldHint: true,
         destructiveHint: false,
@@ -129,6 +134,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Reply to a Google Business review",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: true,
@@ -155,6 +161,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get detailed Reddit posts",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,

@@ -16,6 +16,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get async upload status",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -35,6 +36,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get scheduled job status",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -54,6 +56,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get upload history",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -97,6 +100,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get recent media from connected accounts",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,

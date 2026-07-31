@@ -50,7 +50,7 @@ export function registerUploadStudio(server: McpServer): void {
     UPLOAD_STUDIO_URI,
     {
       title: "Upload-Post Video Studio",
-      description: "ChatGPT UI for uploading and publishing a video with Upload-Post.",
+      description: "Browser UI for uploading and publishing a video with Upload-Post.",
       mimeType: "text/html+skybridge",
       _meta: resourceMeta,
     },
@@ -71,7 +71,7 @@ export function registerUploadStudio(server: McpServer): void {
     {
       title: "Open upload studio",
       description:
-        "Open the ChatGPT UI for local/attached video uploads. Use this FIRST when the user attaches a video in ChatGPT or claude.ai and does not provide a public HTTPS URL. Do not try upload_video with /mnt/data, sandbox, or mounted local paths first: hosted MCP servers cannot read those files. The Studio lets the user select the file in the browser, stages it in short-lived Upload-Post/R2 storage, and publishes it through Upload-Post.",
+        "Open the upload studio in the user's browser for local or attached video uploads. Use this FIRST when the user attaches a video and does not provide a public HTTPS URL. Do not try upload_video with /mnt/data, sandbox, or other mounted local paths first: a hosted MCP server cannot read files on the client's machine. The Studio lets the user select the file in the browser, stages it in short-lived Upload-Post storage, and publishes it through Upload-Post.",
       inputSchema: {
         user: z.string().optional().describe("Optional Upload-Post profile name to prefill."),
         platforms: z.array(VideoPlatform).optional().describe("Optional platforms to preselect."),
@@ -91,6 +91,7 @@ export function registerUploadStudio(server: McpServer): void {
         instagramMediaType: InstagramVideoMediaType,
       },
       annotations: {
+        title: "Open upload studio",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,

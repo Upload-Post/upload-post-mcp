@@ -36,6 +36,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get post comments",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -89,6 +90,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Private reply (DM) to commenter",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: true,
@@ -130,6 +132,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Public reply to comment",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: true,
@@ -178,6 +181,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Create a comment or reply",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: true,
@@ -225,6 +229,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Delete a comment",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: true,

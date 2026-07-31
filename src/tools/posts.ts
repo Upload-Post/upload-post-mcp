@@ -23,6 +23,7 @@ export function registerPostTools(server: McpServer, client: UploadPostMcpClient
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Retry a failed upload",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: false,
@@ -54,6 +55,7 @@ export function registerPostTools(server: McpServer, client: UploadPostMcpClient
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Delete a published post",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: true,

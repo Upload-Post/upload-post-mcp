@@ -19,6 +19,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get profile analytics",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -53,6 +54,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get total impressions",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -77,6 +79,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get post analytics",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -111,6 +114,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "Get cached post analytics",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
@@ -134,6 +138,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
       inputSchema: {},
       outputSchema: genericResultOutputSchema,
       annotations: {
+        title: "List platform metrics",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,
