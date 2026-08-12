@@ -36,6 +36,14 @@ export class IntrospectCache {
     this.store.delete(this.keyFor(token));
   }
 
+  /** Drop expired entries that were never read again after expiry. */
+  purgeExpired(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.store) {
+      if (entry.expiresAt < now) this.store.delete(key);
+    }
+  }
+
   private keyFor(token: string): string {
     return createHash("sha256").update(token).digest("hex");
   }

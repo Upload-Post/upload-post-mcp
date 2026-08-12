@@ -32,7 +32,19 @@ export interface HttpOptions {
 interface Session {
   transport: StreamableHTTPServerTransport;
   server: McpServer;
+  lastSeenAt: number;
 }
+
+// Most MCP clients never send the DELETE that ends a session — they just
+// abandon it. Without eviction every abandoned session pins a full McpServer
+// (tools + zod schemas + axios client) forever, which is exactly the leak that
+// OOM-crashed this server daily in production. Idle sessions past the TTL are
+// swept; the cap is a backstop against bursts between sweeps.
+const SESSION_IDLE_TTL_MS = Number(
+  process.env.UPLOAD_POST_MCP_SESSION_TTL_MS ?? 30 * 60 * 1000
+);
+const SESSION_SWEEP_INTERVAL_MS = 60 * 1000;
+const MAX_SESSIONS = Number(process.env.UPLOAD_POST_MCP_MAX_SESSIONS ?? 2000);
 
 const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
 
@@ -146,7 +158,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     if (method === "GET" && (url === "/healthz" || url === "/health")) {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: true, oauth: oauthCfg.enabled }));
+      res.end(JSON.stringify({ ok: true, oauth: oauthCfg.enabled, sessions: sessions.size }));
       return;
     }
 
@@ -206,6 +218,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
 
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     let session = sessionId ? sessions.get(sessionId) : undefined;
+    if (session) session.lastSeenAt = Date.now();
 
     if (!session) {
       const resolution = await resolveAuth(req.headers["authorization"], authDeps);
@@ -213,19 +226,33 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
         return sendUnauthorized(res, oauthCfg.enabled, oauthCfg.issuer);
       }
 
+      // Cap enforcement: evict the longest-idle session rather than refusing
+      // the new one — the evicted client can always re-initialize.
+      if (sessions.size >= MAX_SESSIONS) {
+        let oldestId: string | undefined;
+        let oldestSeen = Infinity;
+        for (const [id, s] of sessions) {
+          if (s.lastSeenAt < oldestSeen) {
+            oldestSeen = s.lastSeenAt;
+            oldestId = id;
+          }
+        }
+        if (oldestId) closeSession(sessions, oldestId);
+      }
+
       const client = new UploadPostMcpClient({ apiKey: resolution.apiKey, baseUrl: opts.baseUrl });
       const server = opts.buildServer(client);
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
-          sessions.set(id, { transport, server });
+          sessions.set(id, { transport, server, lastSeenAt: Date.now() });
         },
       });
       transport.onclose = () => {
         if (transport.sessionId) sessions.delete(transport.sessionId);
       };
       await server.connect(transport);
-      session = { transport, server };
+      session = { transport, server, lastSeenAt: Date.now() };
     }
 
     let body: unknown = undefined;
@@ -267,6 +294,37 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
    }
   });
 
+  const sweeper = setInterval(() => {
+    introspectCache.purgeExpired();
+    const cutoff = Date.now() - SESSION_IDLE_TTL_MS;
+    let swept = 0;
+    for (const [id, s] of sessions) {
+      if (s.lastSeenAt < cutoff) {
+        closeSession(sessions, id);
+        swept++;
+      }
+    }
+    if (swept > 0) {
+      process.stderr.write(
+        `[upload-post-mcp] swept ${swept} idle session(s), ${sessions.size} active\n`
+      );
+    }
+  }, SESSION_SWEEP_INTERVAL_MS);
+  sweeper.unref();
+
+  // Node runs as PID 1 in the container, where the kernel does not apply
+  // default signal dispositions — without an explicit handler `docker stop`
+  // hangs for its full grace period and ends in SIGKILL.
+  const shutdown = (signal: string) => {
+    process.stderr.write(`[upload-post-mcp] ${signal} received, shutting down\n`);
+    clearInterval(sweeper);
+    for (const id of [...sessions.keys()]) closeSession(sessions, id);
+    httpServer.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 5000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+
   await new Promise<void>((resolve) => {
     httpServer.listen(opts.port, () => {
       process.stderr.write(
@@ -275,6 +333,20 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       );
       resolve();
     });
+  });
+}
+
+/**
+ * Close a session's transport and drop it from the map. `transport.onclose`
+ * already deletes the map entry, but delete explicitly too in case close()
+ * rejects before the callback fires.
+ */
+function closeSession(sessions: Map<string, Session>, id: string): void {
+  const session = sessions.get(id);
+  if (!session) return;
+  sessions.delete(id);
+  void session.transport.close().catch(() => {
+    /* already closed or client gone — nothing to do */
   });
 }
 
