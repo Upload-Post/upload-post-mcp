@@ -16,6 +16,7 @@ import { handleToken, handleRevoke } from "../oauth/tokens.js";
 import { UpstreamOAuthClient } from "../oauth/upstream_client.js";
 import { IntrospectCache } from "../oauth/introspect_cache.js";
 import { resolveAuth } from "../oauth/auth_resolver.js";
+import { stripSchemaDialect } from "./schema_dialect.js";
 
 export interface HttpOptions {
   port: number;
@@ -242,12 +243,14 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
 
       const client = new UploadPostMcpClient({ apiKey: resolution.apiKey, baseUrl: opts.baseUrl });
       const server = opts.buildServer(client);
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (id) => {
-          sessions.set(id, { transport, server, lastSeenAt: Date.now() });
-        },
-      });
+      const transport = stripSchemaDialect(
+        new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: (id) => {
+            sessions.set(id, { transport, server, lastSeenAt: Date.now() });
+          },
+        })
+      );
       transport.onclose = () => {
         if (transport.sessionId) sessions.delete(transport.sessionId);
       };
