@@ -221,6 +221,24 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     let session = sessionId ? sessions.get(sessionId) : undefined;
     if (session) session.lastSeenAt = Date.now();
 
+    // A session id we don't know means the session was swept (idle TTL) or
+    // belonged to a previous deploy. The spec (and every client) expects a
+    // 404 here so the client transparently re-initializes; building a fresh
+    // transport instead made the SDK answer 400 "Server not initialized",
+    // which clients surface as a fatal "session expired".
+    if (!session && sessionId) {
+      res.statusCode = 404;
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          error: { code: -32001, message: "Session not found" },
+          id: null,
+        })
+      );
+      return;
+    }
+
     if (!session) {
       const resolution = await resolveAuth(req.headers["authorization"], authDeps);
       if (!resolution) {
