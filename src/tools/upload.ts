@@ -97,6 +97,69 @@ const VideoPlatformOptions = z
       .describe(
         "TikTok post mode. DIRECT_POST publishes straight to the account. MEDIA_UPLOAD (Draft) sends the video to the user's TikTok inbox/drafts to publish from the app — RECOMMENDED for TikTok, as publishing natively from the app tends to get more organic reach. Note: in Draft mode TikTok ignores the title/caption and other metadata sent via API; the user adds them in the app before publishing. Defaults to DIRECT_POST."
       ),
+    // TikTok Business — require a TikTok Business account on the profile. On a
+    // standard TikTok connection the API ignores these and returns a warning,
+    // so the post still publishes.
+    tiktokMusicId: z
+      .string()
+      .optional()
+      .describe(
+        "TikTok Business only. Commercial Music Library track to add to the video — pass a `commercial_music_id` from tiktok_music_trending."
+      ),
+    tiktokMusicVolume: z
+      .number()
+      .int()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe("TikTok Business only. Volume of the added music track, 0-100. Defaults to 50 when music is set."),
+    tiktokMusicStart: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe("TikTok Business only. Start offset of the music track, in milliseconds."),
+    tiktokMusicEnd: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe("TikTok Business only. End offset of the music track, in milliseconds."),
+    tiktokOriginalSoundVolume: z
+      .number()
+      .int()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe(
+        "TikTok Business only. Volume of the video's own audio when music is added, 0-100. Defaults to 50 so the original audio is not muted."
+      ),
+    tiktokLocationId: z
+      .string()
+      .optional()
+      .describe(
+        "TikTok Business only. Location to tag — pass a `location_id` from tiktok_location_search. Must be sent together with tiktokLocationName."
+      ),
+    tiktokLocationName: z
+      .string()
+      .optional()
+      .describe(
+        "TikTok Business only. Name of the tagged location, from tiktok_location_search. TikTok requires it whenever tiktokLocationId is set."
+      ),
+    tiktokCoverImageUrl: z
+      .string()
+      .optional()
+      .describe("TikTok Business only. Custom cover image URL. Takes priority over tiktokCoverTimestamp."),
+    tiktokIsAiGenerated: z
+      .boolean()
+      .optional()
+      .describe("TikTok Business only. Disclose the video as AI-generated content."),
+    tiktokUploadToDraft: z
+      .boolean()
+      .optional()
+      .describe(
+        "TikTok Business only. Send the video to TikTok drafts instead of publishing it. When true TikTok ignores the rest of the post settings."
+      ),
     // Instagram
     instagramMediaType: z
       .enum(["REELS", "STORIES"])
@@ -171,7 +234,12 @@ const PhotoPlatformOptions = z
     ...commonPlatformOptionFields,
     tiktokAutoAddMusic: z.boolean().optional().describe("Auto add music to TikTok photo posts."),
     tiktokDisableComment: z.boolean().optional().describe("Disable comments on TikTok."),
-    tiktokPhotoCoverIndex: z.number().int().optional().describe("Index of the cover photo, 0-based."),
+    tiktokPhotoCoverIndex: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe("Index of the cover photo, 0-based. Sent as `photo_cover_index`; also honoured by TikTok Business photo posts."),
     instagramMediaType: z
       .enum(["IMAGE", "STORIES"])
       .optional()
@@ -339,7 +407,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
         platformOptions: VideoPlatformOptions
           .optional()
           .describe(
-            "Platform-specific overrides as a flat object (camelCase keys), e.g. { tiktokPrivacyLevel: 'PUBLIC_TO_EVERYONE', youtubePrivacyStatus: 'public', youtubePlaylistId: 'PLxxxxxxxxxxxx', facebookPageId: '123' }. `youtubePlaylistId` may also be an array or a comma-separated list of playlist IDs to add the uploaded video to."
+            "Platform-specific overrides as a flat object (camelCase keys), e.g. { tiktokPrivacyLevel: 'PUBLIC_TO_EVERYONE', youtubePrivacyStatus: 'public', youtubePlaylistId: 'PLxxxxxxxxxxxx', facebookPageId: '123' }. `youtubePlaylistId` may also be an array or a comma-separated list of playlist IDs to add the uploaded video to. The `tiktokMusic*`, `tiktokLocation*`, `tiktokCoverImageUrl`, `tiktokIsAiGenerated` and `tiktokUploadToDraft` keys require a TikTok Business account; discover valid values with tiktok_music_trending and tiktok_location_search."
           ),
       },
       outputSchema: genericResultOutputSchema,

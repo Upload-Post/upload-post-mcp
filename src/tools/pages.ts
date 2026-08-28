@@ -63,6 +63,67 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
   );
 
   server.registerTool(
+    "tiktok_music_trending",
+    {
+      title: "List trending TikTok music",
+      description:
+        "Trending tracks from the TikTok Commercial Music Library, to soundtrack a TikTok video. Requires the profile to have a TikTok Business account connected. Pass the returned `commercial_music_id` as `tiktokMusicId` in upload_video's platformOptions.",
+      inputSchema: {
+        profile: z.string().describe("Upload-Post profile name with a TikTok Business account connected."),
+        genre: z
+          .string()
+          .optional()
+          .describe("Genre filter, e.g. 'ALL' or 'POP'. Defaults to ALL."),
+        countryCode: z.string().optional().describe("ISO country code, e.g. 'US' or 'ES'. Defaults to US."),
+        dateRange: z
+          .enum(["1DAY", "7DAY", "30DAY", "90DAY"])
+          .optional()
+          .describe("Trending window. Defaults to 7DAY."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "List trending TikTok music",
+        readOnlyHint: true,
+        openWorldHint: true,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => {
+      const { profile, genre, countryCode, dateRange } = args as {
+        profile: string;
+        genre?: string;
+        countryCode?: string;
+        dateRange?: "1DAY" | "7DAY" | "30DAY" | "90DAY";
+      };
+      return client.sdk.getTiktokTrendingMusic(profile, { genre, countryCode, dateRange });
+    })
+  );
+
+  server.registerTool(
+    "tiktok_location_search",
+    {
+      title: "Search TikTok locations",
+      description:
+        "Search TikTok places to tag on a post. Requires the profile to have a TikTok Business account connected. TikTok needs both parts, so pass the returned `location_id` as `tiktokLocationId` and `location_name` as `tiktokLocationName` in upload_video's platformOptions.",
+      inputSchema: {
+        profile: z.string().describe("Upload-Post profile name with a TikTok Business account connected."),
+        query: z.string().min(1).max(100).describe("Place to search for, e.g. 'Madrid'. Max 100 characters."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Search TikTok locations",
+        readOnlyHint: true,
+        openWorldHint: true,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => {
+      const { profile, query } = args as { profile: string; query: string };
+      return client.sdk.getTiktokLocations(profile, query);
+    })
+  );
+
+  server.registerTool(
     "get_google_business_locations",
     {
       title: "List Google Business locations",
