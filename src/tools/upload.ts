@@ -253,6 +253,31 @@ const PhotoPlatformOptions = z
       .min(0)
       .optional()
       .describe("Index of the cover photo, 0-based. Sent as `photo_cover_index`; picks the cover of a TikTok photo post."),
+    // TikTok photo posts accept the music track id, the location pair and the AI
+    // disclosure. They do NOT accept the volume/trim, custom cover or draft
+    // fields — those are video-only, which is why they are absent here.
+    tiktokMusicId: z
+      .string()
+      .optional()
+      .describe(
+        "Commercial Music Library track to add to the photo post — pass a track `id` from tiktok_music_trending or tiktok_music_search (the `id` field, not `commercial_music_id`). TikTok's photo posts take the id alone: there is no volume or trim. Available on connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users); otherwise the field is ignored, the post still publishes and the response includes a per-field warning."
+      ),
+    tiktokLocationId: z
+      .string()
+      .optional()
+      .describe(
+        "Location to tag — pass a `location_id` from tiktok_location_search. Must be sent together with tiktokLocationName. Needs the `location` capability (see tiktokMusicId)."
+      ),
+    tiktokLocationName: z
+      .string()
+      .optional()
+      .describe(
+        "Name of the tagged location, from tiktok_location_search. TikTok requires it whenever tiktokLocationId is set."
+      ),
+    tiktokIsAiGenerated: z
+      .boolean()
+      .optional()
+      .describe("Disclose the photo post as AI-generated content."),
     instagramMediaType: z
       .enum(["IMAGE", "STORIES"])
       .optional()

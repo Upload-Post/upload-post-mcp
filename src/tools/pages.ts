@@ -149,19 +149,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
         dateRange?: "1DAY" | "7DAY" | "30DAY" | "90DAY";
         limit?: number;
       };
-      // Raw HTTP rather than the SDK: this endpoint ships in the SDK only from
-      // the next release, and the MCP must work against the currently published
-      // one (see UploadPostMcpClient — `http` exists for exactly this).
-      return client.request("GET", "/uploadposts/tiktok/music/search", {
-        query: compact({
-          profile,
-          q,
-          genre,
-          country_code: countryCode,
-          date_range: dateRange,
-          limit,
-        }),
-      });
+      return client.sdk.searchTiktokMusic(profile, { q, genre, countryCode, dateRange, limit });
     })
   );
 
@@ -186,6 +174,29 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
     safe(async (args) => {
       const { profile, query } = args as { profile: string; query: string };
       return client.sdk.getTiktokLocations(profile, query);
+    })
+  );
+
+  server.registerTool(
+    "tiktok_publishing_settings",
+    {
+      title: "Get TikTok publishing settings",
+      description:
+        "What the connected TikTok account is allowed to publish. Call this before setting `tiktokPrivacyLevel`: TikTok narrows the four privacy values per account (a private account has no PUBLIC_TO_EVERYONE), and sending one the account does not have fails the upload with error_code tiktok_privacy_unavailable. Returns `privacy_level_options` plus the account's max video duration and its comment/duet/stitch switches.",
+      inputSchema: {
+        profile: z.string().describe("Upload-Post profile name with a TikTok account connected."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Get TikTok publishing settings",
+        readOnlyHint: true,
+        openWorldHint: true,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => {
+      const { profile } = args as { profile: string };
+      return client.sdk.getTiktokPublishingSettings(profile);
     })
   );
 
