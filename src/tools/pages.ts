@@ -100,6 +100,72 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
   );
 
   server.registerTool(
+    "tiktok_music_search",
+    {
+      title: "Search TikTok music",
+      description:
+        "Find a TikTok Commercial Music Library track by song title or artist, to soundtrack a TikTok video. Pass the returned track `id` as `tiktokMusicId` in upload_video's platformOptions (not `commercial_music_id`, which TikTok rejects on public posts). IMPORTANT: TikTok has no music search endpoint, so this searches the trending charts Upload-Post caches per genre/country/period, NOT TikTok's whole catalogue — a song that is not trending in the chart you query will not be found; widening the search means trying another genre, country or period. Matching is case- and accent-insensitive and every word must match. Available on TikTok connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users).",
+      inputSchema: {
+        profile: z.string().describe("Upload-Post profile name with a TikTok account connected."),
+        q: z
+          .string()
+          .max(80)
+          .optional()
+          .describe("Song title or artist to look for, e.g. 'bad bunny'. Omit to get the chart in trending order."),
+        genre: z
+          .string()
+          .optional()
+          .describe("Genre filter, e.g. 'ALL' or 'POP'. Restricts the search to that genre. Defaults to ALL."),
+        countryCode: z
+          .string()
+          .optional()
+          .describe("ISO country code choosing WHICH country's chart is searched, e.g. 'US' or 'ES'. Defaults to US."),
+        dateRange: z
+          .enum(["1DAY", "7DAY", "30DAY", "90DAY"])
+          .optional()
+          .describe("Chart window. Defaults to 7DAY."),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Maximum tracks to return. Defaults to 50."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Search TikTok music",
+        readOnlyHint: true,
+        openWorldHint: true,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => {
+      const { profile, q, genre, countryCode, dateRange, limit } = args as {
+        profile: string;
+        q?: string;
+        genre?: string;
+        countryCode?: string;
+        dateRange?: "1DAY" | "7DAY" | "30DAY" | "90DAY";
+        limit?: number;
+      };
+      // Raw HTTP rather than the SDK: this endpoint ships in the SDK only from
+      // the next release, and the MCP must work against the currently published
+      // one (see UploadPostMcpClient — `http` exists for exactly this).
+      return client.request("GET", "/uploadposts/tiktok/music/search", {
+        query: compact({
+          profile,
+          q,
+          genre,
+          country_code: countryCode,
+          date_range: dateRange,
+          limit,
+        }),
+      });
+    })
+  );
+
+  server.registerTool(
     "tiktok_location_search",
     {
       title: "Search TikTok locations",

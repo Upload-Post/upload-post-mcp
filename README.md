@@ -62,7 +62,7 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_cached_post_analytics`, `get_platform_metrics` |
 | Users         | `get_account_info`, `list_users`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
 | Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `select_google_business_location`, `get_reddit_detailed_posts` |
-| TikTok        | `tiktok_music_trending`, `tiktok_location_search` |
+| TikTok        | `tiktok_music_trending`, `tiktok_music_search`, `tiktok_location_search` |
 | Comments      | `get_post_comments`, `reply_to_comment`, `public_reply_to_comment` |
 | DMs           | `send_dm`, `list_dm_conversations`, `manage_autodms` |
 | FFmpeg        | `submit_ffmpeg_job`, `get_ffmpeg_job`, `download_ffmpeg_result`, `get_ffmpeg_consumption` |
@@ -74,12 +74,19 @@ Async uploads return a `request_id`. The agent should poll `get_status` until `s
 
 ### TikTok
 
-Discover values with `tiktok_music_trending` (Commercial Music Library) and
-`tiktok_location_search`, then pass them in `upload_video`'s `platformOptions`:
+Discover values with `tiktok_music_trending` / `tiktok_music_search`
+(Commercial Music Library) and `tiktok_location_search`, then pass them in
+`upload_video`'s `platformOptions`.
+
+TikTok has **no music search endpoint**: the only catalogue it publishes is the
+trending chart for a genre, country and period. `tiktok_music_search` searches
+the charts Upload-Post caches, so it finds trending tracks by name or artist —
+not TikTok's entire catalogue. To widen a fruitless search, try another `genre`,
+`countryCode` or `dateRange`.
 
 | Key | Capability | Notes |
 | --- | --- | --- |
-| `tiktokMusicId` | `music` | The track `id` from `tiktok_music_trending` (not `commercial_music_id`) |
+| `tiktokMusicId` | `music` | The track `id` from `tiktok_music_trending` or `tiktok_music_search` (not `commercial_music_id`) |
 | `tiktokMusicVolume` | `music` | 0-100. Defaults to 50 when music is set |
 | `tiktokMusicStart` / `tiktokMusicEnd` | `music` | Music offsets in ms |
 | `tiktokOriginalSoundVolume` | `music` | 0-100. Defaults to 50 so the original audio is not muted |
@@ -98,8 +105,8 @@ Discover values with `tiktok_music_trending` (Commercial Music Library) and
 `profile_analytics`. A field whose
 capability the connection does not declare is ignored: the post still publishes
 and the response includes a per-field warning. Reconnect the TikTok account to
-enable it. `tiktok_music_trending` needs `music` and `tiktok_location_search`
-needs `location`.
+enable it. `tiktok_music_trending` and `tiktok_music_search` need `music`,
+and `tiktok_location_search` needs `location`.
 
 #### Privacy level
 
