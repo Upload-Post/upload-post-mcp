@@ -102,7 +102,7 @@ const VideoPlatformOptions = z
     // Capability-gated TikTok keys. The TikTok account object returned by
     // list_users carries a `capabilities` array (music, location, cover_image,
     // cover_timestamp, draft, photo_privacy, video_privacy, inbox_fallback,
-    // comments, profile_analytics). When the connection lacks the capability the
+    // profile_analytics). When the connection lacks the capability the
     // field is ignored, the post still publishes and the response includes a
     // per-field warning; reconnecting the TikTok account enables it.
     tiktokMusicId: z

@@ -114,7 +114,7 @@ and TikTok applies the account's own default; on photo posts it defaults to
 
 `list_users` returns a `capabilities` array on each TikTok account, with values
 `music`, `location`, `cover_image`, `cover_timestamp`, `draft`,
-`photo_privacy`, `video_privacy`, `inbox_fallback`, `comments` and
+`photo_privacy`, `video_privacy`, `inbox_fallback` and
 `profile_analytics`. A field whose
 capability the connection does not declare is ignored: the post still publishes
 and the response includes a per-field warning. Reconnect the TikTok account to
