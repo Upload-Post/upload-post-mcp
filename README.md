@@ -103,10 +103,13 @@ needs `location`.
 
 #### Privacy level
 
-A TikTok particularity: **video** posts do not accept `tiktokPrivacyLevel` — the
-video is published public, or sent to drafts with `tiktokUploadToDraft` (or
-`tiktokPostMode: 'MEDIA_UPLOAD'`). **Photo** posts do accept
-`tiktokPrivacyLevel`.
+`tiktokPrivacyLevel` works on **video** and **photo** posts alike, but TikTok
+decides per account which values are available: a private account is offered
+`FOLLOWER_OF_CREATOR`, `MUTUAL_FOLLOW_FRIENDS` and `SELF_ONLY`, with no
+`PUBLIC_TO_EVERYONE`. Asking for one the account does not have fails with
+`error_code: "tiktok_privacy_unavailable"` and an error listing the ones it
+does have. Omit it on video and TikTok keeps the account's own default; on photo
+posts it defaults to `PUBLIC_TO_EVERYONE`.
 
 FFmpeg jobs accept one public URL through `input_url` or multiple URLs through `files`. Poll `get_ffmpeg_job` until completion, then call `download_ffmpeg_result`; it returns the result URL without streaming the processed binary through MCP.
 

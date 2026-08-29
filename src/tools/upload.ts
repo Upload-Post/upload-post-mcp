@@ -86,7 +86,7 @@ const VideoPlatformOptions = z
       .string()
       .optional()
       .describe(
-        "TikTok privacy value, e.g. PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY. TikTok particularity: video posts do not accept it — the video is published public, so use tiktokUploadToDraft (or tiktokPostMode MEDIA_UPLOAD) to keep it unpublished in drafts. Photo posts do accept it."
+        "TikTok privacy value: PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY. TikTok decides per account which of these are available (a private account has no PUBLIC_TO_EVERYONE); asking for another one fails with error_code tiktok_privacy_unavailable listing the allowed ones. Omit it to keep the account's own default."
       ),
     tiktokDisableDuet: z.boolean().optional().describe("Disable duets on TikTok."),
     tiktokDisableComment: z.boolean().optional().describe("Disable comments on TikTok."),
@@ -245,7 +245,7 @@ const PhotoPlatformOptions = z
       .string()
       .optional()
       .describe(
-        "TikTok privacy value, e.g. PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY. TikTok particularity: photo posts accept it, video posts do not."
+        "TikTok privacy value: PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY. TikTok requires one on photo posts (defaults to PUBLIC_TO_EVERYONE) and decides per account which values are available."
       ),
     tiktokPhotoCoverIndex: z
       .number()
