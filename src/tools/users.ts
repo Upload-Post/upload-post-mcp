@@ -27,7 +27,8 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
     "list_users",
     {
       title: "List profiles",
-      description: "List all Upload-Post profiles in the account, with their connected social accounts.",
+      description:
+        "List all Upload-Post profiles in the account, with their connected social accounts. The TikTok account object carries a `capabilities` array (music, location, cover_image, draft, privacy_levels) telling which optional TikTok fields that connection accepts.",
       inputSchema: {},
       outputSchema: genericResultOutputSchema,
       annotations: {

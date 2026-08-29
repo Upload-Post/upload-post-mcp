@@ -67,9 +67,9 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
     {
       title: "List trending TikTok music",
       description:
-        "Trending tracks from the TikTok Commercial Music Library, to soundtrack a TikTok video. Requires the profile to have a TikTok Business account connected. Pass the returned `commercial_music_id` as `tiktokMusicId` in upload_video's platformOptions.",
+        "Trending tracks from the TikTok Commercial Music Library, to soundtrack a TikTok video. Pass the returned `commercial_music_id` as `tiktokMusicId` in upload_video's platformOptions. Available on TikTok connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users).",
       inputSchema: {
-        profile: z.string().describe("Upload-Post profile name with a TikTok Business account connected."),
+        profile: z.string().describe("Upload-Post profile name with a TikTok account connected."),
         genre: z
           .string()
           .optional()
@@ -104,9 +104,9 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
     {
       title: "Search TikTok locations",
       description:
-        "Search TikTok places to tag on a post. Requires the profile to have a TikTok Business account connected. TikTok needs both parts, so pass the returned `location_id` as `tiktokLocationId` and `location_name` as `tiktokLocationName` in upload_video's platformOptions.",
+        "Search TikTok places to tag on a post. TikTok needs both parts, so pass the returned `location_id` as `tiktokLocationId` and `location_name` as `tiktokLocationName` in upload_video's platformOptions. Available on TikTok connections that declare the `location` capability (see `capabilities` on the TikTok account in list_users).",
       inputSchema: {
-        profile: z.string().describe("Upload-Post profile name with a TikTok Business account connected."),
+        profile: z.string().describe("Upload-Post profile name with a TikTok account connected."),
         query: z.string().min(1).max(100).describe("Place to search for, e.g. 'Madrid'. Max 100 characters."),
       },
       outputSchema: genericResultOutputSchema,

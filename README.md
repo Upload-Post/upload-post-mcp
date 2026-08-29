@@ -62,7 +62,7 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_cached_post_analytics`, `get_platform_metrics` |
 | Users         | `get_account_info`, `list_users`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
 | Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `select_google_business_location`, `get_reddit_detailed_posts` |
-| TikTok Business | `tiktok_music_trending`, `tiktok_location_search` |
+| TikTok        | `tiktok_music_trending`, `tiktok_location_search` |
 | Comments      | `get_post_comments`, `reply_to_comment`, `public_reply_to_comment` |
 | DMs           | `send_dm`, `list_dm_conversations`, `manage_autodms` |
 | FFmpeg        | `submit_ffmpeg_job`, `get_ffmpeg_job`, `download_ffmpeg_result`, `get_ffmpeg_consumption` |
@@ -72,30 +72,39 @@ Async uploads return a `request_id`. The agent should poll `get_status` until `s
 
 `get_media` and `get_cached_post_analytics` are cursor-paginated: feed the response's `next_cursor` back as `cursor` until `has_more` is false. LinkedIn, Discord and Telegram do not support media cursors and accept `limit` only. Prefer `get_cached_post_analytics` over `get_post_analytics` when scanning many posts — it replays previously fetched results and so avoids the live analytics rate limit of 100 requests / 5 minutes. Only contains posts previously fetched through a live per-post endpoint; there is no background refresh, so captured_at is the last time that post was read live.
 
-### TikTok Business
-
-> **Requires a TikTok Business account.** `tiktok_music_trending`,
-> `tiktok_location_search` and the TikTok Business keys below only work for
-> profiles whose TikTok account is connected through the TikTok Business flow.
-> On a standard TikTok connection the API ignores the fields and returns a
-> warning, so the post still publishes.
+### TikTok
 
 Discover values with `tiktok_music_trending` (Commercial Music Library) and
 `tiktok_location_search`, then pass them in `upload_video`'s `platformOptions`:
 
-| Key | Notes |
-| --- | --- |
-| `tiktokMusicId` | `commercial_music_id` from `tiktok_music_trending` |
-| `tiktokMusicVolume` | 0-100. Defaults to 50 when music is set |
-| `tiktokMusicStart` / `tiktokMusicEnd` | Music offsets in ms |
-| `tiktokOriginalSoundVolume` | 0-100. Defaults to 50 so the original audio is not muted |
-| `tiktokLocationId` + `tiktokLocationName` | Both from `tiktok_location_search`; TikTok requires them together |
-| `tiktokCoverImageUrl` | Custom cover image; takes priority over `tiktokCoverTimestamp` |
-| `tiktokIsAiGenerated` | AI-generated content disclosure |
-| `tiktokUploadToDraft` | Sends to drafts; TikTok ignores the rest of the post settings |
+| Key | Capability | Notes |
+| --- | --- | --- |
+| `tiktokMusicId` | `music` | `commercial_music_id` from `tiktok_music_trending` |
+| `tiktokMusicVolume` | `music` | 0-100. Defaults to 50 when music is set |
+| `tiktokMusicStart` / `tiktokMusicEnd` | `music` | Music offsets in ms |
+| `tiktokOriginalSoundVolume` | `music` | 0-100. Defaults to 50 so the original audio is not muted |
+| `tiktokLocationId` + `tiktokLocationName` | `location` | Both from `tiktok_location_search`; TikTok requires them together |
+| `tiktokCoverImageUrl` | `cover_image` | Custom cover image; takes priority over `tiktokCoverTimestamp` |
+| `tiktokIsAiGenerated` | — | AI-generated content disclosure |
+| `tiktokUploadToDraft` | `draft` | Sends to drafts; TikTok ignores the rest of the post settings |
 
-`tiktokPhotoCoverIndex` (`upload_photos`) picks the cover of a TikTok Business
-photo post.
+`tiktokPhotoCoverIndex` (`upload_photos`) picks the cover of a TikTok photo post.
+
+#### TikTok capabilities
+
+`list_users` returns a `capabilities` array on each TikTok account, with values
+`music`, `location`, `cover_image`, `draft` and `privacy_levels`. A field whose
+capability the connection does not declare is ignored: the post still publishes
+and the response includes a per-field warning. Reconnect the TikTok account to
+enable it. `tiktok_music_trending` needs `music` and `tiktok_location_search`
+needs `location`.
+
+#### Privacy level
+
+A TikTok particularity: **video** posts do not accept `tiktokPrivacyLevel` — the
+video is published public, or sent to drafts with `tiktokUploadToDraft` (or
+`tiktokPostMode: 'MEDIA_UPLOAD'`). **Photo** posts do accept
+`tiktokPrivacyLevel`.
 
 FFmpeg jobs accept one public URL through `input_url` or multiple URLs through `files`. Poll `get_ffmpeg_job` until completion, then call `download_ffmpeg_result`; it returns the result URL without streaming the processed binary through MCP.
 
