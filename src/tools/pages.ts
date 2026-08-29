@@ -67,7 +67,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
     {
       title: "List trending TikTok music",
       description:
-        "Trending tracks from the TikTok Commercial Music Library, to soundtrack a TikTok video. Pass the returned `commercial_music_id` as `tiktokMusicId` in upload_video's platformOptions. Available on TikTok connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users).",
+        "Trending tracks from the TikTok Commercial Music Library, to soundtrack a TikTok video. Pass the returned track `id` as `tiktokMusicId` in upload_video's platformOptions (not `commercial_music_id`, which TikTok rejects on public posts). Available on TikTok connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users).",
       inputSchema: {
         profile: z.string().describe("Upload-Post profile name with a TikTok account connected."),
         genre: z

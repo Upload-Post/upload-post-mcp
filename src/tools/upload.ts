@@ -101,14 +101,15 @@ const VideoPlatformOptions = z
       ),
     // Capability-gated TikTok keys. The TikTok account object returned by
     // list_users carries a `capabilities` array (music, location, cover_image,
-    // draft, privacy_levels). When the connection lacks the capability the
+    // cover_timestamp, draft, photo_privacy, video_privacy, inbox_fallback,
+    // comments, profile_analytics). When the connection lacks the capability the
     // field is ignored, the post still publishes and the response includes a
     // per-field warning; reconnecting the TikTok account enables it.
     tiktokMusicId: z
       .string()
       .optional()
       .describe(
-        "Commercial Music Library track to add to the video — pass a `commercial_music_id` from tiktok_music_trending. Available on connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users); otherwise the field is ignored, the post still publishes and the response includes a per-field warning — reconnect the TikTok account to enable it."
+        "Commercial Music Library track to add to the video — pass a track `id` from tiktok_music_trending (the `id` field, not `commercial_music_id`). Available on connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users); otherwise the field is ignored, the post still publishes and the response includes a per-field warning — reconnect the TikTok account to enable it."
       ),
     tiktokMusicVolume: z
       .number()

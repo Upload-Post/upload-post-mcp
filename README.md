@@ -79,7 +79,7 @@ Discover values with `tiktok_music_trending` (Commercial Music Library) and
 
 | Key | Capability | Notes |
 | --- | --- | --- |
-| `tiktokMusicId` | `music` | `commercial_music_id` from `tiktok_music_trending` |
+| `tiktokMusicId` | `music` | The track `id` from `tiktok_music_trending` (not `commercial_music_id`) |
 | `tiktokMusicVolume` | `music` | 0-100. Defaults to 50 when music is set |
 | `tiktokMusicStart` / `tiktokMusicEnd` | `music` | Music offsets in ms |
 | `tiktokOriginalSoundVolume` | `music` | 0-100. Defaults to 50 so the original audio is not muted |
@@ -93,7 +93,9 @@ Discover values with `tiktok_music_trending` (Commercial Music Library) and
 #### TikTok capabilities
 
 `list_users` returns a `capabilities` array on each TikTok account, with values
-`music`, `location`, `cover_image`, `draft` and `privacy_levels`. A field whose
+`music`, `location`, `cover_image`, `cover_timestamp`, `draft`,
+`photo_privacy`, `video_privacy`, `inbox_fallback`, `comments` and
+`profile_analytics`. A field whose
 capability the connection does not declare is ignored: the post still publishes
 and the response includes a per-field warning. Reconnect the TikTok account to
 enable it. `tiktok_music_trending` needs `music` and `tiktok_location_search`
