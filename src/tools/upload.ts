@@ -78,6 +78,23 @@ const commonPlatformOptionFields = {
   brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure."),
 };
 
+// The location tag is identical on video and photo posts: TikTok wants the id
+// and the name together, or neither.
+const tiktokLocationFields = {
+  tiktokLocationId: z
+    .string()
+    .optional()
+    .describe(
+      "Location to tag — pass a `location_id` from tiktok_location_search. Must be sent together with tiktokLocationName. Needs the `location` capability (see tiktokMusicId)."
+    ),
+  tiktokLocationName: z
+    .string()
+    .optional()
+    .describe(
+      "Name of the tagged location, from tiktok_location_search. TikTok requires it whenever tiktokLocationId is set."
+    ),
+};
+
 const VideoPlatformOptions = z
   .object({
     ...commonPlatformOptionFields,
@@ -139,18 +156,7 @@ const VideoPlatformOptions = z
       .describe(
         "Volume of the video's own audio when music is added, 0-100. Defaults to 50 so the original audio is not muted."
       ),
-    tiktokLocationId: z
-      .string()
-      .optional()
-      .describe(
-        "Location to tag — pass a `location_id` from tiktok_location_search. Must be sent together with tiktokLocationName. Needs the `location` capability (see tiktokMusicId)."
-      ),
-    tiktokLocationName: z
-      .string()
-      .optional()
-      .describe(
-        "Name of the tagged location, from tiktok_location_search. TikTok requires it whenever tiktokLocationId is set."
-      ),
+    ...tiktokLocationFields,
     tiktokCoverImageUrl: z
       .string()
       .optional()
@@ -262,18 +268,7 @@ const PhotoPlatformOptions = z
       .describe(
         "Commercial Music Library track to add to the photo post — pass a track `id` from tiktok_music_trending or tiktok_music_search (the `id` field, not `commercial_music_id`). TikTok's photo posts take the id alone: there is no volume or trim. Available on connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users); otherwise the field is ignored, the post still publishes and the response includes a per-field warning."
       ),
-    tiktokLocationId: z
-      .string()
-      .optional()
-      .describe(
-        "Location to tag — pass a `location_id` from tiktok_location_search. Must be sent together with tiktokLocationName. Needs the `location` capability (see tiktokMusicId)."
-      ),
-    tiktokLocationName: z
-      .string()
-      .optional()
-      .describe(
-        "Name of the tagged location, from tiktok_location_search. TikTok requires it whenever tiktokLocationId is set."
-      ),
+    ...tiktokLocationFields,
     tiktokIsAiGenerated: z
       .boolean()
       .optional()

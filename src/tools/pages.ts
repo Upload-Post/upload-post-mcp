@@ -62,6 +62,25 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
     safe(async ({ profile }) => client.sdk.getPinterestBoards(profile as string | undefined))
   );
 
+  // Shared by the two music tools: same filters, same cached chart slice.
+  const tiktokProfile = z
+    .string()
+    .describe("Upload-Post profile name with a TikTok account connected.");
+  const musicGenre = z
+    .string()
+    .optional()
+    .describe("Genre filter, e.g. 'ALL' or 'POP'. Defaults to ALL.");
+  const musicDateRange = z
+    .enum(["1DAY", "7DAY", "30DAY", "90DAY"])
+    .optional()
+    .describe("Chart window. Defaults to 7DAY.");
+  const readOnlyTikTokAnnotations = (title: string) => ({
+    title,
+    readOnlyHint: true,
+    openWorldHint: true,
+    destructiveHint: false,
+  });
+
   server.registerTool(
     "tiktok_music_trending",
     {
@@ -69,24 +88,13 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       description:
         "Trending tracks from the TikTok Commercial Music Library, to soundtrack a TikTok video. Pass the returned track `id` as `tiktokMusicId` in upload_video's platformOptions (not `commercial_music_id`, which TikTok rejects on public posts). Available on TikTok connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users).",
       inputSchema: {
-        profile: z.string().describe("Upload-Post profile name with a TikTok account connected."),
-        genre: z
-          .string()
-          .optional()
-          .describe("Genre filter, e.g. 'ALL' or 'POP'. Defaults to ALL."),
+        profile: tiktokProfile,
+        genre: musicGenre,
         countryCode: z.string().optional().describe("ISO country code, e.g. 'US' or 'ES'. Defaults to US."),
-        dateRange: z
-          .enum(["1DAY", "7DAY", "30DAY", "90DAY"])
-          .optional()
-          .describe("Trending window. Defaults to 7DAY."),
+        dateRange: musicDateRange,
       },
       outputSchema: genericResultOutputSchema,
-      annotations: {
-        title: "List trending TikTok music",
-        readOnlyHint: true,
-        openWorldHint: true,
-        destructiveHint: false,
-      },
+      annotations: readOnlyTikTokAnnotations("List trending TikTok music"),
     },
     safe(async (args) => {
       const { profile, genre, countryCode, dateRange } = args as {
@@ -106,24 +114,18 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       description:
         "Find a TikTok Commercial Music Library track by song title or artist, to soundtrack a TikTok video. Pass the returned track `id` as `tiktokMusicId` in upload_video's platformOptions (not `commercial_music_id`, which TikTok rejects on public posts). IMPORTANT: TikTok has no music search endpoint, so this searches the trending charts Upload-Post caches per genre/country/period, NOT TikTok's whole catalogue — a song that is not trending in the chart you query will not be found; widening the search means trying another genre, country or period. Matching is case- and accent-insensitive and every word must match. Available on TikTok connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users).",
       inputSchema: {
-        profile: z.string().describe("Upload-Post profile name with a TikTok account connected."),
+        profile: tiktokProfile,
         q: z
           .string()
           .max(80)
           .optional()
           .describe("Song title or artist to look for, e.g. 'bad bunny'. Omit to get the chart in trending order."),
-        genre: z
-          .string()
-          .optional()
-          .describe("Genre filter, e.g. 'ALL' or 'POP'. Restricts the search to that genre. Defaults to ALL."),
+        genre: musicGenre,
         countryCode: z
           .string()
           .optional()
           .describe("ISO country code choosing WHICH country's chart is searched, e.g. 'US' or 'ES'. Defaults to US."),
-        dateRange: z
-          .enum(["1DAY", "7DAY", "30DAY", "90DAY"])
-          .optional()
-          .describe("Chart window. Defaults to 7DAY."),
+        dateRange: musicDateRange,
         limit: z
           .number()
           .int()
@@ -133,12 +135,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
           .describe("Maximum tracks to return. Defaults to 50."),
       },
       outputSchema: genericResultOutputSchema,
-      annotations: {
-        title: "Search TikTok music",
-        readOnlyHint: true,
-        openWorldHint: true,
-        destructiveHint: false,
-      },
+      annotations: readOnlyTikTokAnnotations("Search TikTok music"),
     },
     safe(async (args) => {
       const { profile, q, genre, countryCode, dateRange, limit } = args as {
@@ -160,16 +157,11 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       description:
         "Search TikTok places to tag on a post. TikTok needs both parts, so pass the returned `location_id` as `tiktokLocationId` and `location_name` as `tiktokLocationName` in upload_video's platformOptions. Available on TikTok connections that declare the `location` capability (see `capabilities` on the TikTok account in list_users).",
       inputSchema: {
-        profile: z.string().describe("Upload-Post profile name with a TikTok account connected."),
+        profile: tiktokProfile,
         query: z.string().min(1).max(100).describe("Place to search for, e.g. 'Madrid'. Max 100 characters."),
       },
       outputSchema: genericResultOutputSchema,
-      annotations: {
-        title: "Search TikTok locations",
-        readOnlyHint: true,
-        openWorldHint: true,
-        destructiveHint: false,
-      },
+      annotations: readOnlyTikTokAnnotations("Search TikTok locations"),
     },
     safe(async (args) => {
       const { profile, query } = args as { profile: string; query: string };
@@ -184,15 +176,10 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       description:
         "What the connected TikTok account is allowed to publish. Call this before setting `tiktokPrivacyLevel`: TikTok narrows the four privacy values per account (a private account has no PUBLIC_TO_EVERYONE), and sending one the account does not have fails the upload with error_code tiktok_privacy_unavailable. Returns `privacy_level_options` plus the account's max video duration and its comment/duet/stitch switches.",
       inputSchema: {
-        profile: z.string().describe("Upload-Post profile name with a TikTok account connected."),
+        profile: tiktokProfile,
       },
       outputSchema: genericResultOutputSchema,
-      annotations: {
-        title: "Get TikTok publishing settings",
-        readOnlyHint: true,
-        openWorldHint: true,
-        destructiveHint: false,
-      },
+      annotations: readOnlyTikTokAnnotations("Get TikTok publishing settings"),
     },
     safe(async (args) => {
       const { profile } = args as { profile: string };
