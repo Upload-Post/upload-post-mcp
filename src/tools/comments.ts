@@ -10,7 +10,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Get post comments",
       description:
-        "List comments on a post. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn; TikTok: postId=the video id, `postUrl` is not accepted). Replies under a TikTok comment come from get_tiktok_comment_replies. TikTok: " +
+        "List comments on a post. One endpoint for every network, chosen with `platform`. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn; TikTok: postId=the video id, `postUrl` is not accepted). Add `commentId` to get the REPLIES hanging off that one comment instead of the post's top-level comments — replies are the same question with one more parameter, not another tool. TikTok: " +
         requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
@@ -23,6 +23,10 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           .optional()
           .describe("Platform media/post ID. YouTube: the videoId. LinkedIn: the post urn. TikTok: the video id (required — TikTok has no URL lookup)."),
         postUrl: z.string().optional().describe("Public URL of the post."),
+        commentId: z
+          .string()
+          .optional()
+          .describe("Return the replies under this comment instead of the post's top-level comments. Sent as `comment_id`."),
         after: z
           .string()
           .optional()
@@ -49,6 +53,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         platform?: string;
         postId?: string;
         postUrl?: string;
+        commentId?: string;
         after?: string;
         limit?: number;
       };
@@ -60,6 +65,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           user: a.user,
           post_id: a.postId,
           post_url: a.postUrl,
+          comment_id: a.commentId,
           after: a.after,
           limit: a.limit,
         }),
@@ -251,6 +257,63 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           user: a.user,
           comment_id: a.commentId,
           post_id: a.postId,
+        }),
+      });
+    })
+  );
+
+  server.registerTool(
+    "comment_action",
+    {
+      title: "Hide, like or pin a comment",
+      description:
+        "Moderate or react to a comment on one of the profile's own posts: hide it from other viewers, like it as the account, or pin it to the top. One endpoint for every network, chosen with `platform`; a network that cannot do it answers 400 `platform_not_supported` with the list of the ones that can. Every action carries its own inverse (hide/unhide, like/unlike, pin/unpin), so nothing here is permanent. `postId` is required for hide/unhide and pin/unpin, and must NOT be sent for like/unlike. Deleting a comment is a different tool: delete_comment. TikTok: " +
+        requiresTiktokCapability("comments", true),
+      inputSchema: {
+        user: z.string().describe("Upload-Post profile name."),
+        platform: z
+          .enum(["tiktok"])
+          .describe("Social platform the comment lives on."),
+        commentId: z
+          .string()
+          .describe("Comment to act on (from get_post_comments). Sent as `comment_id`."),
+        action: z
+          .enum(["hide", "unhide", "like", "unlike", "pin", "unpin"])
+          .describe("What to do. Lowercase; each value already carries its direction, so there is no separate 'undo' flag."),
+        postId: z
+          .string()
+          .optional()
+          .describe("Post the comment belongs to (TikTok: the video id). Required for hide/unhide and pin/unpin; not used by like/unlike."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Hide, like or pin a comment",
+        readOnlyHint: false,
+        openWorldHint: true,
+        // Every action is a toggle with an explicit inverse, so nothing is lost.
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => {
+      const a = args as {
+        user: string;
+        platform: string;
+        commentId: string;
+        action: string;
+        postId?: string;
+      };
+      const needsPost = a.action !== "like" && a.action !== "unlike";
+      if (needsPost && !a.postId) {
+        throw new Error(`postId (the post the comment belongs to) is required to ${a.action} a comment.`);
+      }
+      return client.request("POST", "/uploadposts/comments/action", {
+        body: compact({
+          platform: a.platform,
+          user: a.user,
+          comment_id: a.commentId,
+          action: a.action,
+          // like/unlike take the comment alone, so don't send the post.
+          post_id: needsPost ? a.postId : undefined,
         }),
       });
     })

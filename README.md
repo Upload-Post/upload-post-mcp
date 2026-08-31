@@ -26,7 +26,7 @@ The server runs on your machine, spawned by the MCP client. Add to `~/.claude/mc
 }
 ```
 
-Get your API key at <https://app.upload-post.com> → *API Keys*. Restart the client — you should see 62 `upload-post` tools.
+Get your API key at <https://app.upload-post.com> → *API Keys*. Restart the client — you should see 58 `upload-post` tools.
 
 ### B) Hosted HTTP (multi-tenant) — share one server with many users
 
@@ -60,24 +60,35 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Status        | `get_status`, `get_job_status`, `get_history`, `get_media` |
 | Schedule      | `list_scheduled`, `cancel_scheduled`, `edit_scheduled` |
 | Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_cached_post_analytics`, `get_platform_metrics` |
+| Audience      | `get_audience`, `get_suggestions` |
 | Users         | `get_account_info`, `list_users`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
 | Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `get_google_business_reviews`, `reply_to_google_business_review`, `get_reddit_detailed_posts` |
 | Posts         | `retry_post`, `unpublish_post` |
-| Comments      | `get_post_comments`, `create_comment`, `delete_comment`, `reply_to_comment`, `public_reply_to_comment` |
-| TikTok        | `tiktok_music_trending`, `tiktok_music_search`, `tiktok_location_search`, `tiktok_publishing_settings`, `get_tiktok_comment_replies`, `manage_tiktok_comment`, `search_tiktok_keywords`, `search_tiktok_hashtags`, `get_tiktok_profile_insights`, `get_tiktok_video_insights`, `get_tiktok_benchmark` |
+| Comments      | `get_post_comments`, `create_comment`, `delete_comment`, `comment_action`, `reply_to_comment`, `public_reply_to_comment` |
+| TikTok        | `tiktok_music_trending`, `tiktok_music_search`, `tiktok_location_search`, `tiktok_publishing_settings` |
 | DMs           | `send_dm`, `list_dm_conversations`, `manage_autodms` |
 | FFmpeg        | `submit_ffmpeg_job`, `get_ffmpeg_job`, `download_ffmpeg_result`, `get_ffmpeg_consumption` |
 | Queue         | `get_queue_settings`, `update_queue_settings`, `preview_queue` |
 
 Async uploads return a `request_id`. The agent should poll `get_status` until `success: true`.
 
+### One tool per question, not per network
+
+The Upload-Post API has no endpoint per social network: it has an endpoint per **question**, and a `platform` parameter saying who is being asked. `get_post_comments`, `get_post_analytics`, `get_audience`, `get_suggestions` and `comment_action` all work that way, so an agent learns one shape and reuses it for every network. Only the four `tiktok_*` tools are network-specific, because what they return (the Commercial Music Library, TikTok places, TikTok's per-account publishing settings) exists only on TikTok.
+
+- `get_audience` — who follows the profile, where they are, when they are online, what they tap. Also `benchmark_categories`, and the niche averages to compare against when `benchmarkCategory` is set. The server clamps the window to at most 60 days ending before today, so a wider range is trimmed rather than rejected, and `range` in the response says which window was used.
+- `get_suggestions` — hashtags (with `view_count`) or related keyword searches, told apart by `type`, not by a different tool.
+- `get_post_comments` — top-level comments on a post, or, with `commentId`, the replies under one of them.
+- `comment_action` — hide / unhide, like / unlike, pin / unpin a comment. Each value carries its own inverse, so nothing is permanent. `postId` is required for hide and pin and must not be sent for like.
+- `get_post_analytics` — per-post metrics. `post_metrics` is whatever the platform reports, so its shape varies: on TikTok it adds `retention`, `impression_sources`, `audience_types`, `new_followers`, `reach` and the watch times (`average_time_watched`, `total_time_watched`, `full_video_watched_rate`).
+
+Errors are shared too: `platform_not_supported` (400, with the list of the networks that can answer), `invalid_parameter` (400), `tiktok_reconnect_required` (400), `reauth_required` (409) and 502 when the upstream network fails.
+
 ### TikTok capabilities
 
-`get_post_comments`, `create_comment` and `delete_comment` accept `platform: "tiktok"`, and `firstComment` works on TikTok like on every other network.
+`get_post_comments`, `create_comment`, `delete_comment` and `comment_action` accept `platform: "tiktok"`, and `firstComment` works on TikTok like on every other network.
 
-What a TikTok account can do depends on how it is connected. `list_users` returns a `capabilities` array on each TikTok account — `music`, `location`, `cover_image`, `cover_timestamp`, `draft`, `video_privacy`, `photo_privacy`, `profile_analytics`, `comments`, `trend_search` — and each tool's description names the one it needs. `comments` and `trend_search` are granted when the user connects TikTok, so an account connected before they existed has to reconnect before the comment and keyword tools answer.
-
-The analytics tools (`get_tiktok_profile_insights`, `get_tiktok_video_insights`, `search_tiktok_hashtags`, `get_tiktok_benchmark`) need `profile_analytics`. Profile insights take at most a 60-day window ending before today; video insights are cursor-paginated at up to 20 videos per page.
+What a TikTok account can do depends on how it is connected. `list_users` returns a `capabilities` array on each TikTok account — `music`, `location`, `cover_image`, `cover_timestamp`, `draft`, `video_privacy`, `photo_privacy`, `profile_analytics`, `comments`, `trend_search` — and each tool's description names the one it needs. They are granted when the user connects TikTok, so an account connected before a capability existed has to reconnect before the matching tools answer; that is what a `tiktok_reconnect_required` error means.
 
 `get_media` and `get_cached_post_analytics` are cursor-paginated: feed the response's `next_cursor` back as `cursor` until `has_more` is false. LinkedIn, Discord and Telegram do not support media cursors and accept `limit` only. Prefer `get_cached_post_analytics` over `get_post_analytics` when scanning many posts — it replays previously fetched results and so avoids the live analytics rate limit of 100 requests / 5 minutes. Only contains posts previously fetched through a live per-post endpoint; there is no background refresh, so captured_at is the last time that post was read live.
 

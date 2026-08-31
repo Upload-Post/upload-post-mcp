@@ -144,37 +144,6 @@ export function safe<TArgs>(
 }
 
 /**
- * Fragments shared by the TikTok capability tools.
- *
- * Every one of those endpoints is scoped to a single Upload-Post profile and
- * most of them paginate with an opaque cursor, so the shape lives here instead
- * of being re-typed (and drifting) in each tool.
- */
-export const tiktokProfileField = {
-  profile: z
-    .string()
-    .describe("Upload-Post profile name whose connected TikTok account answers the request."),
-};
-
-export const cursorField = {
-  cursor: z
-    .string()
-    .optional()
-    .describe("Opaque pagination cursor: pass back the `pagination.next_cursor` of a previous call."),
-};
-
-/** `limit` differs per endpoint only in its ceiling, so build it from one place. */
-export function limitField(max: number, what: string) {
-  return z
-    .number()
-    .int()
-    .min(1)
-    .max(max)
-    .optional()
-    .describe(`${what} to return (1-${max}).`);
-}
-
-/**
  * How a tool tells the model which TikTok capability it needs. `capabilities`
  * is the array on the TikTok account returned by list_users; the wording is
  * identical everywhere so the model can learn the check once.
