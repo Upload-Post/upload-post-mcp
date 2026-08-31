@@ -26,7 +26,7 @@ The server runs on your machine, spawned by the MCP client. Add to `~/.claude/mc
 }
 ```
 
-Get your API key at <https://app.upload-post.com> → *API Keys*. Restart the client — you should see 50 `upload-post` tools.
+Get your API key at <https://app.upload-post.com> → *API Keys*. Restart the client — you should see 58 `upload-post` tools.
 
 ### B) Hosted HTTP (multi-tenant) — share one server with many users
 
@@ -61,13 +61,23 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Schedule      | `list_scheduled`, `cancel_scheduled`, `edit_scheduled` |
 | Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_cached_post_analytics`, `get_platform_metrics` |
 | Users         | `get_account_info`, `list_users`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
-| Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `select_google_business_location`, `get_reddit_detailed_posts` |
-| Comments      | `get_post_comments`, `reply_to_comment`, `public_reply_to_comment` |
+| Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `get_google_business_reviews`, `reply_to_google_business_review`, `get_reddit_detailed_posts` |
+| Posts         | `retry_post`, `unpublish_post` |
+| Comments      | `get_post_comments`, `create_comment`, `delete_comment`, `reply_to_comment`, `public_reply_to_comment` |
+| TikTok        | `get_tiktok_comment_replies`, `manage_tiktok_comment`, `search_tiktok_keywords`, `search_tiktok_hashtags`, `get_tiktok_profile_insights`, `get_tiktok_video_insights`, `get_tiktok_benchmark` |
 | DMs           | `send_dm`, `list_dm_conversations`, `manage_autodms` |
 | FFmpeg        | `submit_ffmpeg_job`, `get_ffmpeg_job`, `download_ffmpeg_result`, `get_ffmpeg_consumption` |
 | Queue         | `get_queue_settings`, `update_queue_settings`, `preview_queue` |
 
 Async uploads return a `request_id`. The agent should poll `get_status` until `success: true`.
+
+### TikTok capabilities
+
+`get_post_comments`, `create_comment` and `delete_comment` accept `platform: "tiktok"`, and `firstComment` works on TikTok like on every other network.
+
+What a TikTok account can do depends on how it is connected. `list_users` returns a `capabilities` array on each TikTok account — `music`, `location`, `cover_image`, `cover_timestamp`, `draft`, `video_privacy`, `photo_privacy`, `profile_analytics`, `comments`, `trend_search` — and each tool's description names the one it needs. `comments` and `trend_search` are granted when the user connects TikTok, so an account connected before they existed has to reconnect before the comment and keyword tools answer.
+
+The analytics tools (`get_tiktok_profile_insights`, `get_tiktok_video_insights`, `search_tiktok_hashtags`, `get_tiktok_benchmark`) need `profile_analytics`. Profile insights take at most a 60-day window ending before today; video insights are cursor-paginated at up to 20 videos per page.
 
 `get_media` and `get_cached_post_analytics` are cursor-paginated: feed the response's `next_cursor` back as `cursor` until `has_more` is false. LinkedIn, Discord and Telegram do not support media cursors and accept `limit` only. Prefer `get_cached_post_analytics` over `get_post_analytics` when scanning many posts — it replays previously fetched results and so avoids the live analytics rate limit of 100 requests / 5 minutes. Only contains posts previously fetched through a live per-post endpoint; there is no background refresh, so captured_at is the last time that post was read live.
 

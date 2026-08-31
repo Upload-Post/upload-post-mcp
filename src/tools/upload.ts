@@ -76,6 +76,15 @@ const commonPlatformOptionFields = {
   threadsTopicTag: z.string().optional().describe("Threads topic tag."),
   brandContentToggle: z.boolean().optional().describe("TikTok branded content disclosure."),
   brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure."),
+  // NOTE: uploads go through the `upload-post` npm SDK, which appends form
+  // fields from a fixed allowlist. `tiktok_first_comment` has to be added there
+  // before this reaches the API; the generic `firstComment` already does.
+  tiktokFirstComment: z
+    .string()
+    .optional()
+    .describe(
+      "First comment posted under the TikTok post, overriding the shared `firstComment` for TikTok only. Requires the 'comments' capability on the profile's TikTok account (see the `capabilities` array in list_users)."
+    ),
 };
 
 const VideoPlatformOptions = z
@@ -334,7 +343,12 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
           .describe("Required array of platform identifiers, e.g. ['instagram']. Never pass a single string."),
         title: z.string().optional().describe("Caption / title."),
         description: z.string().optional(),
-        firstComment: z.string().optional(),
+        firstComment: z
+          .string()
+          .optional()
+          .describe(
+            "Comment auto-posted under the post right after publishing. Supported on every platform that has comments, TikTok included. Use `platformOptions.<platform>FirstComment` to override it for one platform."
+          ),
         ...schedulingFields,
         platformOptions: VideoPlatformOptions
           .optional()
@@ -410,7 +424,12 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
         platforms: z.array(PhotoPlatform).min(1),
         title: z.string().optional(),
         description: z.string().optional(),
-        firstComment: z.string().optional(),
+        firstComment: z
+          .string()
+          .optional()
+          .describe(
+            "Comment auto-posted under the post right after publishing. Supported on every platform that has comments, TikTok included. Use `platformOptions.<platform>FirstComment` to override it for one platform."
+          ),
         altText: z.string().optional(),
         ...schedulingFields,
         platformOptions: PhotoPlatformOptions.optional(),

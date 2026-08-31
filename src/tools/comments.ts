@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
-import { genericResultOutputSchema, safe } from "../schemas.js";
+import { genericResultOutputSchema, requiresTiktokCapability, safe } from "../schemas.js";
 
 export function registerCommentTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
@@ -10,17 +10,18 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Get post comments",
       description:
-        "List comments on a post. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn). TikTok is not supported.",
+        "List comments on a post. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn; TikTok: postId=the video id, `postUrl` is not accepted). Replies under a TikTok comment come from get_tiktok_comment_replies. TikTok: " +
+        requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         platform: z
-          .enum(["instagram", "facebook", "youtube", "linkedin"])
+          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok"])
           .default("instagram")
-          .describe("Social platform. One of instagram, facebook, youtube, linkedin. TikTok is unsupported."),
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok."),
         postId: z
           .string()
           .optional()
-          .describe("Platform media/post ID. YouTube: the videoId. LinkedIn: the post urn."),
+          .describe("Platform media/post ID. YouTube: the videoId. LinkedIn: the post urn. TikTok: the video id (required — TikTok has no URL lookup)."),
         postUrl: z.string().optional().describe("Public URL of the post."),
         after: z
           .string()
@@ -32,7 +33,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           .min(1)
           .max(50)
           .optional()
-          .describe("Comments to return (1-50, Meta's cap)."),
+          .describe("Comments to return (1-50; that ceiling is both Meta's and TikTok's)."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -161,22 +162,23 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Create a comment or reply",
       description:
-        "Post a top-level comment or a reply on a post. Provide exactly ONE of `commentId` (reply to a comment), `postId`, or `postUrl` (top-level). LinkedIn: postId=the post urn. Instagram requires `commentId` (replies only).",
+        "Post a top-level comment or a reply on a post. Provide exactly ONE of `commentId` (reply to a comment), `postId`, or `postUrl` (top-level). LinkedIn: postId=the post urn. Instagram requires `commentId` (replies only). TikTok always needs `postId` (the video id); add `commentId` on top of it to reply inside that thread. TikTok: " +
+        requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         message: z.string().min(1).describe("Comment text to post."),
         platform: z
-          .enum(["instagram", "facebook", "youtube", "linkedin"])
+          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok"])
           .default("instagram")
-          .describe("Social platform. One of instagram, facebook, youtube, linkedin."),
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok."),
         commentId: z
           .string()
           .optional()
-          .describe("Reply to this comment. Required by Instagram."),
+          .describe("Reply to this comment. Required by Instagram. TikTok: pass it together with postId to reply inside a thread."),
         postId: z
           .string()
           .optional()
-          .describe("Top-level comment on this post ID. LinkedIn: the post urn."),
+          .describe("Top-level comment on this post ID. LinkedIn: the post urn. TikTok: the video id, always required."),
         postUrl: z.string().optional().describe("Top-level comment on this post URL."),
       },
       outputSchema: genericResultOutputSchema,
@@ -214,14 +216,15 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Delete a comment",
       description:
-        "Delete a comment by `commentId`. LinkedIn also requires `postId` (the post urn).",
+        "Delete a comment by `commentId`. LinkedIn also requires `postId` (the post urn); TikTok needs only the `commentId`. TikTok: " +
+        requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         commentId: z.string().describe("ID of the comment to delete."),
         platform: z
-          .enum(["instagram", "facebook", "youtube", "linkedin"])
+          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok"])
           .default("instagram")
-          .describe("Social platform. One of instagram, facebook, youtube, linkedin."),
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok."),
         postId: z
           .string()
           .optional()
