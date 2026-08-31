@@ -78,6 +78,23 @@ const commonPlatformOptionFields = {
   brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure."),
 };
 
+// The location tag is identical on video and photo posts: TikTok wants the id
+// and the name together, or neither.
+const tiktokLocationFields = {
+  tiktokLocationId: z
+    .string()
+    .optional()
+    .describe(
+      "Location to tag — pass a `location_id` from tiktok_location_search. Must be sent together with tiktokLocationName. Needs the `location` capability (see tiktokMusicId)."
+    ),
+  tiktokLocationName: z
+    .string()
+    .optional()
+    .describe(
+      "Name of the tagged location, from tiktok_location_search. TikTok requires it whenever tiktokLocationId is set."
+    ),
+};
+
 const VideoPlatformOptions = z
   .object({
     ...commonPlatformOptionFields,
@@ -85,7 +102,9 @@ const VideoPlatformOptions = z
     tiktokPrivacyLevel: z
       .string()
       .optional()
-      .describe("TikTok privacy value, e.g. PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY."),
+      .describe(
+        "TikTok privacy value: PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY. TikTok decides per account which of these are available (a private account has no PUBLIC_TO_EVERYONE); asking for another one fails with error_code tiktok_privacy_unavailable listing the allowed ones. Omit it to keep the account's own default."
+      ),
     tiktokDisableDuet: z.boolean().optional().describe("Disable duets on TikTok."),
     tiktokDisableComment: z.boolean().optional().describe("Disable comments on TikTok."),
     tiktokDisableStitch: z.boolean().optional().describe("Disable stitch on TikTok."),
@@ -96,6 +115,63 @@ const VideoPlatformOptions = z
       .optional()
       .describe(
         "TikTok post mode. DIRECT_POST publishes straight to the account. MEDIA_UPLOAD (Draft) sends the video to the user's TikTok inbox/drafts to publish from the app — RECOMMENDED for TikTok, as publishing natively from the app tends to get more organic reach. Note: in Draft mode TikTok ignores the title/caption and other metadata sent via API; the user adds them in the app before publishing. Defaults to DIRECT_POST."
+      ),
+    // Capability-gated TikTok keys. The TikTok account object returned by
+    // list_users carries a `capabilities` array (music, location, cover_image,
+    // cover_timestamp, draft, photo_privacy, video_privacy, inbox_fallback,
+    // profile_analytics). When the connection lacks the capability the
+    // field is ignored, the post still publishes and the response includes a
+    // per-field warning; reconnecting the TikTok account enables it.
+    tiktokMusicId: z
+      .string()
+      .optional()
+      .describe(
+        "Commercial Music Library track to add to the video — pass a track `id` from tiktok_music_trending (the `id` field, not `commercial_music_id`). Available on connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users); otherwise the field is ignored, the post still publishes and the response includes a per-field warning — reconnect the TikTok account to enable it."
+      ),
+    tiktokMusicVolume: z
+      .number()
+      .int()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe("Volume of the added music track, 0-100. Defaults to 50 when music is set."),
+    tiktokMusicStart: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe("Start offset of the music track, in milliseconds."),
+    tiktokMusicEnd: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe("End offset of the music track, in milliseconds."),
+    tiktokOriginalSoundVolume: z
+      .number()
+      .int()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe(
+        "Volume of the video's own audio when music is added, 0-100. Defaults to 50 so the original audio is not muted."
+      ),
+    ...tiktokLocationFields,
+    tiktokCoverImageUrl: z
+      .string()
+      .optional()
+      .describe(
+        "Custom cover image URL. Takes priority over tiktokCoverTimestamp. Needs the `cover_image` capability (see tiktokMusicId)."
+      ),
+    tiktokIsAiGenerated: z
+      .boolean()
+      .optional()
+      .describe("Disclose the video as AI-generated content."),
+    tiktokUploadToDraft: z
+      .boolean()
+      .optional()
+      .describe(
+        "Send the video to TikTok drafts instead of publishing it. When true TikTok ignores the rest of the post settings. Needs the `draft` capability (see tiktokMusicId)."
       ),
     // Instagram
     instagramMediaType: z
@@ -171,7 +247,32 @@ const PhotoPlatformOptions = z
     ...commonPlatformOptionFields,
     tiktokAutoAddMusic: z.boolean().optional().describe("Auto add music to TikTok photo posts."),
     tiktokDisableComment: z.boolean().optional().describe("Disable comments on TikTok."),
-    tiktokPhotoCoverIndex: z.number().int().optional().describe("Index of the cover photo, 0-based."),
+    tiktokPrivacyLevel: z
+      .string()
+      .optional()
+      .describe(
+        "TikTok privacy value: PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY. TikTok requires one on photo posts (defaults to PUBLIC_TO_EVERYONE) and decides per account which values are available."
+      ),
+    tiktokPhotoCoverIndex: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe("Index of the cover photo, 0-based. Sent as `photo_cover_index`; picks the cover of a TikTok photo post."),
+    // TikTok photo posts accept the music track id, the location pair and the AI
+    // disclosure. They do NOT accept the volume/trim, custom cover or draft
+    // fields — those are video-only, which is why they are absent here.
+    tiktokMusicId: z
+      .string()
+      .optional()
+      .describe(
+        "Commercial Music Library track to add to the photo post — pass a track `id` from tiktok_music_trending or tiktok_music_search (the `id` field, not `commercial_music_id`). TikTok's photo posts take the id alone: there is no volume or trim. Available on connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users); otherwise the field is ignored, the post still publishes and the response includes a per-field warning."
+      ),
+    ...tiktokLocationFields,
+    tiktokIsAiGenerated: z
+      .boolean()
+      .optional()
+      .describe("Disclose the photo post as AI-generated content."),
     instagramMediaType: z
       .enum(["IMAGE", "STORIES"])
       .optional()
@@ -339,7 +440,7 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
         platformOptions: VideoPlatformOptions
           .optional()
           .describe(
-            "Platform-specific overrides as a flat object (camelCase keys), e.g. { tiktokPrivacyLevel: 'PUBLIC_TO_EVERYONE', youtubePrivacyStatus: 'public', youtubePlaylistId: 'PLxxxxxxxxxxxx', facebookPageId: '123' }. `youtubePlaylistId` may also be an array or a comma-separated list of playlist IDs to add the uploaded video to."
+            "Platform-specific overrides as a flat object (camelCase keys), e.g. { tiktokPrivacyLevel: 'PUBLIC_TO_EVERYONE', youtubePrivacyStatus: 'public', youtubePlaylistId: 'PLxxxxxxxxxxxx', facebookPageId: '123' }. `youtubePlaylistId` may also be an array or a comma-separated list of playlist IDs to add the uploaded video to. The `tiktokMusic*`, `tiktokLocation*`, `tiktokCoverImageUrl` and `tiktokUploadToDraft` keys depend on the TikTok connection's `capabilities` (see list_users); discover valid values with tiktok_music_trending and tiktok_location_search."
           ),
       },
       outputSchema: genericResultOutputSchema,
