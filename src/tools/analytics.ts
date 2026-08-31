@@ -73,7 +73,8 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
     "get_post_analytics",
     {
       title: "Get post analytics",
-      description: "Per-platform metrics for a specific post identified by `request_id`.",
+      description:
+        "Per-platform metrics for a specific post identified by `request_id`. `post_metrics` carries whatever each platform reports, so its shape is not the same everywhere: on TikTok it adds `retention` (the curve, second by second), `impression_sources` (For You, following, search, profile…), `audience_types` (followers vs non-followers), `new_followers` won by the post, `reach` and the watch times (`average_time_watched`, `total_time_watched`, `full_video_watched_rate`) on top of the usual counters.",
       inputSchema: {
         requestId: z.string(),
       },

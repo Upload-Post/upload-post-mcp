@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
-import { genericResultOutputSchema, safe } from "../schemas.js";
+import { genericResultOutputSchema, requiresTiktokCapability, safe } from "../schemas.js";
 
 export function registerCommentTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
@@ -10,18 +10,23 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Get post comments",
       description:
-        "List comments on a post. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn). TikTok is not supported.",
+        "List comments on a post. One endpoint for every network, chosen with `platform`. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn; TikTok: postId=the video id, `postUrl` is not accepted). Add `commentId` to get the REPLIES hanging off that one comment instead of the post's top-level comments — replies are the same question with one more parameter, not another tool. TikTok: " +
+        requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         platform: z
-          .enum(["instagram", "facebook", "youtube", "linkedin"])
+          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok"])
           .default("instagram")
-          .describe("Social platform. One of instagram, facebook, youtube, linkedin. TikTok is unsupported."),
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok."),
         postId: z
           .string()
           .optional()
-          .describe("Platform media/post ID. YouTube: the videoId. LinkedIn: the post urn."),
+          .describe("Platform media/post ID. YouTube: the videoId. LinkedIn: the post urn. TikTok: the video id (required — TikTok has no URL lookup)."),
         postUrl: z.string().optional().describe("Public URL of the post."),
+        commentId: z
+          .string()
+          .optional()
+          .describe("Return the replies under this comment instead of the post's top-level comments. Sent as `comment_id`."),
         after: z
           .string()
           .optional()
@@ -32,7 +37,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           .min(1)
           .max(50)
           .optional()
-          .describe("Comments to return (1-50, Meta's cap)."),
+          .describe("Comments to return (1-50; that ceiling is both Meta's and TikTok's)."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -48,6 +53,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         platform?: string;
         postId?: string;
         postUrl?: string;
+        commentId?: string;
         after?: string;
         limit?: number;
       };
@@ -59,6 +65,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           user: a.user,
           post_id: a.postId,
           post_url: a.postUrl,
+          comment_id: a.commentId,
           after: a.after,
           limit: a.limit,
         }),
@@ -161,22 +168,23 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Create a comment or reply",
       description:
-        "Post a top-level comment or a reply on a post. Provide exactly ONE of `commentId` (reply to a comment), `postId`, or `postUrl` (top-level). LinkedIn: postId=the post urn. Instagram requires `commentId` (replies only).",
+        "Post a top-level comment or a reply on a post. Provide exactly ONE of `commentId` (reply to a comment), `postId`, or `postUrl` (top-level). LinkedIn: postId=the post urn. Instagram requires `commentId` (replies only). TikTok always needs `postId` (the video id); add `commentId` on top of it to reply inside that thread. TikTok: " +
+        requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         message: z.string().min(1).describe("Comment text to post."),
         platform: z
-          .enum(["instagram", "facebook", "youtube", "linkedin"])
+          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok"])
           .default("instagram")
-          .describe("Social platform. One of instagram, facebook, youtube, linkedin."),
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok."),
         commentId: z
           .string()
           .optional()
-          .describe("Reply to this comment. Required by Instagram."),
+          .describe("Reply to this comment. Required by Instagram. TikTok: pass it together with postId to reply inside a thread."),
         postId: z
           .string()
           .optional()
-          .describe("Top-level comment on this post ID. LinkedIn: the post urn."),
+          .describe("Top-level comment on this post ID. LinkedIn: the post urn. TikTok: the video id, always required."),
         postUrl: z.string().optional().describe("Top-level comment on this post URL."),
       },
       outputSchema: genericResultOutputSchema,
@@ -214,14 +222,15 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Delete a comment",
       description:
-        "Delete a comment by `commentId`. LinkedIn also requires `postId` (the post urn).",
+        "Delete a comment by `commentId`. LinkedIn also requires `postId` (the post urn); TikTok needs only the `commentId`. TikTok: " +
+        requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         commentId: z.string().describe("ID of the comment to delete."),
         platform: z
-          .enum(["instagram", "facebook", "youtube", "linkedin"])
+          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok"])
           .default("instagram")
-          .describe("Social platform. One of instagram, facebook, youtube, linkedin."),
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok."),
         postId: z
           .string()
           .optional()
@@ -248,6 +257,63 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           user: a.user,
           comment_id: a.commentId,
           post_id: a.postId,
+        }),
+      });
+    })
+  );
+
+  server.registerTool(
+    "comment_action",
+    {
+      title: "Hide, like or pin a comment",
+      description:
+        "Moderate or react to a comment on one of the profile's own posts: hide it from other viewers, like it as the account, or pin it to the top. One endpoint for every network, chosen with `platform`; a network that cannot do it answers 400 `platform_not_supported` with the list of the ones that can. Every action carries its own inverse (hide/unhide, like/unlike, pin/unpin), so nothing here is permanent. `postId` is required for hide/unhide and pin/unpin, and must NOT be sent for like/unlike. Deleting a comment is a different tool: delete_comment. TikTok: " +
+        requiresTiktokCapability("comments", true),
+      inputSchema: {
+        user: z.string().describe("Upload-Post profile name."),
+        platform: z
+          .enum(["tiktok"])
+          .describe("Social platform the comment lives on."),
+        commentId: z
+          .string()
+          .describe("Comment to act on (from get_post_comments). Sent as `comment_id`."),
+        action: z
+          .enum(["hide", "unhide", "like", "unlike", "pin", "unpin"])
+          .describe("What to do. Lowercase; each value already carries its direction, so there is no separate 'undo' flag."),
+        postId: z
+          .string()
+          .optional()
+          .describe("Post the comment belongs to (TikTok: the video id). Required for hide/unhide and pin/unpin; not used by like/unlike."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Hide, like or pin a comment",
+        readOnlyHint: false,
+        openWorldHint: true,
+        // Every action is a toggle with an explicit inverse, so nothing is lost.
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => {
+      const a = args as {
+        user: string;
+        platform: string;
+        commentId: string;
+        action: string;
+        postId?: string;
+      };
+      const needsPost = a.action !== "like" && a.action !== "unlike";
+      if (needsPost && !a.postId) {
+        throw new Error(`postId (the post the comment belongs to) is required to ${a.action} a comment.`);
+      }
+      return client.request("POST", "/uploadposts/comments/action", {
+        body: compact({
+          platform: a.platform,
+          user: a.user,
+          comment_id: a.commentId,
+          action: a.action,
+          // like/unlike take the comment alone, so don't send the post.
+          post_id: needsPost ? a.postId : undefined,
         }),
       });
     })

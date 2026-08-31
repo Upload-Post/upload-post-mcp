@@ -26,7 +26,7 @@ The server runs on your machine, spawned by the MCP client. Add to `~/.claude/mc
 }
 ```
 
-Get your API key at <https://app.upload-post.com> → *API Keys*. Restart the client — you should see 50 `upload-post` tools.
+Get your API key at <https://app.upload-post.com> → *API Keys*. Restart the client — you should see 58 `upload-post` tools.
 
 ### B) Hosted HTTP (multi-tenant) — share one server with many users
 
@@ -60,76 +60,37 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Status        | `get_status`, `get_job_status`, `get_history`, `get_media` |
 | Schedule      | `list_scheduled`, `cancel_scheduled`, `edit_scheduled` |
 | Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_cached_post_analytics`, `get_platform_metrics` |
+| Audience      | `get_audience`, `get_suggestions` |
 | Users         | `get_account_info`, `list_users`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
-| Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `select_google_business_location`, `get_reddit_detailed_posts` |
+| Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `get_google_business_reviews`, `reply_to_google_business_review`, `get_reddit_detailed_posts` |
+| Posts         | `retry_post`, `unpublish_post` |
+| Comments      | `get_post_comments`, `create_comment`, `delete_comment`, `comment_action`, `reply_to_comment`, `public_reply_to_comment` |
 | TikTok        | `tiktok_music_trending`, `tiktok_music_search`, `tiktok_location_search`, `tiktok_publishing_settings` |
-| Comments      | `get_post_comments`, `reply_to_comment`, `public_reply_to_comment` |
 | DMs           | `send_dm`, `list_dm_conversations`, `manage_autodms` |
 | FFmpeg        | `submit_ffmpeg_job`, `get_ffmpeg_job`, `download_ffmpeg_result`, `get_ffmpeg_consumption` |
 | Queue         | `get_queue_settings`, `update_queue_settings`, `preview_queue` |
 
 Async uploads return a `request_id`. The agent should poll `get_status` until `success: true`.
 
+### One tool per question, not per network
+
+The Upload-Post API has no endpoint per social network: it has an endpoint per **question**, and a `platform` parameter saying who is being asked. `get_post_comments`, `get_post_analytics`, `get_audience`, `get_suggestions` and `comment_action` all work that way, so an agent learns one shape and reuses it for every network. Only the four `tiktok_*` tools are network-specific, because what they return (the Commercial Music Library, TikTok places, TikTok's per-account publishing settings) exists only on TikTok.
+
+- `get_audience` — who follows the profile, where they are, when they are online, what they tap. Also `benchmark_categories`, and the niche averages to compare against when `benchmarkCategory` is set. The server clamps the window to at most 60 days ending before today, so a wider range is trimmed rather than rejected, and `range` in the response says which window was used.
+- `get_suggestions` — hashtags (with `view_count`) or related keyword searches, told apart by `type`, not by a different tool.
+- `get_post_comments` — top-level comments on a post, or, with `commentId`, the replies under one of them.
+- `comment_action` — hide / unhide, like / unlike, pin / unpin a comment. Each value carries its own inverse, so nothing is permanent. `postId` is required for hide and pin and must not be sent for like.
+- `get_post_analytics` — per-post metrics. `post_metrics` is whatever the platform reports, so its shape varies: on TikTok it adds `retention`, `impression_sources`, `audience_types`, `new_followers`, `reach` and the watch times (`average_time_watched`, `total_time_watched`, `full_video_watched_rate`).
+
+Errors are shared too: `platform_not_supported` (400, with the list of the networks that can answer), `invalid_parameter` (400), `tiktok_reconnect_required` (400), `reauth_required` (409) and 502 when the upstream network fails.
+
+### TikTok capabilities
+
+`get_post_comments`, `create_comment`, `delete_comment` and `comment_action` accept `platform: "tiktok"`, and `firstComment` works on TikTok like on every other network.
+
+What a TikTok account can do depends on how it is connected. `list_users` returns a `capabilities` array on each TikTok account — `music`, `location`, `cover_image`, `cover_timestamp`, `draft`, `video_privacy`, `photo_privacy`, `profile_analytics`, `comments`, `trend_search` — and each tool's description names the one it needs. They are granted when the user connects TikTok, so an account connected before a capability existed has to reconnect before the matching tools answer; that is what a `tiktok_reconnect_required` error means.
+
 `get_media` and `get_cached_post_analytics` are cursor-paginated: feed the response's `next_cursor` back as `cursor` until `has_more` is false. LinkedIn, Discord and Telegram do not support media cursors and accept `limit` only. Prefer `get_cached_post_analytics` over `get_post_analytics` when scanning many posts — it replays previously fetched results and so avoids the live analytics rate limit of 100 requests / 5 minutes. Only contains posts previously fetched through a live per-post endpoint; there is no background refresh, so captured_at is the last time that post was read live.
-
-### TikTok
-
-Discover values with `tiktok_music_trending` / `tiktok_music_search`
-(Commercial Music Library) and `tiktok_location_search`, then pass them in
-`upload_video`'s `platformOptions`.
-
-TikTok has **no music search endpoint**: the only catalogue it publishes is the
-trending chart for a genre, country and period. `tiktok_music_search` searches
-the charts Upload-Post caches, so it finds trending tracks by name or artist —
-not TikTok's entire catalogue. To widen a fruitless search, try another `genre`,
-`countryCode` or `dateRange`.
-
-| Key | Capability | Notes |
-| --- | --- | --- |
-| `tiktokMusicId` | `music` | Video + photos. The track `id` from `tiktok_music_trending` or `tiktok_music_search` (not `commercial_music_id`) |
-| `tiktokMusicVolume` | `music` | Video only. 0-100, defaults to 50 when music is set |
-| `tiktokMusicStart` / `tiktokMusicEnd` | `music` | Video only. Music offsets in ms |
-| `tiktokOriginalSoundVolume` | `music` | Video only. 0-100, defaults to 50 so the original audio is not muted |
-| `tiktokLocationId` + `tiktokLocationName` | `location` | Video + photos. Both from `tiktok_location_search`; TikTok requires them together |
-| `tiktokCoverImageUrl` | `cover_image` | Video only. Custom cover image; takes priority over `tiktokCoverTimestamp` |
-| `tiktokIsAiGenerated` | — | Video + photos. AI-generated content disclosure |
-| `tiktokUploadToDraft` | `draft` | Video only. Sends to drafts; TikTok ignores the rest of the post settings |
-
-TikTok's photo contract takes the music track id alone, which is why the volume,
-trim, cover-image and draft fields are video-only.
-`tiktokPhotoCoverIndex` (`upload_photos`) picks the cover of a TikTok photo post.
-
-#### TikTok privacy is decided per account
-
-`tiktokPrivacyLevel` accepts `PUBLIC_TO_EVERYONE`, `MUTUAL_FOLLOW_FRIENDS`,
-`FOLLOWER_OF_CREATOR` and `SELF_ONLY`, but **TikTok narrows the set per
-account** — a private account has no `PUBLIC_TO_EVERYONE`. Asking for one the
-account does not have fails the upload with
-`error_code: "tiktok_privacy_unavailable"`. Call `tiktok_publishing_settings`
-and read `privacy_level_options` to offer only what will work. Omit it on video
-and TikTok applies the account's own default; on photo posts it defaults to
-`PUBLIC_TO_EVERYONE`.
-
-#### TikTok capabilities
-
-`list_users` returns a `capabilities` array on each TikTok account, with values
-`music`, `location`, `cover_image`, `cover_timestamp`, `draft`,
-`photo_privacy`, `video_privacy`, `inbox_fallback` and
-`profile_analytics`. A field whose
-capability the connection does not declare is ignored: the post still publishes
-and the response includes a per-field warning. Reconnect the TikTok account to
-enable it. `tiktok_music_trending` and `tiktok_music_search` need `music`,
-and `tiktok_location_search` needs `location`.
-
-#### Privacy level
-
-`tiktokPrivacyLevel` works on **video** and **photo** posts alike, but TikTok
-decides per account which values are available: a private account is offered
-`FOLLOWER_OF_CREATOR`, `MUTUAL_FOLLOW_FRIENDS` and `SELF_ONLY`, with no
-`PUBLIC_TO_EVERYONE`. Asking for one the account does not have fails with
-`error_code: "tiktok_privacy_unavailable"` and an error listing the ones it
-does have. Omit it on video and TikTok keeps the account's own default; on photo
-posts it defaults to `PUBLIC_TO_EVERYONE`.
 
 FFmpeg jobs accept one public URL through `input_url` or multiple URLs through `files`. Poll `get_ffmpeg_job` until completion, then call `download_ffmpeg_result`; it returns the result URL without streaming the processed binary through MCP.
 

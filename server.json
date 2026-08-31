@@ -3,7 +3,7 @@
   "name": "com.upload-post/mcp",
   "title": "Upload-Post",
   "description": "Social media MCP: publish, schedule & analyze posts on TikTok, Instagram, YouTube, LinkedIn & X",
-  "version": "0.8.0",
+  "version": "0.10.0",
   "websiteUrl": "https://www.upload-post.com",
   "repository": {
     "url": "https://github.com/Upload-Post/upload-post-mcp",
@@ -13,7 +13,9 @@
     {
       "src": "https://www.upload-post.com/uploadpost-80.jpeg",
       "mimeType": "image/jpeg",
-      "sizes": ["80x80"]
+      "sizes": [
+        "80x80"
+      ]
     }
   ],
   "remotes": [
@@ -32,7 +34,12 @@
   ],
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
-      "categories": ["social-media", "marketing", "content-creation", "automation"],
+      "categories": [
+        "social-media",
+        "marketing",
+        "content-creation",
+        "automation"
+      ],
       "keywords": [
         "social media",
         "social media api",

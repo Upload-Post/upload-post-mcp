@@ -4,6 +4,7 @@ import { registerUploadTools } from "./tools/upload.js";
 import { registerStatusTools } from "./tools/status.js";
 import { registerScheduleTools } from "./tools/schedule.js";
 import { registerAnalyticsTools } from "./tools/analytics.js";
+import { registerAudienceTools } from "./tools/audience.js";
 import { registerUserTools } from "./tools/users.js";
 import { registerPagesTools } from "./tools/pages.js";
 import { registerCommentTools } from "./tools/comments.js";
@@ -53,6 +54,7 @@ export function buildServer(client: UploadPostMcpClient): McpServer {
   registerStatusTools(server, client);
   registerScheduleTools(server, client);
   registerAnalyticsTools(server, client);
+  registerAudienceTools(server, client);
   registerUserTools(server, client);
   registerPagesTools(server, client);
   registerCommentTools(server, client);

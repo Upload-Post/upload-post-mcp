@@ -142,3 +142,15 @@ export function safe<TArgs>(
     }
   };
 }
+
+/**
+ * How a tool tells the model which TikTok capability it needs. `capabilities`
+ * is the array on the TikTok account returned by list_users; the wording is
+ * identical everywhere so the model can learn the check once.
+ */
+export function requiresTiktokCapability(capability: string, reconnect = false): string {
+  const base = `Requires the '${capability}' capability on the profile's TikTok account (see the \`capabilities\` array in list_users).`;
+  return reconnect
+    ? `${base} It is granted at connection time, so an account connected earlier has to reconnect TikTok before this works.`
+    : base;
+}
