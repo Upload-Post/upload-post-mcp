@@ -26,7 +26,7 @@ The server runs on your machine, spawned by the MCP client. Add to `~/.claude/mc
 }
 ```
 
-Get your API key at <https://app.upload-post.com> → *API Keys*. Restart the client — you should see 58 `upload-post` tools.
+Get your API key at <https://app.upload-post.com> → *API Keys*. Restart the client — you should see 62 `upload-post` tools.
 
 ### B) Hosted HTTP (multi-tenant) — share one server with many users
 
@@ -64,7 +64,7 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `get_google_business_reviews`, `reply_to_google_business_review`, `get_reddit_detailed_posts` |
 | Posts         | `retry_post`, `unpublish_post` |
 | Comments      | `get_post_comments`, `create_comment`, `delete_comment`, `reply_to_comment`, `public_reply_to_comment` |
-| TikTok        | `get_tiktok_comment_replies`, `manage_tiktok_comment`, `search_tiktok_keywords`, `search_tiktok_hashtags`, `get_tiktok_profile_insights`, `get_tiktok_video_insights`, `get_tiktok_benchmark` |
+| TikTok        | `tiktok_music_trending`, `tiktok_music_search`, `tiktok_location_search`, `tiktok_publishing_settings`, `get_tiktok_comment_replies`, `manage_tiktok_comment`, `search_tiktok_keywords`, `search_tiktok_hashtags`, `get_tiktok_profile_insights`, `get_tiktok_video_insights`, `get_tiktok_benchmark` |
 | DMs           | `send_dm`, `list_dm_conversations`, `manage_autodms` |
 | FFmpeg        | `submit_ffmpeg_job`, `get_ffmpeg_job`, `download_ffmpeg_result`, `get_ffmpeg_consumption` |
 | Queue         | `get_queue_settings`, `update_queue_settings`, `preview_queue` |
