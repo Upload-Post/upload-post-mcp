@@ -2,6 +2,8 @@
 
 Official **Model Context Protocol (MCP)** server for [Upload-Post](https://www.upload-post.com).
 
+[![smithery badge](https://smithery.ai/badge/upload-post/social-media-mcp)](https://smithery.ai/servers/upload-post/social-media-mcp) [![Glama](https://glama.ai/mcp/servers/Upload-Post/upload-post-mcp/badges/score.svg)](https://glama.ai/mcp/servers/Upload-Post/upload-post-mcp) [![npm](https://img.shields.io/npm/v/@upload-post/mcp)](https://www.npmjs.com/package/@upload-post/mcp)
+
 Lets any MCP-compatible AI agent (Claude Desktop, Claude Code, Cursor, …) publish, schedule, analyze and manage social media across **TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X, Google Business, Discord, Telegram and more** with a single API key.
 
 > Built on top of the official [`upload-post`](https://www.npmjs.com/package/upload-post) SDK and the public Upload-Post REST API.
