@@ -1,7 +1,12 @@
-/** The subset of MCP `clientInfo` this server cares about. */
+/**
+ * The subset of MCP `clientInfo` this server cares about, plus the HTTP
+ * User-Agent when there is one. ChatGPT sends `openai-mcp/1.0.0` in both, so
+ * matching either keeps the Studio alive if one of them ever changes.
+ */
 export interface ClientInfoLike {
   name?: unknown;
   version?: unknown;
+  userAgent?: unknown;
 }
 
 /**
@@ -42,7 +47,9 @@ function studioClientPattern(): RegExp {
 export function detectClientProfile(info: ClientInfoLike | undefined): ClientProfile {
   const name = (info?.name ?? "").toString();
   const version = (info?.version ?? "").toString();
-  const kind: ClientKind = studioClientPattern().test(name) ? "chatgpt" : "other";
+  const userAgent = (info?.userAgent ?? "").toString();
+  const pattern = studioClientPattern();
+  const kind: ClientKind = pattern.test(name) || pattern.test(userAgent) ? "chatgpt" : "other";
   return { kind, name: name || "unknown", version: version || "unknown" };
 }
 

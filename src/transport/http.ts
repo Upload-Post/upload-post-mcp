@@ -281,7 +281,10 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       }
 
       const client = new UploadPostMcpClient({ apiKey: resolution.apiKey, baseUrl: opts.baseUrl });
-      const server = opts.buildServer(client, clientInfoFromInitialize(body));
+      const server = opts.buildServer(client, {
+        ...clientInfoFromInitialize(body),
+        userAgent: req.headers["user-agent"],
+      });
       const transport = stripSchemaDialect(
         new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
