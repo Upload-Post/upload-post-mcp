@@ -417,14 +417,62 @@ export interface UploadToolHandles {
   applyClientProfile(ctx: SessionContext): void;
 }
 
-const UPLOAD_VIDEO_DESCRIPTION_BASE =
-  "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.).";
+/**
+ * The upload_video input shape, parameterised on the one field whose wording
+ * differs per client. Re-registered (not hand-edited) so the generated JSON
+ * Schema stays identical apart from that description.
+ */
+function uploadVideoShape(videoPathOrUrlDescription: string) {
+  return {
+    videoPathOrUrl: z.string().optional().describe(videoPathOrUrlDescription),
+    videoBase64: z
+      .string()
+      .optional()
+      .describe(
+        "Video bytes as base64 (or a data: URI). Provide this OR videoPathOrUrl. The server writes it to a temp file, uploads, then deletes it. Capped by UPLOAD_POST_MAX_INLINE_MB (default 100)."
+      ),
+    videoFilename: z
+      .string()
+      .optional()
+      .describe(
+        "Optional filename (e.g. 'clip.mp4') used only to pick the temp file extension when videoBase64 is given. Defaults to .mp4."
+      ),
+    user: z.string().describe("Profile name (Upload-Post user)."),
+    platforms: z
+      .array(VideoPlatform)
+      .min(1)
+      .describe("Required array of platform identifiers, e.g. ['instagram']. Never pass a single string."),
+    title: z.string().optional().describe("Caption / title."),
+    description: z.string().optional(),
+    firstComment: z
+      .string()
+      .optional()
+      .describe(
+        "Comment auto-posted under the post right after publishing. Supported on every platform that has comments, TikTok included. Use `platformOptions.<platform>FirstComment` to override it for one platform."
+      ),
+    ...schedulingFields,
+    platformOptions: VideoPlatformOptions
+      .optional()
+      .describe(
+        "Platform-specific overrides as a flat object (camelCase keys), e.g. { tiktokPrivacyLevel: 'PUBLIC_TO_EVERYONE', youtubePrivacyStatus: 'public', youtubePlaylistId: 'PLxxxxxxxxxxxx', facebookPageId: '123' }. `youtubePlaylistId` may also be an array or a comma-separated list of playlist IDs to add the uploaded video to. The `tiktokMusic*`, `tiktokLocation*`, `tiktokCoverImageUrl` and `tiktokUploadToDraft` keys depend on the TikTok connection's `capabilities` (see list_users); discover valid values with tiktok_music_trending and tiktok_location_search."
+      ),
+  };
+}
 
+// Kept verbatim: this is the description ChatGPT has always seen, and the
+// Studio flow depends on it. Other clients get the variant below.
 const UPLOAD_VIDEO_DESCRIPTION_CHATGPT =
-  UPLOAD_VIDEO_DESCRIPTION_BASE +
-  " A hosted MCP server cannot publish attached files passed as `/mnt/data`, sandbox, or other mounted local paths; for those files, ALWAYS call `open_upload_studio` first so the browser stages the video, then publishes it.";
+  "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. A hosted MCP server cannot publish attached files passed as `/mnt/data`, sandbox, or other mounted local paths; for those files, ALWAYS call `open_upload_studio` first so the browser stages the video, then publishes it. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.).";
 
-const UPLOAD_VIDEO_DESCRIPTION_OTHER = UPLOAD_VIDEO_DESCRIPTION_BASE + " " + LOCAL_FILE_GUIDANCE;
+const UPLOAD_VIDEO_DESCRIPTION_OTHER =
+  "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.). " +
+  LOCAL_FILE_GUIDANCE;
+
+const VIDEO_PATH_OR_URL_DESCRIPTION_CHATGPT =
+  "Public/signed HTTPS URL of the video. Absolute local paths are supported only for local/self-hosted MCP clients sharing the same filesystem. Do not pass `/mnt/data`, sandbox, or other mounted attachment paths; use open_upload_studio instead.";
+
+const VIDEO_PATH_OR_URL_DESCRIPTION_OTHER =
+  "Public/signed HTTPS URL of the video (a staged `media_url` from complete_media_upload also works). Absolute local paths are supported only for local/self-hosted MCP clients sharing the same filesystem. Never pass `/mnt/data`, sandbox, or other mounted attachment paths: the server cannot read them.";
 
 export function registerUploadTools(
   server: McpServer,
@@ -436,45 +484,7 @@ export function registerUploadTools(
     {
       title: "Upload video",
       description: UPLOAD_VIDEO_DESCRIPTION_CHATGPT,
-      inputSchema: {
-        videoPathOrUrl: z
-          .string()
-          .optional()
-          .describe(
-            "Public/signed HTTPS URL of the video (a staged `media_url` from complete_media_upload also works). Absolute local paths are supported only for local/self-hosted MCP clients sharing the same filesystem. Never pass `/mnt/data`, sandbox, or other mounted attachment paths: the server cannot read them."
-          ),
-        videoBase64: z
-          .string()
-          .optional()
-          .describe(
-            "Video bytes as base64 (or a data: URI). Provide this OR videoPathOrUrl. The server writes it to a temp file, uploads, then deletes it. Capped by UPLOAD_POST_MAX_INLINE_MB (default 100)."
-          ),
-        videoFilename: z
-          .string()
-          .optional()
-          .describe(
-            "Optional filename (e.g. 'clip.mp4') used only to pick the temp file extension when videoBase64 is given. Defaults to .mp4."
-          ),
-        user: z.string().describe("Profile name (Upload-Post user)."),
-        platforms: z
-          .array(VideoPlatform)
-          .min(1)
-          .describe("Required array of platform identifiers, e.g. ['instagram']. Never pass a single string."),
-        title: z.string().optional().describe("Caption / title."),
-        description: z.string().optional(),
-        firstComment: z
-          .string()
-          .optional()
-          .describe(
-            "Comment auto-posted under the post right after publishing. Supported on every platform that has comments, TikTok included. Use `platformOptions.<platform>FirstComment` to override it for one platform."
-          ),
-        ...schedulingFields,
-        platformOptions: VideoPlatformOptions
-          .optional()
-          .describe(
-            "Platform-specific overrides as a flat object (camelCase keys), e.g. { tiktokPrivacyLevel: 'PUBLIC_TO_EVERYONE', youtubePrivacyStatus: 'public', youtubePlaylistId: 'PLxxxxxxxxxxxx', facebookPageId: '123' }. `youtubePlaylistId` may also be an array or a comma-separated list of playlist IDs to add the uploaded video to. The `tiktokMusic*`, `tiktokLocation*`, `tiktokCoverImageUrl` and `tiktokUploadToDraft` keys depend on the TikTok connection's `capabilities` (see list_users); discover valid values with tiktok_music_trending and tiktok_location_search."
-          ),
-      },
+      inputSchema: uploadVideoShape(VIDEO_PATH_OR_URL_DESCRIPTION_CHATGPT),
       outputSchema: genericResultOutputSchema,
       annotations: {
         title: "Upload video",
@@ -652,7 +662,10 @@ export function registerUploadTools(
   return {
     applyClientProfile(profileCtx) {
       if (isChatGpt(profileCtx)) return;
-      uploadVideoTool.update({ description: UPLOAD_VIDEO_DESCRIPTION_OTHER });
+      uploadVideoTool.update({
+        description: UPLOAD_VIDEO_DESCRIPTION_OTHER,
+        paramsSchema: uploadVideoShape(VIDEO_PATH_OR_URL_DESCRIPTION_OTHER),
+      });
     },
   };
 }
