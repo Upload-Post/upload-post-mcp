@@ -1,4 +1,8 @@
-import type { Implementation } from "@modelcontextprotocol/sdk/types.js";
+/** The subset of MCP `clientInfo` this server cares about. */
+export interface ClientInfoLike {
+  name?: unknown;
+  version?: unknown;
+}
 
 /**
  * Per-session view of the connected MCP client, resolved from the
@@ -35,7 +39,7 @@ function studioClientPattern(): RegExp {
   }
 }
 
-export function detectClientProfile(info: Implementation | undefined): ClientProfile {
+export function detectClientProfile(info: ClientInfoLike | undefined): ClientProfile {
   const name = (info?.name ?? "").toString();
   const version = (info?.version ?? "").toString();
   const kind: ClientKind = studioClientPattern().test(name) ? "chatgpt" : "other";

@@ -14,9 +14,14 @@ import { registerFfmpegTools } from "./tools/ffmpeg.js";
 import { registerQueueTools } from "./tools/queue.js";
 import { registerUploadStudio } from "./tools/upload_studio.js";
 import { registerMediaUploadTools } from "./tools/media_uploads.js";
-import { detectClientProfile, isChatGpt, type SessionContext } from "./client_profile.js";
+import {
+  detectClientProfile,
+  isChatGpt,
+  type ClientInfoLike,
+  type SessionContext,
+} from "./client_profile.js";
 
-export function buildServer(client: UploadPostMcpClient): McpServer {
+export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfoLike): McpServer {
   const server = new McpServer(
     {
       name: "upload-post",
@@ -74,10 +79,12 @@ export function buildServer(client: UploadPostMcpClient): McpServer {
   // client has introduced itself, shape the surface for that host: ChatGPT keeps
   // the Studio widget as-is; everyone else gets the staging tools exposed to the
   // model and no widget metadata that would fail to render.
-  server.server.oninitialized = () => {
-    ctx.profile = detectClientProfile(server.server.getClientVersion());
+  const applyProfile = (info: ClientInfoLike | undefined): void => {
+    const profile = detectClientProfile(info);
+    if (ctx.profile?.kind === profile.kind && ctx.profile.name === profile.name) return;
+    ctx.profile = profile;
     process.stderr.write(
-      `[upload-post-mcp] client ${ctx.profile.name}/${ctx.profile.version} → ${ctx.profile.kind}\n`
+      `[upload-post-mcp] client ${profile.name}/${profile.version} → ${profile.kind}\n`
     );
     if (isChatGpt(ctx)) return;
     studio.tool.disable();
@@ -85,6 +92,12 @@ export function buildServer(client: UploadPostMcpClient): McpServer {
     uploadTools.applyClientProfile(ctx);
     mediaTools.applyClientProfile(ctx);
   };
+
+  // HTTP sessions know the client from the `initialize` body before any
+  // `tools/list` can arrive; stdio (and anything that skips the seed) falls
+  // back to the `initialized` notification.
+  if (clientInfo) applyProfile(clientInfo);
+  server.server.oninitialized = () => applyProfile(server.server.getClientVersion());
 
   return server;
 }

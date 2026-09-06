@@ -1,6 +1,7 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { ClientInfoLike } from "../client_profile.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { UploadPostMcpClient } from "../client.js";
 
@@ -27,7 +28,7 @@ export interface HttpOptions {
    * an `McpServer` with the tools registered. Injected so transport stays
    * unaware of which tools exist.
    */
-  buildServer: (client: UploadPostMcpClient) => McpServer;
+  buildServer: (client: UploadPostMcpClient, clientInfo?: ClientInfoLike) => McpServer;
 }
 
 interface Session {
@@ -239,6 +240,26 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       return;
     }
 
+    // The body is read before the session is built so that an `initialize`
+    // request can seed the server with the caller's `clientInfo`. Waiting for
+    // the `initialized` notification would leave a window in which the client
+    // could list tools and see the ChatGPT-only Upload Studio.
+    let body: unknown = undefined;
+    if (method === "POST") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(chunk as Buffer);
+      const raw = Buffer.concat(chunks).toString("utf8");
+      if (raw.length) {
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          res.statusCode = 400;
+          res.end("Invalid JSON");
+          return;
+        }
+      }
+    }
+
     if (!session) {
       const resolution = await resolveAuth(req.headers["authorization"], authDeps);
       if (!resolution) {
@@ -260,7 +281,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       }
 
       const client = new UploadPostMcpClient({ apiKey: resolution.apiKey, baseUrl: opts.baseUrl });
-      const server = opts.buildServer(client);
+      const server = opts.buildServer(client, clientInfoFromInitialize(body));
       const transport = stripSchemaDialect(
         new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
@@ -274,22 +295,6 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       };
       await server.connect(transport);
       session = { transport, server, lastSeenAt: Date.now() };
-    }
-
-    let body: unknown = undefined;
-    if (method === "POST") {
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(chunk as Buffer);
-      const raw = Buffer.concat(chunks).toString("utf8");
-      if (raw.length) {
-        try {
-          body = JSON.parse(raw);
-        } catch {
-          res.statusCode = 400;
-          res.end("Invalid JSON");
-          return;
-        }
-      }
     }
 
     await session.transport.handleRequest(req, res, body);
@@ -475,4 +480,21 @@ function isOriginAllowed(origin: string | string[] | undefined): boolean {
     return false;
   }
   return false;
+}
+
+/**
+ * Pull `params.clientInfo` out of an `initialize` request body (single or
+ * batched) so the server surface can be shaped before the client ever calls
+ * `tools/list`. Returns undefined for anything else.
+ */
+function clientInfoFromInitialize(body: unknown): ClientInfoLike | undefined {
+  const messages = Array.isArray(body) ? body : [body];
+  for (const message of messages) {
+    if (!message || typeof message !== "object") continue;
+    const rpc = message as { method?: unknown; params?: { clientInfo?: unknown } };
+    if (rpc.method !== "initialize") continue;
+    const info = rpc.params?.clientInfo;
+    if (info && typeof info === "object") return info as ClientInfoLike;
+  }
+  return undefined;
 }
