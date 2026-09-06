@@ -4,6 +4,7 @@ import { writeFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { LOCAL_FILE_GUIDANCE, isChatGpt, type SessionContext } from "../client_profile.js";
 import type { UploadPostMcpClient } from "../client.js";
 import {
   PhotoPlatform,
@@ -411,19 +412,36 @@ async function writeInlineVideo(
  * in the Upload-Post docs (tiktokPrivacyLevel, youtubePrivacyStatus, …) flow
  * through unchanged, even when not strictly typed here.
  */
-export function registerUploadTools(server: McpServer, client: UploadPostMcpClient): void {
-  server.registerTool(
+export interface UploadToolHandles {
+  /** Re-shape upload_video guidance for hosts that do not get the Studio widget. */
+  applyClientProfile(ctx: SessionContext): void;
+}
+
+const UPLOAD_VIDEO_DESCRIPTION_BASE =
+  "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.).";
+
+const UPLOAD_VIDEO_DESCRIPTION_CHATGPT =
+  UPLOAD_VIDEO_DESCRIPTION_BASE +
+  " A hosted MCP server cannot publish attached files passed as `/mnt/data`, sandbox, or other mounted local paths; for those files, ALWAYS call `open_upload_studio` first so the browser stages the video, then publishes it.";
+
+const UPLOAD_VIDEO_DESCRIPTION_OTHER = UPLOAD_VIDEO_DESCRIPTION_BASE + " " + LOCAL_FILE_GUIDANCE;
+
+export function registerUploadTools(
+  server: McpServer,
+  client: UploadPostMcpClient,
+  ctx: SessionContext = {}
+): UploadToolHandles {
+  const uploadVideoTool = server.registerTool(
     "upload_video",
     {
       title: "Upload video",
-      description:
-        "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. A hosted MCP server cannot publish attached files passed as `/mnt/data`, sandbox, or other mounted local paths; for those files, ALWAYS call `open_upload_studio` first so the browser stages the video, then publishes it. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.).",
+      description: UPLOAD_VIDEO_DESCRIPTION_CHATGPT,
       inputSchema: {
         videoPathOrUrl: z
           .string()
           .optional()
           .describe(
-            "Public/signed HTTPS URL of the video. Absolute local paths are supported only for local/self-hosted MCP clients sharing the same filesystem. Do not pass `/mnt/data`, sandbox, or other mounted attachment paths; use open_upload_studio instead."
+            "Public/signed HTTPS URL of the video (a staged `media_url` from complete_media_upload also works). Absolute local paths are supported only for local/self-hosted MCP clients sharing the same filesystem. Never pass `/mnt/data`, sandbox, or other mounted attachment paths: the server cannot read them."
           ),
         videoBase64: z
           .string()
@@ -492,7 +510,9 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
       }
       if (videoPathOrUrl && looksLikeHostedAttachmentPath(videoPathOrUrl)) {
         throw new Error(
-          "This looks like a hosted attachment path. The MCP server cannot read mounted paths such as /mnt/data. Use open_upload_studio so the user can select the file in the browser and stage it through Upload-Post, then publish from the returned media URL."
+          isChatGpt(ctx)
+            ? "This looks like a hosted attachment path. The MCP server cannot read mounted paths such as /mnt/data. Use open_upload_studio so the user can select the file in the browser and stage it through Upload-Post, then publish from the returned media URL."
+            : "This looks like a hosted attachment path. The MCP server cannot read mounted paths such as /mnt/data. " + LOCAL_FILE_GUIDANCE
         );
       }
 
@@ -628,4 +648,11 @@ export function registerUploadTools(server: McpServer, client: UploadPostMcpClie
       return client.sdk.uploadDocument(documentPathOrUrl, rest as never);
     })
   );
+
+  return {
+    applyClientProfile(profileCtx) {
+      if (isChatGpt(profileCtx)) return;
+      uploadVideoTool.update({ description: UPLOAD_VIDEO_DESCRIPTION_OTHER });
+    },
+  };
 }

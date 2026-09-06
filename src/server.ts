@@ -14,6 +14,7 @@ import { registerFfmpegTools } from "./tools/ffmpeg.js";
 import { registerQueueTools } from "./tools/queue.js";
 import { registerUploadStudio } from "./tools/upload_studio.js";
 import { registerMediaUploadTools } from "./tools/media_uploads.js";
+import { detectClientProfile, isChatGpt, type SessionContext } from "./client_profile.js";
 
 export function buildServer(client: UploadPostMcpClient): McpServer {
   const server = new McpServer(
@@ -50,7 +51,11 @@ export function buildServer(client: UploadPostMcpClient): McpServer {
     }
   );
 
-  registerUploadTools(server, client);
+  // One McpServer per session (HTTP) or per process (stdio), so the context is
+  // effectively per connected client.
+  const ctx: SessionContext = {};
+
+  const uploadTools = registerUploadTools(server, client, ctx);
   registerStatusTools(server, client);
   registerScheduleTools(server, client);
   registerAnalyticsTools(server, client);
@@ -62,8 +67,24 @@ export function buildServer(client: UploadPostMcpClient): McpServer {
   registerDmTools(server, client);
   registerFfmpegTools(server, client);
   registerQueueTools(server, client);
-  registerMediaUploadTools(server, client);
-  registerUploadStudio(server);
+  const mediaTools = registerMediaUploadTools(server, client);
+  const studio = registerUploadStudio(server);
+
+  // Tools are registered before we know who is on the other end. Once the
+  // client has introduced itself, shape the surface for that host: ChatGPT keeps
+  // the Studio widget as-is; everyone else gets the staging tools exposed to the
+  // model and no widget metadata that would fail to render.
+  server.server.oninitialized = () => {
+    ctx.profile = detectClientProfile(server.server.getClientVersion());
+    process.stderr.write(
+      `[upload-post-mcp] client ${ctx.profile.name}/${ctx.profile.version} → ${ctx.profile.kind}\n`
+    );
+    if (isChatGpt(ctx)) return;
+    studio.tool.disable();
+    studio.resource.disable();
+    uploadTools.applyClientProfile(ctx);
+    mediaTools.applyClientProfile(ctx);
+  };
 
   return server;
 }
