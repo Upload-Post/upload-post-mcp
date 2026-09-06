@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { RegisteredResource, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { VideoPlatform } from "../schemas.js";
 
 const UPLOAD_STUDIO_URI = "ui://upload-post/video-upload-studio.html";
@@ -44,8 +45,17 @@ const resourceMeta = {
   },
 };
 
-export function registerUploadStudio(server: McpServer): void {
-  server.registerResource(
+export interface UploadStudioHandles {
+  tool: RegisteredTool;
+  resource: RegisteredResource;
+}
+
+/**
+ * ChatGPT-only. The widget uses the Apps SDK bridge (`window.openai`,
+ * `text/html+skybridge`); `buildServer` disables both handles for other hosts.
+ */
+export function registerUploadStudio(server: McpServer): UploadStudioHandles {
+  const resource = server.registerResource(
     "upload-post-video-upload-studio",
     UPLOAD_STUDIO_URI,
     {
@@ -66,7 +76,7 @@ export function registerUploadStudio(server: McpServer): void {
     })
   );
 
-  server.registerTool(
+  const tool = server.registerTool(
     "open_upload_studio",
     {
       title: "Open upload studio",
@@ -135,6 +145,8 @@ export function registerUploadStudio(server: McpServer): void {
       };
     }
   );
+
+  return { tool, resource };
 }
 
 const uploadStudioHtml = `<!doctype html>

@@ -100,6 +100,8 @@ FFmpeg jobs accept one public URL through `input_url` or multiple URLs through `
 
 `open_upload_studio` renders a ChatGPT Apps component for file-based video publishing. The widget creates a short-lived Upload-Post/R2 staging upload, PUTs the local video directly to R2, completes the upload, then calls `upload_video` with the returned temporary media URL.
 
+The widget speaks the ChatGPT Apps SDK bridge, so it is **only advertised to ChatGPT** (detected from `clientInfo` at `initialize`; override the match with `UPLOAD_POST_STUDIO_CLIENTS=<regex>`). Every other host (claude.ai, Claude Desktop, Claude Code, Cursor, …) does not see the tool or its `ui://` resource; instead `create_media_upload` / `complete_media_upload` are exposed to the model with step-by-step guidance, and `upload_video` tells the assistant to ask for a public URL or send the user to the dashboard when the client cannot PUT the file itself.
+
 The staging object is deleted after 24 hours whether it is used or not. Scheduled/queued posts remain safe because `upload_video` copies the temporary URL into the existing durable scheduler storage before execution.
 
 Claude and other MCP clients can use the same flow without the ChatGPT UI: call `create_media_upload`, PUT the file to `upload_url`, call `complete_media_upload`, then pass `media_url` to `upload_video`.
@@ -212,6 +214,7 @@ curl -i -X POST http://localhost:8080/mcp \
 
 - Prefer **public URLs** over local paths when uploading — local paths only work if the MCP server runs on the user's machine.
 - In ChatGPT Apps, prefer `open_upload_studio` for user-selected video files. It avoids local-path handoff issues by uploading to short-lived Upload-Post/R2 staging, then passing a temporary media URL to `upload_video`.
+- In any other client with a local file: if the client can run HTTP requests (Claude Code, Cursor, a script), stage it with `create_media_upload` → PUT the bytes to `upload_url` → `complete_media_upload`, then pass the returned `media_url` to `upload_video`. Hosted chats without that ability (claude.ai) need a public HTTPS URL or the dashboard at https://app.upload-post.com.
 - To send video **bytes directly** (a client that holds the file rather than a URL), pass `videoBase64` to `upload_video` instead of `videoPathOrUrl`. The server writes it to a temp file, uploads, then deletes it. Inline bytes are capped at `UPLOAD_POST_MAX_INLINE_MB` (default 100 MB) — for larger videos use a public URL.
 - Always create the profile first (`create_user`) and connect socials in the Upload-Post dashboard before publishing.
 - For scheduled posts, pass ISO 8601 dates with timezone, e.g. `"2026-12-25T10:00:00Z"` + `"timezone": "Europe/Madrid"`.
