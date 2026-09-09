@@ -1,61 +1,71 @@
 import { z } from "zod";
 
-export const VideoPlatform = z.enum([
-  "tiktok",
-  "instagram",
-  "youtube",
-  "linkedin",
-  "facebook",
-  "pinterest",
-  "threads",
-  "reddit",
-  "bluesky",
-  "x",
-  "google_business",
-  "discord",
-  "telegram",
-  "mastodon",
-  "wordpress",
-]);
+/** Agents must not treat Reddit as a working publish target until the app is restored. */
+export const REDDIT_UNAVAILABLE =
+  "Reddit posting is currently unavailable (error_code=reddit_unavailable) until the Reddit app is restored. Do not use reddit as a publish target.";
 
-export const PhotoPlatform = z.enum([
-  "tiktok",
-  "instagram",
-  "linkedin",
-  "facebook",
-  "pinterest",
-  "threads",
-  "reddit",
-  "bluesky",
-  "x",
-  "google_business",
-  "discord",
-  "telegram",
-  "mastodon",
-  "lemmy",
-  "wordpress",
-]);
+export const VideoPlatform = z
+  .enum([
+    "tiktok",
+    "instagram",
+    "youtube",
+    "linkedin",
+    "facebook",
+    "pinterest",
+    "threads",
+    "reddit",
+    "bluesky",
+    "x",
+    "google_business",
+    "discord",
+    "telegram",
+    "mastodon",
+    "wordpress",
+  ])
+  .describe(`Target social platform. ${REDDIT_UNAVAILABLE}`);
 
-export const TextPlatform = z.enum([
-  "x",
-  "linkedin",
-  "facebook",
-  "threads",
-  "reddit",
-  "bluesky",
-  "google_business",
-  "discord",
-  "telegram",
-  "slack",
-  "mastodon",
-  "nostr",
-  "lemmy",
-  "devto",
-  "hashnode",
-  "wordpress",
-  "whop",
-  "listmonk",
-]);
+export const PhotoPlatform = z
+  .enum([
+    "tiktok",
+    "instagram",
+    "linkedin",
+    "facebook",
+    "pinterest",
+    "threads",
+    "reddit",
+    "bluesky",
+    "x",
+    "google_business",
+    "discord",
+    "telegram",
+    "mastodon",
+    "lemmy",
+    "wordpress",
+  ])
+  .describe(`Target social platform. ${REDDIT_UNAVAILABLE}`);
+
+export const TextPlatform = z
+  .enum([
+    "x",
+    "linkedin",
+    "facebook",
+    "threads",
+    "reddit",
+    "bluesky",
+    "google_business",
+    "discord",
+    "telegram",
+    "slack",
+    "mastodon",
+    "nostr",
+    "lemmy",
+    "devto",
+    "hashnode",
+    "wordpress",
+    "whop",
+    "listmonk",
+  ])
+  .describe(`Target social platform. ${REDDIT_UNAVAILABLE}`);
 
 export const AnalyticsPlatform = z.enum([
   "tiktok",

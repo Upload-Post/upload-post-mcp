@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RegisteredResource, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { VideoPlatform } from "../schemas.js";
+import { REDDIT_UNAVAILABLE, VideoPlatform } from "../schemas.js";
 
 const UPLOAD_STUDIO_URI = "ui://upload-post/video-upload-studio.html";
 const WIDGET_DOMAIN = (
@@ -81,10 +81,14 @@ export function registerUploadStudio(server: McpServer): UploadStudioHandles {
     {
       title: "Open upload studio",
       description:
-        "Open the upload studio in the user's browser for local or attached video uploads. Use this FIRST when the user attaches a video and does not provide a public HTTPS URL. Do not try upload_video with /mnt/data, sandbox, or other mounted local paths first: a hosted MCP server cannot read files on the client's machine. The Studio lets the user select the file in the browser, stages it in short-lived Upload-Post storage, and publishes it through Upload-Post.",
+        "Open the upload studio in the user's browser for local or attached video uploads. Use this FIRST when the user attaches a video and does not provide a public HTTPS URL. Do not try upload_video with /mnt/data, sandbox, or other mounted local paths first: a hosted MCP server cannot read files on the client's machine. The Studio lets the user select the file in the browser, stages it in short-lived Upload-Post storage, and publishes it through Upload-Post. " +
+        REDDIT_UNAVAILABLE,
       inputSchema: {
         user: z.string().optional().describe("Optional Upload-Post profile name to prefill."),
-        platforms: z.array(VideoPlatform).optional().describe("Optional platforms to preselect."),
+        platforms: z
+          .array(VideoPlatform)
+          .optional()
+          .describe(`Optional platforms to preselect. ${REDDIT_UNAVAILABLE}`),
         title: z.string().optional().describe("Optional caption/title to prefill."),
         description: z.string().optional().describe("Optional description to prefill."),
         firstComment: z.string().optional().describe("Optional first comment to prefill."),
