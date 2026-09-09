@@ -29,6 +29,16 @@ const MAX_INLINE_MB = Number(process.env.UPLOAD_POST_MAX_INLINE_MB ?? 100);
 
 /** Keys shared by video, photo and text posts. */
 const commonPlatformOptionFields = {
+  replyToId: z
+    .string()
+    .optional()
+    .describe(
+      "Publish as a reply to an existing post (X: tweet ID; Bluesky: post URL or AT-URI). On X's Pay-Per-Use tier a reply to an author the account has not engaged with is rejected with 403."
+    ),
+  xReplyToId: z
+    .string()
+    .optional()
+    .describe("Alias of replyToId, scoped to X: the tweet ID to reply to."),
   facebookPageId: z.string().optional().describe("Facebook Page ID to publish to (see get_facebook_pages)."),
   linkedinPageId: z
     .string()
