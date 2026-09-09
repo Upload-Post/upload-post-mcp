@@ -8,12 +8,17 @@ import { LOCAL_FILE_GUIDANCE, isChatGpt, type SessionContext } from "../client_p
 import type { UploadPostMcpClient } from "../client.js";
 import {
   PhotoPlatform,
+  REDDIT_UNAVAILABLE,
   TextPlatform,
   VideoPlatform,
   genericResultOutputSchema,
   safe,
   schedulingFields,
 } from "../schemas.js";
+
+/** One TikTok draft idea for every account type (inbox and Business is_draft). */
+const TIKTOK_DRAFT_DESCRIPTION =
+  "Send to TikTok drafts/inbox. Same flag for every TikTok account; do not pick a different field for Business.";
 
 /**
  * Max decoded size accepted for inline (base64) video bytes, in MB.
@@ -134,7 +139,7 @@ const VideoPlatformOptions = z
       .enum(["DIRECT_POST", "MEDIA_UPLOAD"])
       .optional()
       .describe(
-        "TikTok post mode. DIRECT_POST publishes straight to the account. MEDIA_UPLOAD (Draft) sends the video to the user's TikTok inbox/drafts to publish from the app — RECOMMENDED for TikTok, as publishing natively from the app tends to get more organic reach. Note: in Draft mode TikTok ignores the title/caption and other metadata sent via API; the user adds them in the app before publishing. Defaults to DIRECT_POST."
+        `${TIKTOK_DRAFT_DESCRIPTION} MEDIA_UPLOAD (or tiktokUploadToDraft=true) sends the video to drafts/inbox. DIRECT_POST publishes now.`
       ),
     // Capability-gated TikTok keys. The TikTok account object returned by
     // list_users carries a `capabilities` array (music, location, cover_image,
@@ -190,9 +195,7 @@ const VideoPlatformOptions = z
     tiktokUploadToDraft: z
       .boolean()
       .optional()
-      .describe(
-        "Send the video to TikTok drafts instead of publishing it. When true TikTok ignores the rest of the post settings. Needs the `draft` capability (see tiktokMusicId)."
-      ),
+      .describe(`${TIKTOK_DRAFT_DESCRIPTION} Set true, or tiktokPostMode=MEDIA_UPLOAD.`),
     // Instagram
     instagramMediaType: z
       .enum(["REELS", "STORIES"])
@@ -259,7 +262,8 @@ const VideoPlatformOptions = z
   })
   .passthrough()
   .describe(
-    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (youtubeTitle, tiktokTitle, youtubeDescription, instagramFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (youtubeTitle, tiktokTitle, youtubeDescription, instagramFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream. " +
+      REDDIT_UNAVAILABLE
   );
 
 const PhotoPlatformOptions = z
@@ -279,9 +283,19 @@ const PhotoPlatformOptions = z
       .min(0)
       .optional()
       .describe("Index of the cover photo, 0-based. Sent as `photo_cover_index`; picks the cover of a TikTok photo post."),
-    // TikTok photo posts accept the music track id, the location pair and the AI
-    // disclosure. They do NOT accept the volume/trim, custom cover or draft
-    // fields — those are video-only, which is why they are absent here.
+    tiktokPostMode: z
+      .enum(["DIRECT_POST", "MEDIA_UPLOAD"])
+      .optional()
+      .describe(
+        `${TIKTOK_DRAFT_DESCRIPTION} MEDIA_UPLOAD (or tiktokUploadToDraft=true) sends the post to drafts/inbox. DIRECT_POST publishes now.`
+      ),
+    tiktokUploadToDraft: z
+      .boolean()
+      .optional()
+      .describe(`${TIKTOK_DRAFT_DESCRIPTION} Set true, or tiktokPostMode=MEDIA_UPLOAD.`),
+    // TikTok photo posts accept the music track id, the location pair, the AI
+    // disclosure and the same draft flag as video. They do NOT accept the
+    // volume/trim or custom cover fields — those are video-only.
     tiktokMusicId: z
       .string()
       .optional()
@@ -313,12 +327,13 @@ const PhotoPlatformOptions = z
       .string()
       .optional()
       .describe("Media items per Threads post, e.g. '5,5'. Total must equal file count."),
-    redditSubreddit: z.string().optional().describe("Subreddit name, without r/."),
-    redditFlairId: z.string().optional().describe("Reddit flair template ID."),
+    redditSubreddit: z.string().optional().describe(REDDIT_UNAVAILABLE),
+    redditFlairId: z.string().optional().describe(REDDIT_UNAVAILABLE),
   })
   .passthrough()
   .describe(
-    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (instagramTitle, xFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (instagramTitle, xFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream. " +
+      REDDIT_UNAVAILABLE
   );
 
 const TextPlatformOptions = z
@@ -339,14 +354,19 @@ const TextPlatformOptions = z
       .optional()
       .describe("Who can reply to the X poll."),
     xCardUri: z.string().optional().describe("Card URI for Twitter Cards."),
-    redditSubreddit: z.string().optional().describe("Subreddit name, without r/. Title is required for Reddit."),
-    redditFlairId: z.string().optional().describe("Reddit flair template ID."),
-    redditLinkUrl: z.string().optional().describe("Link to attach on Reddit."),
+    redditSubreddit: z.string().optional().describe(REDDIT_UNAVAILABLE),
+    redditFlairId: z.string().optional().describe(REDDIT_UNAVAILABLE),
+    redditLinkUrl: z.string().optional().describe(REDDIT_UNAVAILABLE),
   })
   .passthrough()
   .describe(
-    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (xTitle, linkedinTitle, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (xTitle, linkedinTitle, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream. " +
+      REDDIT_UNAVAILABLE
   );
+
+function truthyFlag(value: unknown): boolean {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
 
 /**
  * Normalize option names the SDK does not know and resolve routing that is
@@ -355,6 +375,9 @@ const TextPlatformOptions = z
  * - `googleBusinessLocationId` is an alias of the SDK's `gbpLocationId`, which
  *   the API reads from the upload form. There is no persistent location
  *   selection: /uploadposts/google-business/locations/select does not exist.
+ * - TikTok draft is one idea: `tiktokPostMode=MEDIA_UPLOAD` and
+ *   `tiktokUploadToDraft=true` (plus API names `post_mode` /
+ *   `tiktok_upload_to_draft`) all map to the same SDK kwargs.
  */
 async function resolvePlatformRouting(
   client: UploadPostMcpClient,
@@ -371,6 +394,25 @@ async function resolvePlatformRouting(
   if (locationId && !opts.gbpLocationId) {
     opts.gbpLocationId = String(locationId);
   }
+
+  // One TikTok draft idea: SDK kwargs tiktokPostMode / tiktokUploadToDraft, plus
+  // the API names post_mode / tiktok_upload_to_draft. Either one sets both so
+  // inbox (MEDIA_UPLOAD) and Business is_draft use the same flag.
+  const postMode = opts.tiktokPostMode ?? opts.post_mode;
+  const rawDraft = opts.tiktokUploadToDraft ?? opts.tiktok_upload_to_draft;
+  if (typeof postMode === "string" && !opts.tiktokPostMode) {
+    opts.tiktokPostMode = postMode;
+  }
+  if (rawDraft !== undefined && opts.tiktokUploadToDraft === undefined) {
+    opts.tiktokUploadToDraft = truthyFlag(rawDraft);
+  }
+  if (opts.tiktokPostMode === "MEDIA_UPLOAD" || truthyFlag(opts.tiktokUploadToDraft)) {
+    opts.tiktokPostMode = "MEDIA_UPLOAD";
+    opts.tiktokUploadToDraft = true;
+  }
+  delete opts.post_mode;
+  delete opts.tiktok_upload_to_draft;
+
   return opts;
 }
 
@@ -451,7 +493,9 @@ function uploadVideoShape(videoPathOrUrlDescription: string) {
     platforms: z
       .array(VideoPlatform)
       .min(1)
-      .describe("Required array of platform identifiers, e.g. ['instagram']. Never pass a single string."),
+      .describe(
+        `Required array of platform identifiers, e.g. ['instagram']. Never pass a single string. ${REDDIT_UNAVAILABLE}`
+      ),
     title: z.string().optional().describe("Caption / title."),
     description: z.string().optional(),
     firstComment: z
@@ -464,7 +508,7 @@ function uploadVideoShape(videoPathOrUrlDescription: string) {
     platformOptions: VideoPlatformOptions
       .optional()
       .describe(
-        "Platform-specific overrides as a flat object (camelCase keys), e.g. { tiktokPrivacyLevel: 'PUBLIC_TO_EVERYONE', youtubePrivacyStatus: 'public', youtubePlaylistId: 'PLxxxxxxxxxxxx', facebookPageId: '123' }. `youtubePlaylistId` may also be an array or a comma-separated list of playlist IDs to add the uploaded video to. The `tiktokMusic*`, `tiktokLocation*`, `tiktokCoverImageUrl` and `tiktokUploadToDraft` keys depend on the TikTok connection's `capabilities` (see list_users); discover valid values with tiktok_music_trending and tiktok_location_search."
+        "Platform-specific overrides as a flat object (camelCase keys), e.g. { tiktokPrivacyLevel: 'PUBLIC_TO_EVERYONE', youtubePrivacyStatus: 'public', youtubePlaylistId: 'PLxxxxxxxxxxxx', facebookPageId: '123' }. `youtubePlaylistId` may also be an array or a comma-separated list of playlist IDs to add the uploaded video to. The `tiktokMusic*`, `tiktokLocation*`, and `tiktokCoverImageUrl` keys depend on the TikTok connection's `capabilities` (see list_users); discover valid values with tiktok_music_trending and tiktok_location_search. tiktokPostMode=MEDIA_UPLOAD and tiktokUploadToDraft=true are the same draft/inbox flag for every TikTok account."
       ),
   };
 }
@@ -476,6 +520,8 @@ const UPLOAD_VIDEO_DESCRIPTION_CHATGPT =
 
 const UPLOAD_VIDEO_DESCRIPTION_OTHER =
   "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.). " +
+  REDDIT_UNAVAILABLE +
+  " " +
   LOCAL_FILE_GUIDANCE;
 
 const VIDEO_PATH_OR_URL_DESCRIPTION_CHATGPT =
@@ -558,11 +604,15 @@ export function registerUploadTools(
     {
       title: "Upload photos / carousel",
       description:
-        "Publish one or more photos (single image or carousel). Each item in `photosPathsOrUrls` may be a public URL or a local path.",
+        "Publish one or more photos (single image or carousel). Each item in `photosPathsOrUrls` may be a public URL or a local path. " +
+        REDDIT_UNAVAILABLE,
       inputSchema: {
         photosPathsOrUrls: z.array(z.string()).min(1),
         user: z.string(),
-        platforms: z.array(PhotoPlatform).min(1),
+        platforms: z
+          .array(PhotoPlatform)
+          .min(1)
+          .describe(`Required array of platform identifiers. ${REDDIT_UNAVAILABLE}`),
         title: z.string().optional(),
         description: z.string().optional(),
         firstComment: z
@@ -602,11 +652,15 @@ export function registerUploadTools(
     {
       title: "Upload text post",
       description:
-        "Publish a text-only post. Title is required for Reddit. `linkUrl` (or platform-specific *LinkUrl) attaches a link preview where supported.",
+        "Publish a text-only post. `linkUrl` (or platform-specific *LinkUrl) attaches a link preview where supported. " +
+        REDDIT_UNAVAILABLE,
       inputSchema: {
         title: z.string().describe("Post text / caption."),
         user: z.string(),
-        platforms: z.array(TextPlatform).min(1),
+        platforms: z
+          .array(TextPlatform)
+          .min(1)
+          .describe(`Required array of platform identifiers. ${REDDIT_UNAVAILABLE}`),
         linkUrl: z
           .string()
           .optional()
