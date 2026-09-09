@@ -4,13 +4,21 @@ Official **Model Context Protocol (MCP)** server for [Upload-Post](https://www.u
 
 [![smithery badge](https://smithery.ai/badge/upload-post/social-media-mcp)](https://smithery.ai/servers/upload-post/social-media-mcp) [![Glama](https://glama.ai/mcp/servers/Upload-Post/upload-post-mcp/badges/score.svg)](https://glama.ai/mcp/servers/Upload-Post/upload-post-mcp) [![npm](https://img.shields.io/npm/v/@upload-post/mcp)](https://www.npmjs.com/package/@upload-post/mcp)
 
-Lets any MCP-compatible AI agent (Claude Desktop, Claude Code, Cursor, …) publish, schedule, analyze and manage social media across **TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X, Google Business, Discord, Telegram and more** with a single API key.
+Lets any MCP-compatible AI agent (ChatGPT, Claude Desktop, Claude Code, Cursor, …) publish, schedule, analyze and manage social media across **TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X, Google Business, Discord, Telegram and more** with a single API key.
 
 > Built on top of the official [`upload-post`](https://www.npmjs.com/package/upload-post) SDK and the public Upload-Post REST API.
 
 ---
 
-## Two ways to use it
+## Use it in ChatGPT (no setup)
+
+Upload-Post is a reviewed app in the **ChatGPT app directory**. [Add Upload-Post in ChatGPT](https://chatgpt.com/plugins/plugin_asdk_app_6a1fed02ff5c8191b4060c5807221f26) — or search for *Upload-Post* under **Apps** — click **Connect** and sign in with OAuth. No Developer mode, no MCP URL to paste, and you get the [Upload Studio](#chatgpt-video-upload-ui) widget for publishing video files straight from your computer.
+
+Prefer to wire it up by hand? Enable **Developer mode** in **Settings → Apps → Advanced settings**, click **Create app**, point it at `https://mcp.upload-post.com/mcp` and set authentication to **OAuth**.
+
+---
+
+## Two ways to run it yourself
 
 ### A) Local stdio (single-user) — simplest
 
