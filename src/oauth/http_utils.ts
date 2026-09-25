@@ -53,3 +53,22 @@ export function sendRedirect(res: ServerResponse, url: string): void {
   res.setHeader("cache-control", "no-store");
   res.end();
 }
+
+/** Seconds a client should wait before retrying after a 503 from us. */
+export const UPSTREAM_RETRY_AFTER_SECONDS = 5;
+
+/**
+ * 503 `temporarily_unavailable` (RFC 6749 §4.1.2.1 vocabulary) for when the
+ * Upload-Post backend that owns tokens could not be reached. Always an answer:
+ * leaving the request hanging is what made clients give up on a valid refresh
+ * token (support ticket 5177).
+ */
+export function sendUpstreamUnavailable(res: ServerResponse): void {
+  res.setHeader("retry-after", String(UPSTREAM_RETRY_AFTER_SECONDS));
+  sendError(
+    res,
+    503,
+    "temporarily_unavailable",
+    "The authorization backend is temporarily unreachable. Retry shortly; your tokens are still valid."
+  );
+}

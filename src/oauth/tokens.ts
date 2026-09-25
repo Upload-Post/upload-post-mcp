@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { UpstreamOAuthClient } from "./upstream_client.js";
+import { UpstreamUnavailableError, type UpstreamOAuthClient } from "./upstream_client.js";
 import type { IntrospectCache } from "./introspect_cache.js";
-import { readFormBody, sendError, sendJson } from "./http_utils.js";
+import { readFormBody, sendError, sendJson, sendUpstreamUnavailable } from "./http_utils.js";
 
 /**
  * POST /token — RFC 6749 §4.1.3 + §6 (refresh). Public client (PKCE), so no
@@ -23,7 +23,13 @@ export async function handleToken(
   if (!form.grant_type) return sendError(res, 400, "invalid_request", "grant_type required");
 
   const params = new URLSearchParams(form);
-  const response = await upstream.exchangeOrRefresh(params);
+  let response: { status: number; body: string };
+  try {
+    response = await upstream.exchangeOrRefresh(params);
+  } catch (err) {
+    if (err instanceof UpstreamUnavailableError) return sendUpstreamUnavailable(res);
+    throw err;
+  }
   res.statusCode = response.status;
   res.setHeader("content-type", "application/json");
   res.setHeader("cache-control", "no-store");

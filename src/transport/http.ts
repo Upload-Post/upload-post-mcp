@@ -14,7 +14,8 @@ import {
 import { handleRegistration } from "../oauth/registration.js";
 import { handleAuthorize } from "../oauth/authorize.js";
 import { handleToken, handleRevoke } from "../oauth/tokens.js";
-import { UpstreamOAuthClient } from "../oauth/upstream_client.js";
+import { UpstreamOAuthClient, UpstreamUnavailableError } from "../oauth/upstream_client.js";
+import { sendUpstreamUnavailable } from "../oauth/http_utils.js";
 import { IntrospectCache } from "../oauth/introspect_cache.js";
 import { resolveAuth } from "../oauth/auth_resolver.js";
 import { stripSchemaDialect } from "./schema_dialect.js";
@@ -173,16 +174,16 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
         return serveJson(res, authorizationServerMetadata(oauthCfg));
       }
       if (method === "POST" && url === "/register") {
-        return handleRegistration(req, res);
+        return await handleRegistration(req, res);
       }
       if (method === "GET" && url.startsWith("/authorize")) {
-        return handleAuthorize(req, res, oauthCfg);
+        return await handleAuthorize(req, res, oauthCfg);
       }
       if (method === "POST" && url === "/token") {
-        return handleToken(req, res, upstream);
+        return await handleToken(req, res, upstream);
       }
       if (method === "POST" && url === "/revoke") {
-        return handleRevoke(req, res, upstream, introspectCache);
+        return await handleRevoke(req, res, upstream, introspectCache);
       }
     }
 
@@ -266,7 +267,18 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     };
 
     if (!session) {
-      const resolution = await resolveAuth(req.headers["authorization"], authDeps);
+      let resolution;
+      try {
+        resolution = await resolveAuth(req.headers["authorization"], authDeps);
+      } catch (err) {
+        // The token could not be checked (backend unreachable), which is not
+        // the same as a bad token. A 401 here tells the client to throw its
+        // credentials away and re-authorize; a 503 tells it to retry.
+        if (err instanceof UpstreamUnavailableError) {
+          return sendUpstreamUnavailable(res);
+        }
+        throw err;
+      }
       if (!resolution) {
         return sendUnauthorized(res, oauthCfg.enabled, oauthCfg.issuer);
       }
