@@ -45,11 +45,21 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
     "edit_scheduled",
     {
       title: "Edit scheduled post",
-      description: "Reschedule a post: change date and/or timezone.",
+      description:
+        "Edit a pending scheduled post in place, keeping its job ID and media: reschedule it (scheduledDate/timezone) and/or fix its text. `title` and `caption` rewrite the text for EVERY platform of the post; to change only some platforms, send `platformContent` instead, e.g. {\"instagram\":{\"caption\":\"...\"},\"tiktok\":{\"caption\":\"...\"}} — platforms not listed keep their text. First comments cannot be edited on a pending post.",
       inputSchema: {
         jobId: z.string(),
-        scheduledDate: z.string().optional(),
-        timezone: z.string().optional(),
+        scheduledDate: z.string().optional().describe("New date, ISO 8601."),
+        timezone: z.string().optional().describe("IANA timezone for scheduledDate."),
+        title: z.string().optional().describe("New title for every platform of the post."),
+        caption: z.string().optional().describe("New caption/description for every platform of the post."),
+        platformContent: z
+          .record(
+            z.string(),
+            z.object({ title: z.string().optional(), caption: z.string().optional() })
+          )
+          .optional()
+          .describe("Per-platform text, keyed by platform (instagram, tiktok, youtube, facebook, linkedin, x, threads…). Only the platforms listed are changed."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -60,11 +70,23 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
       },
     },
     safe(async (args) => {
-      const { jobId, ...rest } = args as { jobId: string; [k: string]: unknown };
-      return client.sdk.editScheduled(
-        jobId,
-        compact(rest) as { scheduledDate?: string; timezone?: string }
-      );
+      const a = args as {
+        jobId: string;
+        scheduledDate?: string;
+        timezone?: string;
+        title?: string;
+        caption?: string;
+        platformContent?: Record<string, { title?: string; caption?: string }>;
+      };
+      return client.request("PATCH", `/uploadposts/schedule/${encodeURIComponent(a.jobId)}`, {
+        body: compact({
+          scheduled_date: a.scheduledDate,
+          timezone: a.timezone,
+          title: a.title,
+          caption: a.caption,
+          platform_content: a.platformContent,
+        }),
+      });
     })
   );
 }

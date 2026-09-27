@@ -363,9 +363,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Changes the date or timezone of a scheduled post.",
-        "open_world_justification": "Alters when content will be published to an external platform.",
-        "destructive_justification": "Overwrites the existing schedule for a queued publishing job."
+        "read_only_justification": "Changes the date, timezone or text (title, caption, per-platform captions) of a scheduled post.",
+        "open_world_justification": "Alters when and with what text content will be published to an external platform.",
+        "destructive_justification": "Overwrites the existing schedule or text of a queued publishing job."
       }
     },
     "get_status": {
