@@ -89,7 +89,7 @@ The Upload-Post API has no endpoint per social network: it has an endpoint per *
 - `get_audience` — who follows the profile, where they are, when they are online, what they tap. Also `benchmark_categories`, and the niche averages to compare against when `benchmarkCategory` is set. The server clamps the window to at most 60 days ending before today, so a wider range is trimmed rather than rejected, and `range` in the response says which window was used.
 - `get_suggestions` — hashtags (with `view_count`) or related keyword searches, told apart by `type`, not by a different tool.
 - `get_post_comments` — top-level comments on a post, or, with `commentId`, the replies under one of them.
-- `comment_action` — hide / unhide, like / unlike, pin / unpin a comment. Each value carries its own inverse, so nothing is permanent. `postId` is required for hide and pin and must not be sent for like.
+- `comment_action` — moderate a comment on TikTok (hide / like / pin), Facebook (hide / like / edit), Instagram (hide, or enable / disable comments on a post), YouTube (hide / hold) and Threads (hide / approve / ignore). Each value carries its own inverse, so nothing is permanent.
 - `get_post_analytics` — per-post metrics. `post_metrics` is whatever the platform reports, so its shape varies: on TikTok it adds `retention`, `impression_sources`, `audience_types`, `new_followers`, `reach` and the watch times (`average_time_watched`, `total_time_watched`, `full_video_watched_rate`).
 
 Errors are shared too: `platform_not_supported` (400, with the list of the networks that can answer), `invalid_parameter` (400), `tiktok_reconnect_required` (400), `reauth_required` (409) and 502 when the upstream network fails.

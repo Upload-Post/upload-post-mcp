@@ -15,9 +15,9 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         platform: z
-          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok"])
+          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok", "x", "threads", "bluesky"])
           .default("instagram")
-          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok."),
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok, x, threads, bluesky."),
         postId: z
           .string()
           .optional()
@@ -174,9 +174,9 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         user: z.string().describe("Upload-Post profile name."),
         message: z.string().min(1).describe("Comment text to post."),
         platform: z
-          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok"])
+          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok", "x", "threads", "bluesky"])
           .default("instagram")
-          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok."),
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok, x, threads, bluesky."),
         commentId: z
           .string()
           .optional()
@@ -228,9 +228,9 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         user: z.string().describe("Upload-Post profile name."),
         commentId: z.string().describe("ID of the comment to delete."),
         platform: z
-          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok"])
+          .enum(["instagram", "facebook", "youtube", "linkedin", "tiktok", "x", "bluesky"])
           .default("instagram")
-          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok."),
+          .describe("Social platform. One of instagram, facebook, youtube, linkedin, tiktok, x, bluesky (Threads cannot delete comments)."),
         postId: z
           .string()
           .optional()
@@ -267,23 +267,32 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Hide, like or pin a comment",
       description:
-        "Moderate or react to a comment on one of the profile's own posts: hide it from other viewers, like it as the account, or pin it to the top. One endpoint for every network, chosen with `platform`; a network that cannot do it answers 400 `platform_not_supported` with the list of the ones that can. Every action carries its own inverse (hide/unhide, like/unlike, pin/unpin), so nothing here is permanent. `postId` is required for hide/unhide and pin/unpin, and must NOT be sent for like/unlike. Deleting a comment is a different tool: delete_comment. TikTok: " +
+        "Moderate or react to a comment on one of the profile's own posts. One endpoint for every network, chosen with `platform`; each network supports its own verbs and answers 400 `platform_not_supported` / invalid action otherwise. TikTok: hide/unhide (postId), like/unlike (no postId), pin/unpin (postId). Facebook: hide/unhide, like/unlike, edit (needs `message`). Instagram: hide/unhide a comment, or enable_comments/disable_comments on a post (postId, no commentId). YouTube: hide/unhide/hold (postId; `banAuthor` only with hide). Threads: hide/unhide, approve/ignore. Every action has an inverse, so nothing here is permanent. Deleting a comment is a different tool: delete_comment. TikTok: " +
         requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         platform: z
-          .enum(["tiktok"])
+          .enum(["tiktok", "facebook", "instagram", "youtube", "threads"])
           .describe("Social platform the comment lives on."),
         commentId: z
           .string()
-          .describe("Comment to act on (from get_post_comments). Sent as `comment_id`."),
+          .optional()
+          .describe("Comment to act on (from get_post_comments). Sent as `comment_id`. Required except Instagram enable_comments/disable_comments."),
         action: z
-          .enum(["hide", "unhide", "like", "unlike", "pin", "unpin"])
-          .describe("What to do. Lowercase; each value already carries its direction, so there is no separate 'undo' flag."),
+          .enum(["hide", "unhide", "like", "unlike", "pin", "unpin", "edit", "hold", "approve", "ignore", "enable_comments", "disable_comments"])
+          .describe("What to do. Lowercase; each value already carries its direction, so there is no separate 'undo' flag. Which values a platform accepts is listed in the tool description."),
         postId: z
           .string()
           .optional()
-          .describe("Post the comment belongs to (TikTok: the video id). Required for hide/unhide and pin/unpin; not used by like/unlike."),
+          .describe("Post the comment belongs to (TikTok: the video id). Required for TikTok hide/unhide and pin/unpin, YouTube moderation and Instagram enable_comments/disable_comments; not used by like/unlike."),
+        message: z
+          .string()
+          .optional()
+          .describe("Facebook `edit` only: the new comment text."),
+        banAuthor: z
+          .boolean()
+          .optional()
+          .describe("YouTube `hide` only: also ban the comment's author from the channel."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -298,13 +307,25 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
       const a = args as {
         user: string;
         platform: string;
-        commentId: string;
+        commentId?: string;
         action: string;
         postId?: string;
+        message?: string;
+        banAuthor?: boolean;
       };
-      const needsPost = a.action !== "like" && a.action !== "unlike";
+      const postToggle = a.action === "enable_comments" || a.action === "disable_comments";
+      if (!postToggle && !a.commentId) {
+        throw new Error(`commentId is required to ${a.action} a comment.`);
+      }
+      const needsPost =
+        postToggle ||
+        a.platform === "youtube" ||
+        (a.platform === "tiktok" && a.action !== "like" && a.action !== "unlike");
       if (needsPost && !a.postId) {
-        throw new Error(`postId (the post the comment belongs to) is required to ${a.action} a comment.`);
+        throw new Error(`postId (the post the comment belongs to) is required to ${a.action} on ${a.platform}.`);
+      }
+      if (a.action === "edit" && !a.message) {
+        throw new Error("message (the new text) is required to edit a comment.");
       }
       return client.request("POST", "/uploadposts/comments/action", {
         body: compact({
@@ -313,7 +334,9 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           comment_id: a.commentId,
           action: a.action,
           // like/unlike take the comment alone, so don't send the post.
-          post_id: needsPost ? a.postId : undefined,
+          post_id: a.action === "like" || a.action === "unlike" ? undefined : a.postId,
+          message: a.message,
+          ban_author: a.banAuthor,
         }),
       });
     })
