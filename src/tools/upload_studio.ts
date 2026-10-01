@@ -296,6 +296,12 @@ const uploadStudioHtml = `<!doctype html>
         cursor: not-allowed;
         opacity: .58;
       }
+      #connectButton {
+        margin-top: 12px;
+      }
+      #connectButton[hidden] {
+        display: none;
+      }
       .fileMeta {
         border: 1px solid var(--line);
         border-radius: 14px;
@@ -467,6 +473,7 @@ const uploadStudioHtml = `<!doctype html>
             <button id="publishButton" class="primary" type="button">Publish video</button>
           </div>
           <pre id="result"></pre>
+          <button id="connectButton" class="primary" type="button" hidden>Connect accounts</button>
         </section>
       </main>
     </div>
@@ -514,8 +521,10 @@ const uploadStudioHtml = `<!doctype html>
           caption: document.getElementById("caption"),
           firstComment: document.getElementById("firstComment"),
           publishButton: document.getElementById("publishButton"),
-          result: document.getElementById("result")
+          result: document.getElementById("result"),
+          connectButton: document.getElementById("connectButton")
         };
+        var connectUrl = "";
 
         function initialData() {
           var persisted = (openai.widgetState && openai.widgetState.uploadPostStudio) || {};
@@ -781,6 +790,20 @@ const uploadStudioHtml = `<!doctype html>
           return JSON.stringify(result, null, 2);
         }
 
+        // upload_* answers "connect your accounts first" with a connect_url
+        // (structured) and the same link in the text.
+        function findConnectUrl(result) {
+          var structured = result && result.structuredContent && result.structuredContent.result;
+          if (structured && typeof structured.connect_url === "string") return structured.connect_url;
+          var match = /https:\\/\\/app\\.upload-post\\.com\\/(?:connect\\?token=[^\\s"')]+|manage-users)/.exec(resultText(result));
+          return match ? match[0].replace(/[.,;:]+$/, "") : "";
+        }
+
+        function showConnect(url) {
+          connectUrl = url || "";
+          els.connectButton.hidden = !connectUrl;
+        }
+
         async function publish() {
           var form = currentForm();
           if (!form.user) throw new Error("Profile is required.");
@@ -806,6 +829,11 @@ const uploadStudioHtml = `<!doctype html>
           var result = await openai.callTool("upload_video", payload);
           els.result.style.display = "block";
           els.result.textContent = resultText(result);
+          showConnect(findConnectUrl(result));
+          if (result && result.isError) {
+            setStatus(connectUrl ? "Connect your social accounts, then publish again." : "Upload-Post could not publish this video.", "bad");
+            return;
+          }
           setStatus("Upload queued. You can close this window; request_id is only for optional status checks.", "ok");
         }
 
@@ -835,9 +863,18 @@ const uploadStudioHtml = `<!doctype html>
         els.dropTarget.addEventListener("drop", function (event) {
           setLocalFile(event.dataTransfer.files && event.dataTransfer.files[0]);
         });
+        els.connectButton.addEventListener("click", function () {
+          if (!connectUrl) return;
+          if (openai.openExternal) {
+            openai.openExternal({ href: connectUrl });
+          } else {
+            window.open(connectUrl, "_blank", "noopener");
+          }
+        });
         els.publishButton.addEventListener("click", function () {
           els.publishButton.disabled = true;
           els.result.style.display = "none";
+          showConnect("");
           publish()
             .catch(function (error) {
               els.result.style.display = "block";

@@ -500,6 +500,18 @@
         "destructive_justification": "Does not delete, overwrite, revoke, send, publish, or cancel anything."
       }
     },
+    "get_connect_link": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Returns a link for the user to connect social accounts; on an account with no profile it first creates a private profile named \"default\" to connect them to.",
+        "open_world_justification": "Only creates internal profile state and a connection link; it does not publish to public platforms.",
+        "destructive_justification": "Never deletes or overwrites anything: it only creates a profile when the account has none, and never changes an existing profile's settings."
+      }
+    },
     "create_user": {
       "annotations": {
         "readOnlyHint": false,

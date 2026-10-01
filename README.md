@@ -71,7 +71,7 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Schedule      | `list_scheduled`, `cancel_scheduled`, `edit_scheduled` |
 | Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_cached_post_analytics`, `get_platform_metrics` |
 | Audience      | `get_audience`, `get_suggestions` |
-| Users         | `get_account_info`, `list_users`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
+| Users         | `get_account_info`, `list_users`, `get_connect_link`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
 | Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `get_google_business_reviews`, `reply_to_google_business_review`, `get_reddit_detailed_posts` |
 | Posts         | `retry_post`, `unpublish_post` |
 | Comments      | `get_post_comments`, `create_comment`, `delete_comment`, `comment_action`, `reply_to_comment`, `public_reply_to_comment` |

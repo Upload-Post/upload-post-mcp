@@ -6,13 +6,13 @@ import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { LOCAL_FILE_GUIDANCE, isChatGpt, type SessionContext } from "../client_profile.js";
 import type { UploadPostMcpClient } from "../client.js";
+import { safeUpload } from "../connect.js";
 import {
   PhotoPlatform,
   REDDIT_UNAVAILABLE,
   TextPlatform,
   VideoPlatform,
   genericResultOutputSchema,
-  safe,
   schedulingFields,
 } from "../schemas.js";
 
@@ -557,7 +557,7 @@ export function registerUploadTools(
         "openai/toolInvocation/invoked": "Upload started",
       },
     },
-    safe(async (args) => {
+    safeUpload(client, async (args) => {
       const { videoPathOrUrl, videoBase64, videoFilename, platformOptions, ...rest } =
         args as {
           videoPathOrUrl?: string;
@@ -633,7 +633,7 @@ export function registerUploadTools(
         destructiveHint: false,
       },
     },
-    safe(async (args) => {
+    safeUpload(client, async (args) => {
       const { photosPathsOrUrls, platformOptions, ...rest } = args as {
         photosPathsOrUrls: string[];
         platformOptions?: Record<string, unknown>;
@@ -676,7 +676,7 @@ export function registerUploadTools(
         destructiveHint: false,
       },
     },
-    safe(async (args) => {
+    safeUpload(client, async (args) => {
       const { platformOptions, ...rest } = args as {
         platformOptions?: Record<string, unknown>;
         [k: string]: unknown;
@@ -714,7 +714,7 @@ export function registerUploadTools(
         destructiveHint: false,
       },
     },
-    safe(async (args) => {
+    safeUpload(client, async (args) => {
       const { documentPathOrUrl, ...rest } = args as {
         documentPathOrUrl: string;
         [k: string]: unknown;

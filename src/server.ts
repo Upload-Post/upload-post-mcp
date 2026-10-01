@@ -52,7 +52,9 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     },
     {
       instructions:
-        "Tools for publishing, scheduling, analyzing and managing social media posts via Upload-Post (TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X, Google Business, Discord, Telegram). Async uploads return a request_id — poll get_status until success.",
+        "Tools for publishing, scheduling, analyzing and managing social media posts via Upload-Post (TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X, Google Business, Discord, Telegram). Async uploads return a request_id — poll get_status until success. " +
+        "Before publishing, call list_users to get the exact profile name (`user`) and see which platforms are connected; never invent a profile name. " +
+        "New accounts start with no profile and no connected social account. If list_users returns no profiles, or the platform the user wants is not connected or needs reconnecting, do not guess and do not try to publish: call get_connect_link (or use the `connect_url` in the response), give the user the link, ask them to tell you when they have connected their accounts, and wait. Then call list_users again and publish.",
     }
   );
 
