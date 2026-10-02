@@ -102,7 +102,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
       annotations: {
         title: "Get recent media from connected accounts",
         readOnlyHint: true,
-        openWorldHint: false,
+        openWorldHint: true,
         destructiveHint: false,
       },
     },

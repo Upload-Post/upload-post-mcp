@@ -82,7 +82,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
       annotations: {
         title: "Get post analytics",
         readOnlyHint: true,
-        openWorldHint: false,
+        openWorldHint: true,
         destructiveHint: false,
       },
     },

@@ -24,12 +24,12 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Hides, likes, pins, edits, holds or approves a comment, or turns comments on or off for a post.",
         "open_world_justification": "Changes the public state of comments on the user's connected TikTok, Facebook, Instagram, YouTube or Threads account.",
-        "destructive_justification": "Every action has an inverse (unhide, unlike, unpin, enable) and nothing is permanently deleted."
+        "destructive_justification": "Hiding, unpinning or disabling comments changes what the public sees on a live post; each action has an inverse, but the effect is visible until it is undone."
       }
     },
     "complete_media_upload": {
@@ -144,12 +144,12 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates a JWT and connection URL for an embedded social-account connection flow.",
         "open_world_justification": "Generates private connection credentials and does not publish to external platforms.",
-        "destructive_justification": "Does not delete, overwrite, revoke, send, publish, or cancel anything."
+        "destructive_justification": "Generating a connection link resets the profile's white-label connection settings, which cannot be restored automatically."
       }
     },
     "get_account_info": {
@@ -311,12 +311,12 @@
     "get_media": {
       "annotations": {
         "readOnlyHint": true,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
         "read_only_justification": "Retrieves recent media from connected accounts without changing it.",
-        "open_world_justification": "Only reads media metadata and does not publish, reply, or send messages.",
+        "open_world_justification": "Reads recent posts live from the user's connected social platforms, which are independently controlled external systems.",
         "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
       }
     },
@@ -359,12 +359,12 @@
     "get_post_analytics": {
       "annotations": {
         "readOnlyHint": true,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
         "read_only_justification": "Retrieves metrics for an existing post request without modifying the post.",
-        "open_world_justification": "Only reads analytics data and does not write to connected platforms.",
+        "open_world_justification": "Fetches live metrics from the connected social platform's API, an independently controlled external system.",
         "destructive_justification": "Does not delete, overwrite, revoke, send, or publish anything."
       }
     },
@@ -575,12 +575,12 @@
     "submit_ffmpeg_job": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
         "read_only_justification": "Creates a private media processing job and consumes processing resources.",
-        "open_world_justification": "Processes media in Upload-Post infrastructure without publishing to public platforms.",
+        "open_world_justification": "Downloads the input media from the public URLs the user provides, which can be any external host.",
         "destructive_justification": "Does not delete or overwrite source media and only creates a derived processing job."
       }
     },

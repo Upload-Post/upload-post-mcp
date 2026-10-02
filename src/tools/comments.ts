@@ -299,8 +299,8 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         title: "Hide, like or pin a comment",
         readOnlyHint: false,
         openWorldHint: true,
-        // Every action is a toggle with an explicit inverse, so nothing is lost.
-        destructiveHint: false,
+        // Toggles have inverses, but a hidden or unpinned comment changes what the public sees and the review treats it as hard to reverse.
+        destructiveHint: true,
       },
     },
     safe(async (args) => {

@@ -164,7 +164,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
         title: "Generate platform-integration JWT",
         readOnlyHint: false,
         openWorldHint: false,
-        destructiveHint: false,
+        destructiveHint: true,
       },
     },
     safe(async (args) => {

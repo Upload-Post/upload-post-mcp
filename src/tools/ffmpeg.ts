@@ -34,7 +34,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       annotations: {
         title: "Submit FFmpeg processing job",
         readOnlyHint: false,
-        openWorldHint: false,
+        openWorldHint: true,
         destructiveHint: false,
       },
     },
