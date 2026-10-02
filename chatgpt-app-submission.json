@@ -719,43 +719,43 @@
   },
   "test_cases": [
     {
-      "description": "Publish a provided video URL to Instagram Reels with an optimized caption.",
-      "user_prompt": "Publish this video URL to Instagram Reels using profile marketing and write a concise caption for launch week.",
-      "file_attachment_urls": null,
-      "tools_triggered": "upload_video",
-      "expected_output": "Queues or starts an async Instagram video upload and returns a request ID or job status summary.",
-      "expected_output_url": null
-    },
-    {
-      "description": "Open the browser upload flow for an attached video file.",
-      "user_prompt": "Upload the attached video to Instagram, generate a caption, and use the profile automated-tests.",
+      "description": "Open the browser video upload flow with deterministic prefilled values.",
+      "user_prompt": "Open the Upload-Post video Studio for profile automated-tests, preselect Instagram Reels, and prefill the caption \"OpenAI app review video\". Do not publish until I choose a file in the Studio.",
       "file_attachment_urls": null,
       "tools_triggered": "open_upload_studio",
-      "expected_output": "Opens the Upload Studio with profile, platform, format, and caption prefilled so the user can select the file and publish asynchronously.",
+      "expected_output": "Opens the Upload Studio with automated-tests, Instagram Reels, and the requested caption prefilled, without publishing automatically.",
       "expected_output_url": null
     },
     {
-      "description": "Schedule a text post on LinkedIn for a future time.",
-      "user_prompt": "Schedule a LinkedIn text post for next Monday at 10:00 Europe/Madrid using profile founders with copy about our product launch.",
+      "description": "Inspect the configured demo profile and its connected LinkedIn pages.",
+      "user_prompt": "Show my Upload-Post profiles and list the LinkedIn company pages available for profile automated-tests",
       "file_attachment_urls": null,
-      "tools_triggered": "upload_text",
-      "expected_output": "Creates a scheduled LinkedIn text post and returns scheduling status or a job identifier.",
+      "tools_triggered": "list_users, get_linkedin_pages",
+      "expected_output": "Returns the available Upload-Post profiles and the LinkedIn pages connected to automated-tests.",
       "expected_output_url": null
     },
     {
-      "description": "Review analytics for a profile and a specific post.",
-      "user_prompt": "Show analytics for profile marketing over the last month and then get the metrics for request abc123.",
+      "description": "Review current Instagram analytics for the configured demo profile.",
+      "user_prompt": "Show the current aggregated Instagram analytics for Upload-Post profile automated-tests.",
       "file_attachment_urls": null,
-      "tools_triggered": "get_analytics, get_post_analytics",
-      "expected_output": "Summarizes profile performance and the specific post metrics without modifying posts.",
+      "tools_triggered": "get_analytics",
+      "expected_output": "Returns the available Instagram analytics for automated-tests without modifying account or platform state.",
       "expected_output_url": null
     },
     {
-      "description": "Reply to an Instagram comment by DM after reading comments.",
-      "user_prompt": "Find comments on this Instagram post and privately send the guide link to the commenter with comment ID 179999.",
+      "description": "Inspect queue configuration and preview the next available posting slot.",
+      "user_prompt": "Show the queue settings and the next available queue slot for profile automated-tests. Do not change the settings.",
       "file_attachment_urls": null,
-      "tools_triggered": "get_post_comments, reply_to_comment",
-      "expected_output": "Lists relevant comments and sends the requested private reply only after the user identifies the target comment.",
+      "tools_triggered": "get_queue_settings, preview_queue",
+      "expected_output": "Returns the current private queue configuration and next available slot without changing either",
+      "expected_output_url": null
+    },
+    {
+      "description": "Retrieve recent Instagram media for the configured demo profile.",
+      "user_prompt": "Show recent Instagram media for Upload-Post profile automated-tests",
+      "file_attachment_urls": null,
+      "tools_triggered": "get_media",
+      "expected_output": "Returns recent Instagram media for automated-tests without creating or modifying content.",
       "expected_output_url": null
     }
   ],
