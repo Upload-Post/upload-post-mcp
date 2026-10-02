@@ -20,7 +20,7 @@ Qué puedes hacer:
 - Gestionar varios perfiles y marcas, páginas de Facebook y LinkedIn, tableros de Pinterest y reseñas de Google Business.
 - Procesar vídeo e imagen con FFmpeg antes de publicar.
 
-Conectas tus redes una vez en Upload-Post e inicias sesión en ChatGPT con OAuth. Las publicaciones salen por las integraciones oficiales de Upload-Post con cada red, así que ChatGPT nunca ve tus contraseñas. El plan gratuito incluye 10 subidas al mes.
+Conectas tus redes una vez en Upload-Post e inicias sesión en ChatGPT con OAuth. Las publicaciones salen por las integraciones oficiales de Upload-Post con cada red, así que ChatGPT nunca ve tus contraseñas.
 
 Pensado para creadores, community managers, agencias y equipos de marketing que quieren que ChatGPT se encargue de publicar y programar en redes sociales.
 
