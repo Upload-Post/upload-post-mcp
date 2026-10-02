@@ -363,7 +363,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Retrieves metrics for an existing post request without modifying the post.",
+        "read_only_justification": "Only fetches post metrics; Upload-Post keeps a private copy of the response for get_cached_post_analytics, and nothing changes on the post, the account, or the platform.",
         "open_world_justification": "Fetches live metrics from the connected social platform's API, an independently controlled external system.",
         "destructive_justification": "Does not delete, overwrite, revoke, send, or publish anything."
       }

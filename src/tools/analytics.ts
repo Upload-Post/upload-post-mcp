@@ -74,7 +74,8 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
     {
       title: "Get post analytics",
       description:
-        "Per-platform metrics for a specific post identified by `request_id`. `post_metrics` carries whatever each platform reports, so its shape is not the same everywhere: on TikTok it adds `retention` (the curve, second by second), `impression_sources` (For You, following, search, profile…), `audience_types` (followers vs non-followers), `new_followers` won by the post, `reach` and the watch times (`average_time_watched`, `total_time_watched`, `full_video_watched_rate`) on top of the usual counters.",
+        "Per-platform metrics for a specific post identified by `request_id`. `post_metrics` carries whatever each platform reports, so its shape is not the same everywhere: on TikTok it adds `retention` (the curve, second by second), `impression_sources` (For You, following, search, profile…), `audience_types` (followers vs non-followers), `new_followers` won by the post, `reach` and the watch times (`average_time_watched`, `total_time_watched`, `full_video_watched_rate`) on top of the usual counters. " +
+        "Read-only: it fetches the metrics live from the platform and changes nothing on the post or the account; Upload-Post only keeps a private copy of the response so get_cached_post_analytics can return it later without another live call.",
       inputSchema: {
         requestId: z.string(),
       },
