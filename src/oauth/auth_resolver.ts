@@ -32,6 +32,17 @@ export interface AuthResolverDeps {
   cache: IntrospectCache;
 }
 
+/**
+ * True when the header carries one of our OAuth access tokens. If such a
+ * request fails to resolve, the token is expired or revoked rather than
+ * missing, and the 401 must say `error="invalid_token"` (RFC 6750 §3.1) so
+ * the client refreshes instead of asking the user to reconnect.
+ */
+export function hasOAuthBearer(header: string | string[] | undefined): boolean {
+  if (!header || Array.isArray(header)) return false;
+  return /^Bearer\s+up_oauth_/i.test(header);
+}
+
 export async function resolveAuth(
   header: string | string[] | undefined,
   deps: AuthResolverDeps

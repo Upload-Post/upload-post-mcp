@@ -17,7 +17,7 @@ import { handleToken, handleRevoke } from "../oauth/tokens.js";
 import { UpstreamOAuthClient, UpstreamUnavailableError } from "../oauth/upstream_client.js";
 import { sendUpstreamUnavailable } from "../oauth/http_utils.js";
 import { IntrospectCache } from "../oauth/introspect_cache.js";
-import { resolveAuth } from "../oauth/auth_resolver.js";
+import { hasOAuthBearer, resolveAuth } from "../oauth/auth_resolver.js";
 import { stripSchemaDialect } from "./schema_dialect.js";
 
 export interface HttpOptions {
@@ -280,7 +280,12 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
         throw err;
       }
       if (!resolution) {
-        return sendUnauthorized(res, oauthCfg.enabled, oauthCfg.issuer);
+        return sendUnauthorized(
+          res,
+          oauthCfg.enabled,
+          oauthCfg.issuer,
+          oauthCfg.enabled && hasOAuthBearer(req.headers["authorization"])
+        );
       }
 
       // Cap enforcement: evict the longest-idle session rather than refusing
@@ -405,18 +410,36 @@ function closeSession(sessions: Map<string, Session>, id: string): void {
  * `Bearer resource_metadata=...` challenge that claude.ai needs to discover
  * the authorization server. Sending BOTH keeps the existing API-key flow
  * working and unlocks the OAuth Custom-Connector flow on the same endpoint.
+ * `invalidToken` marks an OAuth token that was sent but no longer works.
  */
-function sendUnauthorized(res: ServerResponse, oauthEnabled: boolean, issuer: string): void {
+function sendUnauthorized(
+  res: ServerResponse,
+  oauthEnabled: boolean,
+  issuer: string,
+  invalidToken = false
+): void {
   const challenges: string[] = [];
   if (oauthEnabled) {
+    const error = invalidToken
+      ? `, error="invalid_token", error_description="The access token expired or was revoked"`
+      : "";
     challenges.push(
-      `Bearer realm="upload-post", resource_metadata="${issuer}/.well-known/oauth-protected-resource"`
+      `Bearer realm="upload-post", resource_metadata="${issuer}/.well-known/oauth-protected-resource"${error}`
     );
   }
   challenges.push('ApiKey realm="upload-post"');
   res.statusCode = 401;
   res.setHeader("www-authenticate", challenges.join(", "));
   res.setHeader("content-type", "application/json");
+  if (invalidToken) {
+    res.end(
+      JSON.stringify({
+        error: "invalid_token",
+        error_description: "The access token expired or was revoked. Refresh it or reconnect.",
+      })
+    );
+    return;
+  }
   res.end(
     JSON.stringify({
       error:
