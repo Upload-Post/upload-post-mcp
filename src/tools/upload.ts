@@ -25,6 +25,13 @@ const TIKTOK_DRAFT_DESCRIPTION =
  * Caps memory use of the MCP process; override with UPLOAD_POST_MAX_INLINE_MB.
  * Big videos should still be passed as a public URL, not inlined.
  */
+// X bills posts with a URL ~13x higher, so Upload-Post strips links from X text
+// (caption, title and first comment) unless the account has the X Links add-on.
+// Say it up front: "Full video in the first comment" otherwise ships with no link.
+const FIRST_COMMENT_DESCRIPTION =
+  "Comment auto-posted under the post right after publishing. Supported on every platform that has comments, TikTok included. Use `platformOptions.<platform>FirstComment` to override it for one platform. " +
+  "X: links are removed from X posts and first comments unless the account has the paid X Links add-on (https://docs.upload-post.com/guides/x-links-addon), so a 'link in the first comment' reply goes out without the URL. Tell the user before publishing a link to X, and check `warnings` in get_status afterwards.";
+
 const MAX_INLINE_MB = Number(process.env.UPLOAD_POST_MAX_INLINE_MB ?? 100);
 
 /** Keys shared by video, photo and text posts. */
@@ -502,7 +509,7 @@ function uploadVideoShape(videoPathOrUrlDescription: string) {
       .string()
       .optional()
       .describe(
-        "Comment auto-posted under the post right after publishing. Supported on every platform that has comments, TikTok included. Use `platformOptions.<platform>FirstComment` to override it for one platform."
+        FIRST_COMMENT_DESCRIPTION
       ),
     ...schedulingFields,
     platformOptions: VideoPlatformOptions
@@ -619,7 +626,7 @@ export function registerUploadTools(
           .string()
           .optional()
           .describe(
-            "Comment auto-posted under the post right after publishing. Supported on every platform that has comments, TikTok included. Use `platformOptions.<platform>FirstComment` to override it for one platform."
+            FIRST_COMMENT_DESCRIPTION
           ),
         altText: z.string().optional(),
         ...schedulingFields,
