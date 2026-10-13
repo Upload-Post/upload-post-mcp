@@ -117,6 +117,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
    try {
     const url = req.url ?? "";
     const method = req.method ?? "GET";
+    logAccess(req, res);
 
     // ----- ChatGPT Apps domain verification -----------------------------
     // This must be reachable publicly before Origin validation because the
@@ -167,10 +168,14 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
 
     // ----- OAuth surface (only if configured) ----------------------------
     if (oauthCfg.enabled) {
-      if (method === "GET" && url === "/.well-known/oauth-protected-resource") {
+      // RFC 9728 §3.1 / RFC 8414 §3.1: clients that never saw our 401 build
+      // the metadata URL by inserting the well-known prefix before the
+      // resource path, i.e. `/.well-known/<name>/mcp`. Serve both shapes.
+      const wellKnown = requestPath(url).replace(/\/mcp$/, "");
+      if (method === "GET" && wellKnown === "/.well-known/oauth-protected-resource") {
         return serveJson(res, protectedResourceMetadata(oauthCfg));
       }
-      if (method === "GET" && url === "/.well-known/oauth-authorization-server") {
+      if (method === "GET" && wellKnown === "/.well-known/oauth-authorization-server") {
         return serveJson(res, authorizationServerMetadata(oauthCfg));
       }
       if (method === "POST" && url === "/register") {
@@ -454,6 +459,32 @@ function sendUnauthorized(
 function requestPath(url: string): string {
   const queryStart = url.indexOf("?");
   return queryStart >= 0 ? url.slice(0, queryStart) : url;
+}
+
+// One stderr line per request once the response is sent. `errors` (default)
+// covers non-2xx/3xx answers plus the OAuth surface, which is where connector
+// failures show up; `all` adds every MCP call; `off` disables it. Only the
+// path, status, auth scheme and user agent are written — never query strings
+// or credentials.
+const ACCESS_LOG = (process.env.UPLOAD_POST_MCP_ACCESS_LOG ?? "errors").toLowerCase();
+const OAUTH_PATHS = new Set(["/register", "/authorize", "/token", "/revoke"]);
+
+function logAccess(req: IncomingMessage, res: ServerResponse): void {
+  if (ACCESS_LOG === "off") return;
+  const startedAt = Date.now();
+  res.on("finish", () => {
+    const path = requestPath(req.url ?? "");
+    const oauthSurface = path.startsWith("/.well-known/") || OAUTH_PATHS.has(path);
+    if (ACCESS_LOG !== "all" && res.statusCode < 400 && !oauthSurface) return;
+    const authHeader = req.headers["authorization"];
+    const auth =
+      typeof authHeader === "string" ? authHeader.split(/\s+/, 1)[0].toLowerCase() : "none";
+    const agent = String(req.headers["user-agent"] ?? "-").slice(0, 120);
+    process.stderr.write(
+      `[upload-post-mcp] access ${req.method ?? "?"} ${path} ${res.statusCode} ` +
+        `${Date.now() - startedAt}ms auth=${auth} ua="${agent}"\n`
+    );
+  });
 }
 
 function isOpenAiAppsChallengePath(url: string): boolean {
