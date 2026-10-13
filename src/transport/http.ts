@@ -476,9 +476,11 @@ function logAccess(req: IncomingMessage, res: ServerResponse): void {
     const path = requestPath(req.url ?? "");
     const oauthSurface = path.startsWith("/.well-known/") || OAUTH_PATHS.has(path);
     if (ACCESS_LOG !== "all" && res.statusCode < 400 && !oauthSurface) return;
+    // Some clients send a bare credential with no scheme, so only a known
+    // scheme name is ever echoed back.
     const authHeader = req.headers["authorization"];
-    const auth =
-      typeof authHeader === "string" ? authHeader.split(/\s+/, 1)[0].toLowerCase() : "none";
+    const scheme = typeof authHeader === "string" ? authHeader.split(/\s+/, 1)[0].toLowerCase() : "";
+    const auth = !scheme ? "none" : ["bearer", "apikey", "basic"].includes(scheme) ? scheme : "other";
     const agent = String(req.headers["user-agent"] ?? "-").slice(0, 120);
     process.stderr.write(
       `[upload-post-mcp] access ${req.method ?? "?"} ${path} ${res.statusCode} ` +
