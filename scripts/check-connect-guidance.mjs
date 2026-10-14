@@ -352,4 +352,167 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
   await s.close();
 }
 
+// --- upload_photos: attachment paths are refused with Studio guidance -------
+{
+  const account = fakeAccount();
+  const s = await connect(account, "openai-mcp");
+  const r = await s.call("upload_photos", {
+    user: "marca",
+    platforms: ["instagram", "facebook"],
+    photosPathsOrUrls: ["https://example.com/a.jpg", "/mnt/data/IMG_0001.jpeg"],
+  });
+  assert.equal(r.isError, true);
+  assert.match(r.text, /\/mnt\/data\/IMG_0001\.jpeg" looks like a hosted attachment path/);
+  assert.match(r.text, /open_upload_studio with mediaType "photos"/);
+  assert.match(r.text, /carousel/);
+  assert.equal(called(account, "uploadPhotos").length, 0, "nothing is sent upstream");
+  const many = await s.call("upload_photos", {
+    user: "marca",
+    platforms: ["instagram"],
+    photosPathsOrUrls: ["sandbox:/mnt/data/a.png", "/mnt/data/b.png"],
+  });
+  assert.match(many.text, /2 items look like a hosted attachment path/);
+  const fine = await s.call("upload_photos", {
+    user: "marca",
+    platforms: ["instagram"],
+    photosPathsOrUrls: ["https://example.com/a.jpg", "https://example.com/b.jpg"],
+    platformOptions: { facebookTitle: "fb", instagramTitle: "ig" },
+  });
+  assert.equal(fine.isError, false);
+  const [, urls, options] = called(account, "uploadPhotos")[0];
+  assert.deepEqual(urls, ["https://example.com/a.jpg", "https://example.com/b.jpg"]);
+  assert.equal(options.facebookTitle, "fb", "per-platform captions reach the SDK");
+  assert.equal(options.instagramTitle, "ig");
+  await s.close();
+
+  const other = await connect(fakeAccount(), "claude-ai");
+  const o = await other.call("upload_photos", {
+    user: "marca",
+    platforms: ["instagram"],
+    photosPathsOrUrls: ["/mnt/data/x.jpg"],
+  });
+  assert.equal(o.isError, true);
+  assert.doesNotMatch(o.text, /open_upload_studio/, "hosts without the Studio get staging guidance");
+  assert.match(o.text, /create_media_upload/);
+  await other.close();
+}
+
+// --- open_upload_studio: photos mode -----------------------------------------
+{
+  const s = await connect(fakeAccount(), "openai-mcp");
+  const photos = await s.client.callTool({
+    name: "open_upload_studio",
+    arguments: { mediaType: "photos", platforms: ["instagram", "lemmy"], instagramMediaType: "REELS" },
+  });
+  assert.equal(photos.isError, undefined);
+  assert.equal(photos.structuredContent.mediaType, "photos");
+  assert.equal(photos.structuredContent.instagramMediaType, "IMAGE", "REELS is video-only");
+  assert.deepEqual(photos.structuredContent.platforms, ["instagram", "lemmy"]);
+  const video = await s.client.callTool({ name: "open_upload_studio", arguments: {} });
+  assert.equal(video.structuredContent.mediaType, "video");
+  assert.equal(video.structuredContent.instagramMediaType, "REELS");
+  await s.close();
+}
+
+// --- Upload Studio: image / carousel staging ---------------------------------
+{
+  const s = await connect(fakeAccount(), "openai-mcp");
+  const res = await s.client.readResource({ uri: "ui://upload-post/video-upload-studio.html" });
+  const html = res.contents[0].text;
+  assert.match(html, /accept="video\/\*,image\/jpeg,image\/png,image\/webp,image\/gif" multiple/);
+  const script = html.slice(html.indexOf("<script>") + 8, html.lastIndexOf("</script>"));
+  const block = script.slice(script.indexOf("var MAX_PHOTOS"), script.indexOf("// --- end media selection ---"));
+
+  function studio() {
+    const calls = [];
+    const puts = [];
+    let n = 0;
+    const openai = {
+      async callTool(name, args) {
+        calls.push([name, args]);
+        if (name === "create_media_upload") {
+          n += 1;
+          return {
+            structuredContent: {
+              result: {
+                success: true,
+                upload_id: `up_${n}`,
+                upload_url: `https://r2.example/put/${n}`,
+                method: "PUT",
+                headers: { "Content-Type": args.contentType },
+              },
+            },
+          };
+        }
+        if (name === "complete_media_upload") {
+          return { structuredContent: { result: { success: true, media_url: `https://r2.example/get/${args.uploadId}` } } };
+        }
+        throw new Error(`unexpected tool ${name}`);
+      },
+    };
+    const fetch = async (url, init) => {
+      puts.push([url, init.method, init.headers["Content-Type"]]);
+      return { ok: true, status: 200 };
+    };
+    const state = { kind: "video", items: [], stagedMediaUrls: [] };
+    const api = new Function(
+      "openai", "state", "setStatus", "saveState", "fetch", "window",
+      `${block}; return { classifySelection, resolveMediaUrls, guessImageMime };`
+    )(openai, state, () => {}, () => {}, fetch, { location: { origin: "https://widget.example" } });
+    return { api, state, calls, puts };
+  }
+
+  const { api } = studio();
+  assert.deepEqual(api.classifySelection([{ name: "a.mp4", type: "video/mp4" }]), { kind: "video" });
+  assert.deepEqual(api.classifySelection([{ name: "a.jpg", type: "image/jpeg" }]), { kind: "photos" });
+  assert.deepEqual(
+    api.classifySelection([{ name: "a.png", type: "" }, { name: "b.webp", type: "image/webp" }]),
+    { kind: "photos" }
+  );
+  assert.match(api.classifySelection([{ name: "a.mp4", type: "video/mp4" }, { name: "b.jpg", type: "image/jpeg" }]).error, /can't be mixed/);
+  assert.match(api.classifySelection([{ name: "a.mp4", type: "video/mp4" }, { name: "b.mp4", type: "video/mp4" }]).error, /one video/);
+  assert.match(api.classifySelection([{ name: "IMG.HEIC", type: "image/heic" }]).error, /HEIC/);
+  assert.match(api.classifySelection([{ name: "doc.pdf", type: "application/pdf" }]).error, /Only videos and images/);
+  const eleven = Array.from({ length: 11 }, (_, i) => ({ name: `${i}.jpg`, type: "image/jpeg" }));
+  assert.match(api.classifySelection(eleven).error, /up to 10 images/);
+  assert.equal(api.guessImageMime("x.PNG", ""), "image/png");
+  assert.equal(api.guessImageMime("x", "image/jpg"), "image/jpeg");
+
+  // A 3-image carousel stages sequentially, in order, as images.
+  const c = studio();
+  c.state.kind = "photos";
+  c.state.items = ["one.jpg", "two.png", "three.webp"].map((fileName, i) => ({
+    file: { size: 1000 + i, type: "" },
+    fileName,
+    mimeType: c.api.guessImageMime(fileName, ""),
+  }));
+  const urls = await c.api.resolveMediaUrls();
+  assert.deepEqual(urls, ["https://r2.example/get/up_1", "https://r2.example/get/up_2", "https://r2.example/get/up_3"]);
+  assert.deepEqual(c.state.stagedMediaUrls, urls, "staged URLs are kept in order for the model");
+  assert.deepEqual(
+    c.calls.map(([name, args]) => (name === "create_media_upload" ? `create:${args.filename}:${args.mediaType}:${args.contentType}` : `complete:${args.uploadId}`)),
+    [
+      "create:one.jpg:image:image/jpeg", "complete:up_1",
+      "create:two.png:image:image/png", "complete:up_2",
+      "create:three.webp:image:image/webp", "complete:up_3",
+    ],
+    "one staging slot at a time, in carousel order"
+  );
+  assert.equal(c.puts.length, 3);
+  // A retry (e.g. after "connect your accounts") reuses the staged images.
+  const again = await c.api.resolveMediaUrls();
+  assert.deepEqual(again, urls);
+  assert.equal(c.calls.length, 6, "no re-staging on retry");
+
+  // Video keeps its single-file flow.
+  const v = studio();
+  v.state.kind = "video";
+  v.state.items = [{ file: { size: 5, type: "video/mp4" }, fileName: "clip.mp4", mimeType: "video/mp4" }];
+  assert.deepEqual(await v.api.resolveMediaUrls(), ["https://r2.example/get/up_1"]);
+  assert.equal(v.calls[0][1].mediaType, "video");
+  assert.equal(v.calls[0][1].contentType, "video/mp4");
+  assert.deepEqual(v.state.stagedMediaUrls, []);
+  await s.close();
+}
+
 console.log("connect guidance OK");

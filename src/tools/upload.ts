@@ -537,6 +537,26 @@ const VIDEO_PATH_OR_URL_DESCRIPTION_CHATGPT =
 const VIDEO_PATH_OR_URL_DESCRIPTION_OTHER =
   "Public/signed HTTPS URL of the video (a staged `media_url` from complete_media_upload also works). Absolute local paths are supported only for local/self-hosted MCP clients sharing the same filesystem. Never pass `/mnt/data`, sandbox, or other mounted attachment paths: the server cannot read them.";
 
+const PER_PLATFORM_CAPTIONS =
+  "One call can carry a different caption per platform: `title` is the default and `platformOptions.facebookTitle`, `platformOptions.instagramTitle`, `platformOptions.linkedinTitle`, `platformOptions.xTitle`, … override it for that platform.";
+
+const UPLOAD_PHOTOS_DESCRIPTION_CHATGPT =
+  "Publish one or more photos (single image or carousel; items are published in array order). Each item in `photosPathsOrUrls` must be a public/signed HTTPS URL (a staged `media_url` works), or an absolute local path only when the MCP server runs on the same machine as the file. A hosted MCP server cannot read images the user attached in the chat (`/mnt/data`, sandbox, or other mounted paths); for attached images, ALWAYS call `open_upload_studio` with `mediaType: \"photos\"` first so the user selects the image(s) in the browser (several for a carousel) and the Studio stages them, then either publishes them or hands back the staged media URLs in order to pass here. " +
+  PER_PLATFORM_CAPTIONS +
+  " " +
+  REDDIT_UNAVAILABLE;
+
+const UPLOAD_PHOTOS_DESCRIPTION_OTHER =
+  "Publish one or more photos (single image or carousel; items are published in array order). Each item in `photosPathsOrUrls` must be a public/signed HTTPS URL (a staged `media_url` from complete_media_upload works), or an absolute local path only when the MCP server runs on the same machine as the file. " +
+  PER_PLATFORM_CAPTIONS +
+  " " +
+  REDDIT_UNAVAILABLE +
+  " " +
+  LOCAL_FILE_GUIDANCE;
+
+const HOSTED_PATH_STUDIO_PHOTOS =
+  "The MCP server cannot read mounted paths such as /mnt/data, so it cannot see images attached in the chat. Call open_upload_studio with mediaType \"photos\" so the user can select the image(s) in the browser (several for a carousel). The Studio stages them through Upload-Post and publishes them, or returns the staged media URLs in order; pass those URLs to upload_photos.";
+
 export function registerUploadTools(
   server: McpServer,
   client: UploadPostMcpClient,
@@ -606,15 +626,18 @@ export function registerUploadTools(
     })
   );
 
-  server.registerTool(
+  const uploadPhotosTool = server.registerTool(
     "upload_photos",
     {
       title: "Upload photos / carousel",
-      description:
-        "Publish one or more photos (single image or carousel). Each item in `photosPathsOrUrls` may be a public URL or a local path. " +
-        REDDIT_UNAVAILABLE,
+      description: UPLOAD_PHOTOS_DESCRIPTION_CHATGPT,
       inputSchema: {
-        photosPathsOrUrls: z.array(z.string()).min(1),
+        photosPathsOrUrls: z
+          .array(z.string())
+          .min(1)
+          .describe(
+            "Photo URLs (or same-machine local paths), in carousel order. Never `/mnt/data` or sandbox attachment paths."
+          ),
         user: z.string(),
         platforms: z
           .array(PhotoPlatform)
@@ -639,6 +662,15 @@ export function registerUploadTools(
         openWorldHint: true,
         destructiveHint: false,
       },
+      _meta: {
+        ui: {
+          visibility: ["model", "app"],
+        },
+        // The Upload Studio publishes staged images through this tool.
+        "openai/widgetAccessible": true,
+        "openai/toolInvocation/invoking": "Uploading photos…",
+        "openai/toolInvocation/invoked": "Upload started",
+      },
     },
     safeUpload(client, async (args) => {
       const { photosPathsOrUrls, platformOptions, ...rest } = args as {
@@ -646,6 +678,19 @@ export function registerUploadTools(
         platformOptions?: Record<string, unknown>;
         [k: string]: unknown;
       };
+      const hosted = photosPathsOrUrls.filter(
+        (item) => typeof item === "string" && looksLikeHostedAttachmentPath(item)
+      );
+      if (hosted.length) {
+        const which =
+          hosted.length === 1 ? `"${hosted[0]}" looks` : `${hosted.length} items look`;
+        throw new Error(
+          `${which} like a hosted attachment path. ` +
+            (isChatGpt(ctx)
+              ? HOSTED_PATH_STUDIO_PHOTOS
+              : "The MCP server cannot read mounted paths such as /mnt/data. " + LOCAL_FILE_GUIDANCE)
+        );
+      }
       const options = (await resolvePlatformRouting(client, {
         ...(rest as Record<string, unknown>),
         ...(platformOptions ?? {}),
@@ -737,6 +782,7 @@ export function registerUploadTools(
         description: UPLOAD_VIDEO_DESCRIPTION_OTHER,
         paramsSchema: uploadVideoShape(VIDEO_PATH_OR_URL_DESCRIPTION_OTHER),
       });
+      uploadPhotosTool.update({ description: UPLOAD_PHOTOS_DESCRIPTION_OTHER });
     },
   };
 }

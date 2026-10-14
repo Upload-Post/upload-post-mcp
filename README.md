@@ -12,7 +12,7 @@ Lets any MCP-compatible AI agent (ChatGPT, Claude Desktop, Claude Code, Cursor, 
 
 ## Use it in ChatGPT (no setup)
 
-Upload-Post is a reviewed app in the **ChatGPT app directory**. [Add Upload-Post in ChatGPT](https://chatgpt.com/plugins/plugin_asdk_app_6a1fed02ff5c8191b4060c5807221f26) — or search for *Upload-Post* under **Apps** — click **Connect** and sign in with OAuth. No Developer mode, no MCP URL to paste, and you get the [Upload Studio](#chatgpt-video-upload-ui) widget for publishing video files straight from your computer.
+Upload-Post is a reviewed app in the **ChatGPT app directory**. [Add Upload-Post in ChatGPT](https://chatgpt.com/plugins/plugin_asdk_app_6a1fed02ff5c8191b4060c5807221f26) — or search for *Upload-Post* under **Apps** — click **Connect** and sign in with OAuth. No Developer mode, no MCP URL to paste, and you get the [Upload Studio](#chatgpt-video-upload-ui) widget for publishing video files, photos and carousels straight from your computer.
 
 Prefer to wire it up by hand? Enable **Developer mode** in **Settings → Apps → Advanced settings**, click **Create app**, point it at `https://mcp.upload-post.com/mcp` and set authentication to **OAuth**.
 
@@ -106,7 +106,7 @@ FFmpeg jobs accept one public URL through `input_url` or multiple URLs through `
 
 ### ChatGPT video upload UI
 
-`open_upload_studio` renders a ChatGPT Apps component for file-based video publishing. The widget creates a short-lived Upload-Post/R2 staging upload, PUTs the local video directly to R2, completes the upload, then calls `upload_video` with the returned temporary media URL.
+`open_upload_studio` renders a ChatGPT Apps component for file-based publishing: one video, or one or more images (up to 10, for a carousel; pass `mediaType: "photos"`). For each file the widget creates a short-lived Upload-Post/R2 staging upload, PUTs the file directly to R2 and completes the upload, one file at a time, then calls `upload_video` or `upload_photos` with the returned temporary media URLs in order. For photos it can instead hand the staged URLs back to ChatGPT ("Send to ChatGPT"), which then calls `upload_photos` itself, e.g. with a different caption per platform. `upload_video` and `upload_photos` refuse `/mnt/data` and sandbox attachment paths and point the model at the Studio.
 
 The widget speaks the ChatGPT Apps SDK bridge, so it is **only advertised to ChatGPT** (detected from `clientInfo` at `initialize`; override the match with `UPLOAD_POST_STUDIO_CLIENTS=<regex>`). Every other host (claude.ai, Claude Desktop, Claude Code, Cursor, …) does not see the tool or its `ui://` resource; instead `create_media_upload` / `complete_media_upload` are exposed to the model with step-by-step guidance, and `upload_video` tells the assistant to ask for a public URL or send the user to the dashboard when the client cannot PUT the file itself.
 
@@ -221,7 +221,7 @@ curl -i -X POST http://localhost:8080/mcp \
 ## Tips for prompting the agent
 
 - Prefer **public URLs** over local paths when uploading — local paths only work if the MCP server runs on the user's machine.
-- In ChatGPT Apps, prefer `open_upload_studio` for user-selected video files. It avoids local-path handoff issues by uploading to short-lived Upload-Post/R2 staging, then passing a temporary media URL to `upload_video`.
+- In ChatGPT Apps, prefer `open_upload_studio` for user-selected video and image files. It avoids local-path handoff issues by uploading to short-lived Upload-Post/R2 staging, then passing temporary media URLs to `upload_video` / `upload_photos`.
 - In any other client with a local file: if the client can run HTTP requests (Claude Code, Cursor, a script), stage it with `create_media_upload` → PUT the bytes to `upload_url` → `complete_media_upload`, then pass the returned `media_url` to `upload_video`. Hosted chats without that ability (claude.ai) need a public HTTPS URL or the dashboard at https://app.upload-post.com.
 - To send video **bytes directly** (a client that holds the file rather than a URL), pass `videoBase64` to `upload_video` instead of `videoPathOrUrl`. The server writes it to a temp file, uploads, then deletes it. Inline bytes are capped at `UPLOAD_POST_MAX_INLINE_MB` (default 100 MB) — for larger videos use a public URL.
 - Always create the profile first (`create_user`) and connect socials in the Upload-Post dashboard before publishing.

@@ -38,6 +38,21 @@ assert.ok(
   "ChatGPT upload_video must point at the Studio"
 );
 
+const chatgptPhotos = chatgpt.tools.get("upload_photos");
+assert.ok(
+  chatgptPhotos.description.includes("open_upload_studio"),
+  "ChatGPT upload_photos must point at the Studio for attached images"
+);
+assert.equal(
+  chatgptPhotos._meta["openai/widgetAccessible"],
+  true,
+  "the Studio publishes photos through upload_photos, so the widget must be allowed to call it"
+);
+assert.ok(
+  chatgpt.tools.get("open_upload_studio").inputSchema.properties.mediaType,
+  "open_upload_studio must accept mediaType (video | photos)"
+);
+
 for (const name of ["claude-ai", "Claude Code", "cursor-vscode", "unknown-host"]) {
   const { tools, resources } = await surfaceFor(name);
   assert.ok(!tools.has("open_upload_studio"), `${name} must not see the Studio tool`);
@@ -48,6 +63,9 @@ for (const name of ["claude-ai", "Claude Code", "cursor-vscode", "unknown-host"]
     uploadVideo.includes("create_media_upload"),
     `${name} upload_video must point at media staging`
   );
+  const uploadPhotos = tools.get("upload_photos").description;
+  assert.ok(!uploadPhotos.includes("open_upload_studio"), `${name} upload_photos must not name the Studio`);
+  assert.ok(uploadPhotos.includes("create_media_upload"), `${name} upload_photos must point at media staging`);
   assert.deepEqual(
     tools.get("create_media_upload")._meta.ui.visibility,
     ["model", "app"],
