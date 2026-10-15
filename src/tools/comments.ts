@@ -43,7 +43,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
       annotations: {
         title: "Get post comments",
         readOnlyHint: true,
-        openWorldHint: false,
+        openWorldHint: true,
         destructiveHint: false,
       },
     },

@@ -363,7 +363,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Only fetches post metrics; Upload-Post keeps a private copy of the response for get_cached_post_analytics, and nothing changes on the post, the account, or the platform.",
+        "read_only_justification": "Only fetches post metrics; nothing changes on the post, the account, or the platform.",
         "open_world_justification": "Fetches live metrics from the connected social platform's API, an independently controlled external system.",
         "destructive_justification": "Does not delete, overwrite, revoke, send, or publish anything."
       }
@@ -371,12 +371,12 @@
     "get_post_comments": {
       "annotations": {
         "readOnlyHint": true,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Lists comments for an Instagram post without replying or changing the post.",
-        "open_world_justification": "Only reads comments and does not create public replies or messages.",
+        "read_only_justification": "Lists comments on a post without replying or changing the post.",
+        "open_world_justification": "Reads comments live from the connected social platform, an independently controlled external system.",
         "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
       }
     },
