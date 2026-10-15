@@ -7,6 +7,7 @@
  * and show the user "Upload Post MCP cannot be reached". Run after `npm run build`.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { buildServer } from "../dist/server.js";
@@ -71,6 +72,34 @@ for (const name of ["claude-ai", "Claude Code", "cursor-vscode", "unknown-host"]
     ["model", "app"],
     `${name} must expose media staging to the model`
   );
+}
+
+// The one-operation comment and AutoDM tools sit next to the older multi-action
+// tools; clients that already call comment_action or manage_autodms keep working.
+for (const name of [
+  "comment_action", "manage_autodms",
+  "hide_comment", "like_comment", "pin_comment", "edit_comment", "hold_comment",
+  "approve_comment", "ignore_comment", "set_post_comments",
+  "start_autodm", "list_autodms", "get_autodm_logs", "pause_autodm",
+  "resume_autodm", "stop_autodm", "delete_autodm",
+]) {
+  assert.ok(chatgpt.tools.has(name), `ChatGPT must expose ${name}`);
+}
+
+// Annotations declared in the ChatGPT submission must match what the server serves.
+const submission = JSON.parse(
+  readFileSync(new URL("../chatgpt-app-submission.json", import.meta.url), "utf8")
+);
+for (const [name, tool] of chatgpt.tools) {
+  const declared = submission.tools[name];
+  assert.ok(declared, `chatgpt-app-submission.json is missing ${name}`);
+  for (const hint of ["readOnlyHint", "openWorldHint", "destructiveHint"]) {
+    assert.equal(
+      tool.annotations?.[hint],
+      declared.annotations[hint],
+      `${name}.${hint} differs between the server and chatgpt-app-submission.json`
+    );
+  }
 }
 
 console.log("client profile surfaces OK");

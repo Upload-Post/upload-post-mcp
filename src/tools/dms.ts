@@ -123,16 +123,176 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
         action: string;
         [key: string]: unknown;
       };
-      const isGet = action === "status" || action === "logs";
-      const path = `/uploadposts/autodms/${action}`;
-      if (isGet) {
-        return client.request("GET", path, {
-          query: compact(rest),
-        });
-      }
-      return client.request("POST", path, {
-        body: compact(rest),
-      });
+      return runAutodm(client, action, rest);
     })
+  );
+
+  registerAutodmOperationTools(server, client);
+}
+
+/** /uploadposts/autodms/<action>: status and logs are GETs, the rest POSTs. */
+async function runAutodm(
+  client: UploadPostMcpClient,
+  action: string,
+  params: Record<string, unknown>
+): Promise<unknown> {
+  const path = `/uploadposts/autodms/${action}`;
+  if (action === "status" || action === "logs") {
+    return client.request("GET", path, { query: compact(params) });
+  }
+  return client.request("POST", path, { body: compact(params) });
+}
+
+const monitorIdField = z.string().describe("AutoDM monitor ID (from list_autodms or start_autodm).");
+
+/**
+ * One tool per AutoDM operation, each with its own schema and annotations.
+ * manage_autodms stays registered alongside them for clients that already call it.
+ */
+function registerAutodmOperationTools(server: McpServer, client: UploadPostMcpClient): void {
+  server.registerTool(
+    "start_autodm",
+    {
+      title: "Start an Instagram AutoDM",
+      description:
+        "Watch one of the profile's Instagram posts and automatically DM everyone who comments on it (optionally only comments containing `trigger_keywords`). The DM carries `reply_message` and up to 3 link buttons. Returns the monitor ID used by the other AutoDM tools.",
+      inputSchema: {
+        profile_username: z.string().describe("Upload-Post profile name that owns the Instagram account."),
+        post_url: z.string().describe("Instagram post URL to watch."),
+        reply_message: z.string().min(1).describe("DM text sent to matching commenters."),
+        buttons: z
+          .array(z.object({ title: z.string(), url: z.string().url() }))
+          .max(3)
+          .optional()
+          .describe("Up to 3 web_url buttons ({ title, url }) added to each DM."),
+        monitoring_interval: z
+          .number()
+          .int()
+          .min(15)
+          .optional()
+          .describe("How often to check for new comments, in minutes. Minimum is 15."),
+        trigger_keywords: z
+          .union([z.string(), z.array(z.string())])
+          .optional()
+          .describe("Keyword or keywords; when set, only comments containing them receive a DM."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Start an Instagram AutoDM",
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => runAutodm(client, "start", args as Record<string, unknown>))
+  );
+
+  server.registerTool(
+    "list_autodms",
+    {
+      title: "List Instagram AutoDMs",
+      description:
+        "List the account's AutoDM monitors with their state and counters. Active ones only, unless `include_inactive` is true.",
+      inputSchema: {
+        include_inactive: z
+          .boolean()
+          .optional()
+          .describe("Also list stopped and expired monitors."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "List Instagram AutoDMs",
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => runAutodm(client, "status", args as Record<string, unknown>))
+  );
+
+  server.registerTool(
+    "get_autodm_logs",
+    {
+      title: "Get AutoDM logs",
+      description: "Read the activity log of one AutoDM monitor: comments seen and DMs sent or failed.",
+      inputSchema: { monitor_id: monitorIdField },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Get AutoDM logs",
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => runAutodm(client, "logs", args as Record<string, unknown>))
+  );
+
+  server.registerTool(
+    "pause_autodm",
+    {
+      title: "Pause an AutoDM",
+      description: "Pause an AutoDM monitor: no DMs are sent until resume_autodm.",
+      inputSchema: { monitor_id: monitorIdField },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Pause an AutoDM",
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => runAutodm(client, "pause", args as Record<string, unknown>))
+  );
+
+  server.registerTool(
+    "resume_autodm",
+    {
+      title: "Resume an AutoDM",
+      description: "Resume a paused AutoDM monitor, so it sends DMs to new matching comments again.",
+      inputSchema: { monitor_id: monitorIdField },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Resume an AutoDM",
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => runAutodm(client, "resume", args as Record<string, unknown>))
+  );
+
+  server.registerTool(
+    "stop_autodm",
+    {
+      title: "Stop an AutoDM",
+      description:
+        "Stop an AutoDM monitor: it stops sending DMs and shows as stopped in list_autodms (with `include_inactive`). For a temporary break use pause_autodm; to remove it entirely use delete_autodm.",
+      inputSchema: { monitor_id: monitorIdField },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Stop an AutoDM",
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: true,
+      },
+    },
+    safe(async (args) => runAutodm(client, "stop", args as Record<string, unknown>))
+  );
+
+  server.registerTool(
+    "delete_autodm",
+    {
+      title: "Delete an AutoDM",
+      description: "Permanently delete an AutoDM monitor with its stats and logs. Cannot be undone.",
+      inputSchema: { monitor_id: monitorIdField },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Delete an AutoDM",
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: true,
+      },
+    },
+    safe(async (args) => runAutodm(client, "delete", args as Record<string, unknown>))
   );
 }

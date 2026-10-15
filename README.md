@@ -74,9 +74,9 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Users         | `get_account_info`, `list_users`, `get_connect_link`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
 | Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `get_pinterest_boards`, `get_google_business_locations`, `get_google_business_reviews`, `reply_to_google_business_review`, `get_reddit_detailed_posts` |
 | Posts         | `retry_post`, `unpublish_post` |
-| Comments      | `get_post_comments`, `create_comment`, `delete_comment`, `comment_action`, `reply_to_comment`, `public_reply_to_comment` |
+| Comments      | `get_post_comments`, `create_comment`, `delete_comment`, `reply_to_comment`, `public_reply_to_comment`, `hide_comment`, `like_comment`, `pin_comment`, `edit_comment`, `hold_comment`, `approve_comment`, `ignore_comment`, `set_post_comments`, `comment_action` |
 | TikTok        | `tiktok_music_trending`, `tiktok_music_search`, `tiktok_location_search`, `tiktok_publishing_settings` |
-| DMs           | `send_dm`, `list_dm_conversations`, `manage_autodms` |
+| DMs           | `send_dm`, `list_dm_conversations`, `start_autodm`, `list_autodms`, `get_autodm_logs`, `pause_autodm`, `resume_autodm`, `stop_autodm`, `delete_autodm`, `manage_autodms` |
 | FFmpeg        | `submit_ffmpeg_job`, `get_ffmpeg_job`, `download_ffmpeg_result`, `get_ffmpeg_consumption` |
 | Queue         | `get_queue_settings`, `update_queue_settings`, `preview_queue` |
 
@@ -89,6 +89,7 @@ The Upload-Post API has no endpoint per social network: it has an endpoint per *
 - `get_audience` — who follows the profile, where they are, when they are online, what they tap. Also `benchmark_categories`, and the niche averages to compare against when `benchmarkCategory` is set. The server clamps the window to at most 60 days ending before today, so a wider range is trimmed rather than rejected, and `range` in the response says which window was used.
 - `get_suggestions` — hashtags (with `view_count`) or related keyword searches, told apart by `type`, not by a different tool.
 - `get_post_comments` — top-level comments on a post, or, with `commentId`, the replies under one of them.
+- `hide_comment`, `like_comment`, `pin_comment`, `edit_comment`, `hold_comment`, `approve_comment`, `ignore_comment`, `set_post_comments` — one tool per moderation operation. `comment_action` does the same through a single `action` argument and stays available.
 - `comment_action` — moderate a comment on TikTok (hide / like / pin), Facebook (hide / like / edit), Instagram (hide, or enable / disable comments on a post), YouTube (hide / hold) and Threads (hide / approve / ignore). Each value carries its own inverse, so nothing is permanent.
 - `get_post_analytics` — per-post metrics. `post_metrics` is whatever the platform reports, so its shape varies: on TikTok it adds `retention`, `impression_sources`, `audience_types`, `new_followers`, `reach` and the watch times (`average_time_watched`, `total_time_watched`, `full_video_watched_rate`).
 

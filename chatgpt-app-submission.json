@@ -8,6 +8,18 @@
     "category": "BUSINESS"
   },
   "tools": {
+    "approve_comment": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Approves a pending reply on the user's Threads post.",
+        "open_world_justification": "Changes what the public sees on the user's connected social account, an independently controlled external system.",
+        "destructive_justification": "Publishes a reply that was waiting for approval; nothing is deleted or overwritten."
+      }
+    },
     "cancel_scheduled": {
       "annotations": {
         "readOnlyHint": false,
@@ -80,6 +92,18 @@
         "destructive_justification": "Adds a profile and does not delete or overwrite existing profiles."
       }
     },
+    "delete_autodm": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes an AutoDM monitor.",
+        "open_world_justification": "Only removes data stored in Upload-Post.",
+        "destructive_justification": "Permanently deletes the monitor with its stats and logs."
+      }
+    },
     "delete_comment": {
       "annotations": {
         "readOnlyHint": false,
@@ -126,6 +150,18 @@
         "read_only_justification": "Returns a download URL for an existing processing result without changing it.",
         "open_world_justification": "Only retrieves private result metadata and does not create public platform content.",
         "destructive_justification": "Does not delete, overwrite, revoke, send, or publish anything."
+      }
+    },
+    "edit_comment": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Replaces the text of the Page's own Facebook comment.",
+        "open_world_justification": "Changes what the public sees on the user's connected social account, an independently controlled external system.",
+        "destructive_justification": "The previous comment text is overwritten and not kept."
       }
     },
     "edit_scheduled": {
@@ -186,6 +222,18 @@
         "read_only_justification": "Only retrieves TikTok audience demographics, activity times and optional niche benchmarks.",
         "open_world_justification": "Reads data live from TikTok for the user's connected account.",
         "destructive_justification": "Does not create, change or delete anything."
+      }
+    },
+    "get_autodm_logs": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads one monitor's activity log without changing it.",
+        "open_world_justification": "Reads activity stored in Upload-Post only.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
       }
     },
     "get_cached_post_analytics": {
@@ -440,6 +488,66 @@
         "destructive_justification": "Does not remove, overwrite, send, publish, or cancel any content."
       }
     },
+    "hide_comment": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Hides or unhides a comment on the user's own post.",
+        "open_world_justification": "Changes what the public sees on the user's connected social account, an independently controlled external system.",
+        "destructive_justification": "A hidden comment disappears from a live post until it is unhidden."
+      }
+    },
+    "hold_comment": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Moves a YouTube comment to held for review.",
+        "open_world_justification": "Changes what the public sees on the user's connected social account, an independently controlled external system.",
+        "destructive_justification": "The comment is taken off the public video until it is published again."
+      }
+    },
+    "ignore_comment": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Ignores a pending reply on the user's Threads post.",
+        "open_world_justification": "Changes what the public sees on the user's connected social account, an independently controlled external system.",
+        "destructive_justification": "The pending reply stays unpublished."
+      }
+    },
+    "like_comment": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Adds or removes the account's like on a comment.",
+        "open_world_justification": "Changes what the public sees on the user's connected social account, an independently controlled external system.",
+        "destructive_justification": "A like can be removed again; nothing is deleted or overwritten."
+      }
+    },
+    "list_autodms": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists AutoDM monitors without changing them.",
+        "open_world_justification": "Reads monitor state stored in Upload-Post only.",
+        "destructive_justification": "Does not delete, overwrite, send, publish, or cancel anything."
+      }
+    },
     "list_dm_conversations": {
       "annotations": {
         "readOnlyHint": true,
@@ -500,6 +608,30 @@
         "destructive_justification": "Opening the UI does not delete, overwrite, revoke, send, publish, or cancel anything."
       }
     },
+    "pause_autodm": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Pauses an AutoDM monitor.",
+        "open_world_justification": "Only changes the monitor's state in Upload-Post; it sends nothing.",
+        "destructive_justification": "A paused monitor can be resumed; nothing is deleted."
+      }
+    },
+    "pin_comment": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Pins or unpins a comment on the user's own TikTok video.",
+        "open_world_justification": "Changes what the public sees on the user's connected social account, an independently controlled external system.",
+        "destructive_justification": "Pinning or unpinning changes which comment viewers see first on a live video."
+      }
+    },
     "preview_queue": {
       "annotations": {
         "readOnlyHint": true,
@@ -548,6 +680,18 @@
         "destructive_justification": "Overwrites any existing owner reply on that review."
       }
     },
+    "resume_autodm": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Resumes a paused AutoDM monitor.",
+        "open_world_justification": "A resumed monitor sends DMs on Instagram again.",
+        "destructive_justification": "Nothing is deleted or overwritten."
+      }
+    },
     "retry_post": {
       "annotations": {
         "readOnlyHint": false,
@@ -570,6 +714,42 @@
         "read_only_justification": "Sends a direct message to a recipient, which changes external conversation state.",
         "open_world_justification": "Transmits a message through a connected social platform.",
         "destructive_justification": "The delivered DM is user-visible and cannot be reliably undone after sending."
+      }
+    },
+    "set_post_comments": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Turns commenting on or off for the user's own Instagram post.",
+        "open_world_justification": "Changes what the public sees on the user's connected social account, an independently controlled external system.",
+        "destructive_justification": "Turning comments off stops the public from commenting until they are turned back on."
+      }
+    },
+    "start_autodm": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates an automation that sends Instagram DMs to commenters.",
+        "open_world_justification": "Sends direct messages to people on Instagram, an independently controlled external system.",
+        "destructive_justification": "Creates a new monitor; it does not delete or overwrite anything."
+      }
+    },
+    "stop_autodm": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Stops an AutoDM monitor.",
+        "open_world_justification": "Only changes the monitor's state in Upload-Post; it sends nothing.",
+        "destructive_justification": "Stops an active automation the user set up."
       }
     },
     "submit_ffmpeg_job": {

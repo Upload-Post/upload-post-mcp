@@ -303,41 +303,328 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         destructiveHint: true,
       },
     },
+    safe(async (args) => runCommentAction(client, args as CommentActionArgs))
+  );
+
+  registerCommentOperationTools(server, client);
+}
+
+type CommentActionArgs = {
+  user: string;
+  platform: string;
+  commentId?: string;
+  action: string;
+  postId?: string;
+  message?: string;
+  banAuthor?: boolean;
+};
+
+/**
+ * POST /uploadposts/comments/action. Shared by comment_action and the
+ * one-operation tools below, so every entry point validates and sends the same.
+ */
+async function runCommentAction(client: UploadPostMcpClient, a: CommentActionArgs): Promise<unknown> {
+  const postToggle = a.action === "enable_comments" || a.action === "disable_comments";
+  if (!postToggle && !a.commentId) {
+    throw new Error(`commentId is required to ${a.action} a comment.`);
+  }
+  const needsPost =
+    postToggle ||
+    a.platform === "youtube" ||
+    (a.platform === "tiktok" && a.action !== "like" && a.action !== "unlike");
+  if (needsPost && !a.postId) {
+    throw new Error(`postId (the post the comment belongs to) is required to ${a.action} on ${a.platform}.`);
+  }
+  if (a.action === "edit" && !a.message) {
+    throw new Error("message (the new text) is required to edit a comment.");
+  }
+  return client.request("POST", "/uploadposts/comments/action", {
+    body: compact({
+      platform: a.platform,
+      user: a.user,
+      comment_id: a.commentId,
+      action: a.action,
+      // like/unlike take the comment alone, so don't send the post.
+      post_id: a.action === "like" || a.action === "unlike" ? undefined : a.postId,
+      message: a.message,
+      ban_author: a.banAuthor,
+    }),
+  });
+}
+
+
+const userField = z.string().describe("Upload-Post profile name.");
+const commentIdField = z.string().describe("Comment to act on (from get_post_comments).");
+
+/**
+ * One tool per comment operation, each with its own schema and annotations.
+ * comment_action stays registered alongside them for clients that already call it.
+ */
+function registerCommentOperationTools(server: McpServer, client: UploadPostMcpClient): void {
+  server.registerTool(
+    "hide_comment",
+    {
+      title: "Hide or unhide a comment",
+      description:
+        "Hide a comment on one of the profile's own posts so the public no longer sees it, or show it again with `hidden: false`. Works on TikTok, Facebook, Instagram, YouTube and Threads. TikTok and YouTube need the `postId` the comment belongs to. To delete a comment use delete_comment. TikTok: " +
+        requiresTiktokCapability("comments", true),
+      inputSchema: {
+        user: userField,
+        platform: z
+          .enum(["tiktok", "facebook", "instagram", "youtube", "threads"])
+          .describe("Social platform the comment lives on."),
+        commentId: commentIdField,
+        postId: z
+          .string()
+          .optional()
+          .describe("Post the comment belongs to (TikTok: the video id; YouTube: the videoId). Required on TikTok and YouTube."),
+        hidden: z
+          .boolean()
+          .default(true)
+          .describe("true hides the comment (default); false makes a hidden comment visible again."),
+        banAuthor: z
+          .boolean()
+          .optional()
+          .describe("YouTube only, when hiding: also ban the comment's author from the channel."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Hide or unhide a comment",
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
+    },
     safe(async (args) => {
-      const a = args as {
-        user: string;
-        platform: string;
-        commentId?: string;
-        action: string;
-        postId?: string;
-        message?: string;
-        banAuthor?: boolean;
-      };
-      const postToggle = a.action === "enable_comments" || a.action === "disable_comments";
-      if (!postToggle && !a.commentId) {
-        throw new Error(`commentId is required to ${a.action} a comment.`);
-      }
-      const needsPost =
-        postToggle ||
-        a.platform === "youtube" ||
-        (a.platform === "tiktok" && a.action !== "like" && a.action !== "unlike");
-      if (needsPost && !a.postId) {
-        throw new Error(`postId (the post the comment belongs to) is required to ${a.action} on ${a.platform}.`);
-      }
-      if (a.action === "edit" && !a.message) {
-        throw new Error("message (the new text) is required to edit a comment.");
-      }
-      return client.request("POST", "/uploadposts/comments/action", {
-        body: compact({
-          platform: a.platform,
-          user: a.user,
-          comment_id: a.commentId,
-          action: a.action,
-          // like/unlike take the comment alone, so don't send the post.
-          post_id: a.action === "like" || a.action === "unlike" ? undefined : a.postId,
-          message: a.message,
-          ban_author: a.banAuthor,
-        }),
+      const a = args as { user: string; platform: string; commentId: string; postId?: string; hidden?: boolean; banAuthor?: boolean };
+      return runCommentAction(client, {
+        user: a.user,
+        platform: a.platform,
+        commentId: a.commentId,
+        postId: a.postId,
+        action: a.hidden === false ? "unhide" : "hide",
+        banAuthor: a.hidden === false ? undefined : a.banAuthor,
+      });
+    })
+  );
+
+  server.registerTool(
+    "like_comment",
+    {
+      title: "Like or unlike a comment",
+      description:
+        "Like a comment as the profile's account, or remove that like with `liked: false`. Works on TikTok and Facebook. TikTok: " +
+        requiresTiktokCapability("comments", true),
+      inputSchema: {
+        user: userField,
+        platform: z.enum(["tiktok", "facebook"]).describe("Social platform the comment lives on."),
+        commentId: commentIdField,
+        liked: z
+          .boolean()
+          .default(true)
+          .describe("true likes the comment (default); false removes the like."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Like or unlike a comment",
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => {
+      const a = args as { user: string; platform: string; commentId: string; liked?: boolean };
+      return runCommentAction(client, {
+        user: a.user,
+        platform: a.platform,
+        commentId: a.commentId,
+        action: a.liked === false ? "unlike" : "like",
+      });
+    })
+  );
+
+  server.registerTool(
+    "pin_comment",
+    {
+      title: "Pin or unpin a TikTok comment",
+      description:
+        "Pin a comment to the top of one of the profile's own TikTok videos, or unpin it with `pinned: false`. TikTok only. TikTok: " +
+        requiresTiktokCapability("comments", true),
+      inputSchema: {
+        user: userField,
+        commentId: commentIdField,
+        postId: z.string().describe("TikTok video id the comment belongs to."),
+        pinned: z
+          .boolean()
+          .default(true)
+          .describe("true pins the comment (default); false unpins it."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Pin or unpin a TikTok comment",
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
+    },
+    safe(async (args) => {
+      const a = args as { user: string; commentId: string; postId: string; pinned?: boolean };
+      return runCommentAction(client, {
+        user: a.user,
+        platform: "tiktok",
+        commentId: a.commentId,
+        postId: a.postId,
+        action: a.pinned === false ? "unpin" : "pin",
+      });
+    })
+  );
+
+  server.registerTool(
+    "edit_comment",
+    {
+      title: "Edit a Facebook comment",
+      description:
+        "Replace the text of a comment the Page itself wrote on Facebook. Facebook only. The previous text is not kept.",
+      inputSchema: {
+        user: userField,
+        commentId: commentIdField,
+        message: z.string().min(1).describe("The new comment text."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Edit a Facebook comment",
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
+    },
+    safe(async (args) => {
+      const a = args as { user: string; commentId: string; message: string };
+      return runCommentAction(client, {
+        user: a.user,
+        platform: "facebook",
+        commentId: a.commentId,
+        action: "edit",
+        message: a.message,
+      });
+    })
+  );
+
+  server.registerTool(
+    "hold_comment",
+    {
+      title: "Hold a YouTube comment for review",
+      description:
+        "Move a comment on one of the channel's YouTube videos to \"Held for review\", taking it off the public video until it is approved. YouTube only. To publish it again use hide_comment with `hidden: false`.",
+      inputSchema: {
+        user: userField,
+        commentId: commentIdField,
+        postId: z.string().describe("YouTube videoId the comment belongs to."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Hold a YouTube comment for review",
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
+    },
+    safe(async (args) => {
+      const a = args as { user: string; commentId: string; postId: string };
+      return runCommentAction(client, {
+        user: a.user,
+        platform: "youtube",
+        commentId: a.commentId,
+        postId: a.postId,
+        action: "hold",
+      });
+    })
+  );
+
+  server.registerTool(
+    "approve_comment",
+    {
+      title: "Approve a pending Threads reply",
+      description:
+        "Approve a reply waiting for approval on one of the profile's Threads posts, so it shows publicly. Threads only; to leave it unpublished use ignore_comment.",
+      inputSchema: {
+        user: userField,
+        commentId: z.string().describe("Pending reply to approve (from get_post_comments)."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Approve a pending Threads reply",
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) => {
+      const a = args as { user: string; commentId: string };
+      return runCommentAction(client, {
+        user: a.user,
+        platform: "threads",
+        commentId: a.commentId,
+        action: "approve",
+      });
+    })
+  );
+
+  server.registerTool(
+    "ignore_comment",
+    {
+      title: "Ignore a pending Threads reply",
+      description:
+        "Ignore a reply waiting for approval on one of the profile's Threads posts, so it stays unpublished. Threads only; to publish it use approve_comment.",
+      inputSchema: {
+        user: userField,
+        commentId: z.string().describe("Pending reply to ignore (from get_post_comments)."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Ignore a pending Threads reply",
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
+    },
+    safe(async (args) => {
+      const a = args as { user: string; commentId: string };
+      return runCommentAction(client, {
+        user: a.user,
+        platform: "threads",
+        commentId: a.commentId,
+        action: "ignore",
+      });
+    })
+  );
+
+  server.registerTool(
+    "set_post_comments",
+    {
+      title: "Turn comments on or off for an Instagram post",
+      description:
+        "Turn commenting off on one of the profile's own Instagram posts, or back on with `enabled: true`. Existing comments are kept either way. Instagram only.",
+      inputSchema: {
+        user: userField,
+        postId: z.string().describe("Instagram media id of the post."),
+        enabled: z.boolean().describe("false turns comments off; true turns them back on."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Turn comments on or off for an Instagram post",
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
+    },
+    safe(async (args) => {
+      const a = args as { user: string; postId: string; enabled: boolean };
+      return runCommentAction(client, {
+        user: a.user,
+        platform: "instagram",
+        postId: a.postId,
+        action: a.enabled ? "enable_comments" : "disable_comments",
       });
     })
   );
