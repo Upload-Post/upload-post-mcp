@@ -4,6 +4,13 @@ import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
 import { genericResultOutputSchema, safe } from "../schemas.js";
 
+// /api/uploadposts/history answers 400 to any page size outside this set.
+const HISTORY_PAGE_SIZES = [10, 20, 50, 100] as const;
+
+export function historyPageSize(limit: number): number {
+  return HISTORY_PAGE_SIZES.find((size) => size >= limit) ?? 100;
+}
+
 export function registerStatusTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
     "get_status",
@@ -52,7 +59,13 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
       description: "Paginated history of uploads across all profiles.",
       inputSchema: {
         page: z.number().int().positive().optional(),
-        limit: z.number().int().positive().max(200).optional(),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(100)
+          .optional()
+          .describe("Items per page. The API pages in 10, 20, 50 or 100, so other values are rounded up to the next of those. Defaults to 10."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -62,9 +75,12 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
         destructiveHint: false,
       },
     },
-    safe(async (args) =>
-      client.sdk.getHistory(compact(args as Record<string, unknown>) as { page?: number; limit?: number })
-    )
+    safe(async (args) => {
+      const { page, limit } = args as { page?: number; limit?: number };
+      return client.sdk.getHistory(
+        compact({ page, limit: limit === undefined ? undefined : historyPageSize(limit) }) as { page?: number; limit?: number }
+      );
+    })
   );
 
   server.registerTool(

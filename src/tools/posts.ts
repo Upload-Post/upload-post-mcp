@@ -45,13 +45,13 @@ export function registerPostTools(server: McpServer, client: UploadPostMcpClient
     {
       title: "Delete a published post",
       description:
-        "Delete a post already published to a platform. Instagram and TikTok are not supported.",
+        "Delete a post already published to a platform. Supported: facebook, youtube, x, linkedin, pinterest, bluesky, google_business. Instagram, TikTok, Threads and Reddit posts cannot be deleted through the API; they have to be removed in the platform's own app.",
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         platform: z
-          .enum(["facebook", "youtube", "x", "linkedin", "threads"])
-          .describe("Social platform. One of facebook, youtube, x, linkedin, threads. Instagram and TikTok are unsupported."),
-        postId: z.string().describe("Platform post ID to delete."),
+          .enum(["facebook", "youtube", "x", "linkedin", "pinterest", "bluesky", "google_business"])
+          .describe("Social platform the post lives on."),
+        postId: z.string().describe("Platform post ID to delete (Bluesky: the post AT-URI; Google Business: the full accounts/.../locations/.../localPosts/... name returned on upload)."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
