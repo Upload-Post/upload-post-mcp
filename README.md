@@ -16,6 +16,14 @@ Upload-Post is a reviewed app in the **ChatGPT app directory**. [Add Upload-Post
 
 Prefer to wire it up by hand? Enable **Developer mode** in **Settings → Apps → Advanced settings**, click **Create app**, point it at `https://mcp.upload-post.com/mcp` and set authentication to **OAuth**.
 
+## Use it in Gemini CLI
+
+Install the extension and sign in with OAuth the first time Gemini calls a tool:
+
+```bash
+gemini extensions install https://github.com/Upload-Post/upload-post-mcp
+```
+
 ---
 
 ## Two ways to run it yourself
