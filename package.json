@@ -21,7 +21,7 @@
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build",
-    "check": "node scripts/check-client-profile.mjs && node scripts/check-connect-guidance.mjs"
+    "check": "node scripts/check-client-profile.mjs && node scripts/check-connect-guidance.mjs && node scripts/check-rename-user.mjs"
   },
   "engines": {
     "node": ">=18"

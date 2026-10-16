@@ -656,6 +656,18 @@
         "destructive_justification": "The public reply is externally visible and may not be reversible through this tool."
       }
     },
+    "rename_user": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Changes the label of a private Upload-Post profile in the user's account.",
+        "open_world_justification": "Only updates internal profile state; nothing is published to public platforms.",
+        "destructive_justification": "Only sets a display label; the profile, its username and its connected accounts are kept."
+      }
+    },
     "reply_to_comment": {
       "annotations": {
         "readOnlyHint": false,

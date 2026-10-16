@@ -34,7 +34,7 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
     {
       title: "List profiles",
       description:
-        "List all Upload-Post profiles in the account, with their connected social accounts. Call this FIRST, before publishing, to get the exact profile name (`user`) and check that the target platforms are connected; never invent a profile name. When the account has no profile, or the requested platform is not connected or needs reconnecting, the response carries `next_step` and `connect_url`: give the user that link, ask them to tell you when they have connected, and wait — do not try to publish meanwhile. The TikTok account object carries a `capabilities` array (music, location, cover_image, cover_timestamp, draft, photo_privacy, video_privacy, inbox_fallback, profile_analytics) telling which optional TikTok fields that connection accepts.",
+        "List all Upload-Post profiles in the account, with their connected social accounts. Call this FIRST, before publishing, to get the exact profile name (`user`) and check that the target platforms are connected; never invent a profile name. When the account has no profile, or the requested platform is not connected or needs reconnecting, the response carries `next_step` and `connect_url`: give the user that link, ask them to tell you when they have connected, and wait — do not try to publish meanwhile. The TikTok account object carries a `capabilities` array (music, location, cover_image, cover_timestamp, draft, photo_privacy, video_privacy, inbox_fallback, profile_analytics) telling which optional TikTok fields that connection accepts. A profile may also carry `display_name`, the label the user sees in the dashboard (null when unset): when the user names a profile by that label, publish with its `username` — `user` is always the username, never the display_name.",
       inputSchema: {
         platforms: z
           .array(z.string())
@@ -96,9 +96,15 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
     "create_user",
     {
       title: "Create profile",
-      description: "Create a new Upload-Post profile (logical container for connected socials).",
+      description:
+        "Create a new Upload-Post profile (logical container for connected socials). The `username` becomes the `user` value of every publish call and cannot be changed later; to give the profile a friendlier name in the dashboard, pass `display_name` (or call rename_user afterwards).",
       inputSchema: {
         username: z.string(),
+        display_name: z
+          .string()
+          .max(100)
+          .optional()
+          .describe("Optional label shown in the dashboard instead of the username (max 100 characters)."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -108,7 +114,41 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
         destructiveHint: false,
       },
     },
-    safe(async ({ username }) => client.sdk.createUser(username as string))
+    safe(async ({ username, display_name }) =>
+      display_name === undefined
+        ? client.sdk.createUser(username as string)
+        : client.request("POST", "/uploadposts/users", {
+            body: { username, display_name },
+          })
+    )
+  );
+
+  server.registerTool(
+    "rename_user",
+    {
+      title: "Rename profile",
+      description:
+        "Rename a profile by setting its display name, the label the user sees in the dashboard. The `username` does not change and stays the `user` value of every publish call, so existing automations and scheduled posts keep working. Pass an empty string to remove the display name and show the username again.",
+      inputSchema: {
+        username: z.string().describe("The profile's current username (from list_users). It is not changed."),
+        display_name: z
+          .string()
+          .max(100)
+          .describe("New label, max 100 characters, no line breaks. Empty string clears it."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Rename profile",
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: false,
+      },
+    },
+    safe(async ({ username, display_name }) =>
+      client.request("PATCH", `/uploadposts/users/${encodeURIComponent(username as string)}`, {
+        body: { display_name },
+      })
+    )
   );
 
   server.registerTool(
