@@ -1,10 +1,10 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
 import { genericResultOutputSchema, safe } from "../schemas.js";
 
-export function registerDmTools(server: McpServer, client: UploadPostMcpClient): void {
+export function registerDmTools(server: McpServer, client: UploadPostMcpClient): { manageAutodms: RegisteredTool } {
   server.registerTool(
     "send_dm",
     {
@@ -64,7 +64,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
     )
   );
 
-  server.registerTool(
+  const manageAutodms = server.registerTool(
     "manage_autodms",
     {
       title: "Manage automatic DM monitoring",
@@ -128,6 +128,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
   );
 
   registerAutodmOperationTools(server, client);
+  return { manageAutodms };
 }
 
 /** /uploadposts/autodms/<action>: status and logs are GETs, the rest POSTs. */
@@ -147,7 +148,8 @@ const monitorIdField = z.string().describe("AutoDM monitor ID (from list_autodms
 
 /**
  * One tool per AutoDM operation, each with its own schema and annotations.
- * manage_autodms stays registered alongside them for clients that already call it.
+ * manage_autodms stays registered alongside them for clients that already call it,
+ * except ChatGPT, whose review rejects multi-action tools (see server.ts).
  */
 function registerAutodmOperationTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(

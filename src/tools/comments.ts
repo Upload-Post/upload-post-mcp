@@ -1,10 +1,10 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
 import { genericResultOutputSchema, requiresTiktokCapability, safe } from "../schemas.js";
 
-export function registerCommentTools(server: McpServer, client: UploadPostMcpClient): void {
+export function registerCommentTools(server: McpServer, client: UploadPostMcpClient): { commentAction: RegisteredTool } {
   server.registerTool(
     "get_post_comments",
     {
@@ -262,7 +262,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     })
   );
 
-  server.registerTool(
+  const commentAction = server.registerTool(
     "comment_action",
     {
       title: "Hide, like or pin a comment",
@@ -307,6 +307,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
   );
 
   registerCommentOperationTools(server, client);
+  return { commentAction };
 }
 
 type CommentActionArgs = {
@@ -358,7 +359,8 @@ const commentIdField = z.string().describe("Comment to act on (from get_post_com
 
 /**
  * One tool per comment operation, each with its own schema and annotations.
- * comment_action stays registered alongside them for clients that already call it.
+ * comment_action stays registered alongside them for clients that already call it,
+ * except ChatGPT, whose review rejects multi-action tools (see server.ts).
  */
 function registerCommentOperationTools(server: McpServer, client: UploadPostMcpClient): void {
   server.registerTool(
