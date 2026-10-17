@@ -32,18 +32,6 @@
         "destructive_justification": "Permanently removes the scheduled publishing job before it runs."
       }
     },
-    "comment_action": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Hides, likes, pins, edits, holds or approves a comment, or turns comments on or off for a post.",
-        "open_world_justification": "Changes the public state of comments on the user's connected TikTok, Facebook, Instagram, YouTube or Threads account.",
-        "destructive_justification": "Hiding, unpinning or disabling comments changes what the public sees on a live post; each action has an inverse, but the effect is visible until it is undone."
-      }
-    },
     "complete_media_upload": {
       "annotations": {
         "readOnlyHint": false,
@@ -406,12 +394,12 @@
     },
     "get_post_analytics": {
       "annotations": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Only fetches post metrics; nothing changes on the post, the account, or the platform.",
+        "read_only_justification": "Nothing changes on the post, the account, or the platform, but Upload-Post stores a copy of the fetched metrics so get_cached_post_analytics can replay them.",
         "open_world_justification": "Fetches live metrics from the connected social platform's API, an independently controlled external system.",
         "destructive_justification": "Does not delete, overwrite, revoke, send, or publish anything."
       }
@@ -582,18 +570,6 @@
         "read_only_justification": "Lists Upload-Post profiles without creating, updating, or deleting them.",
         "open_world_justification": "Only reads private profile metadata and does not publish externally.",
         "destructive_justification": "Does not delete, overwrite, revoke, send, publish, or cancel anything."
-      }
-    },
-    "manage_autodms": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Can start, pause, resume, stop, or delete AutoDM monitors, which changes automation state.",
-        "open_world_justification": "Controls automations that can send messages on connected social platforms.",
-        "destructive_justification": "Can stop or delete active DM automations and can enable irreversible outgoing messages."
       }
     },
     "open_upload_studio": {

@@ -74,10 +74,21 @@ for (const name of ["claude-ai", "Claude Code", "cursor-vscode", "unknown-host"]
   );
 }
 
-// The one-operation comment and AutoDM tools sit next to the older multi-action
-// tools; clients that already call comment_action or manage_autodms keep working.
+// ChatGPT gets one tool per comment and AutoDM operation: OpenAI's review
+// rejects comment_action and manage_autodms for dispatching several operations
+// through one `action` argument. Other clients keep them, since some already call them.
+for (const name of ["comment_action", "manage_autodms"]) {
+  assert.ok(!chatgpt.tools.has(name), `ChatGPT must not see ${name}`);
+  for (const other of ["claude-ai", "Claude Code", "unknown-host"]) {
+    assert.ok((await surfaceFor(other)).tools.has(name), `${other} must keep ${name}`);
+  }
+}
+assert.equal(
+  chatgpt.tools.get("get_post_analytics").annotations.readOnlyHint,
+  false,
+  "get_post_analytics stores a copy of the metrics, so it is not read-only"
+);
 for (const name of [
-  "comment_action", "manage_autodms",
   "hide_comment", "like_comment", "pin_comment", "edit_comment", "hold_comment",
   "approve_comment", "ignore_comment", "set_post_comments",
   "start_autodm", "list_autodms", "get_autodm_logs", "pause_autodm",

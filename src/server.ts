@@ -71,9 +71,9 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   registerAudienceTools(server, client);
   registerUserTools(server, client);
   registerPagesTools(server, client);
-  registerCommentTools(server, client);
+  const commentTools = registerCommentTools(server, client);
   registerPostTools(server, client);
-  registerDmTools(server, client);
+  const dmTools = registerDmTools(server, client);
   registerFfmpegTools(server, client);
   registerQueueTools(server, client);
   const mediaTools = registerMediaUploadTools(server, client);
@@ -81,7 +81,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
 
   // Tools are registered before we know who is on the other end. Once the
   // client has introduced itself, shape the surface for that host: ChatGPT keeps
-  // the Studio widget as-is; everyone else gets the staging tools exposed to the
+  // the Studio widget and loses the multi-action tools; everyone else gets the staging tools exposed to the
   // model and no widget metadata that would fail to render.
   const applyProfile = (info: ClientInfoLike | undefined): void => {
     const profile = detectClientProfile(info);
@@ -90,7 +90,13 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     process.stderr.write(
       `[upload-post-mcp] client ${profile.name}/${profile.version} → ${profile.kind}\n`
     );
-    if (isChatGpt(ctx)) return;
+    if (isChatGpt(ctx)) {
+      // OpenAI's review rejects tools that dispatch several operations through
+      // one `action` argument. ChatGPT gets the one-operation tools instead.
+      commentTools.commentAction.disable();
+      dmTools.manageAutodms.disable();
+      return;
+    }
     studio.tool.disable();
     studio.resource.disable();
     uploadTools.applyClientProfile(ctx);
