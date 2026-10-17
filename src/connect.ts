@@ -1,5 +1,6 @@
 import type { UploadPostMcpClient } from "./client.js";
 import { fail, ok, type ToolResult } from "./schemas.js";
+import { planErrorGuidance } from "./plan.js";
 
 /**
  * Onboarding guidance for accounts that cannot publish yet.
@@ -333,8 +334,9 @@ export function skippedUnconnectedPlatforms(result: unknown): string[] {
 }
 
 /**
- * `safe()` for publishing tools: same envelope, but connection problems come
- * back with a link and the sentence to relay instead of a bare API error.
+ * `safe()` for publishing tools: same envelope, but connection problems and
+ * plan limits come back with a link and the sentence to relay instead of a
+ * bare API error.
  */
 export function safeUpload<TArgs>(
   client: UploadPostMcpClient,
@@ -346,7 +348,8 @@ export function safeUpload<TArgs>(
       result = await handler(args);
     } catch (err) {
       const message = err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
-      const guidance = await uploadErrorGuidance(client, message, (args ?? {}) as { user?: unknown; platforms?: unknown });
+      const uploadArgs = (args ?? {}) as { user?: unknown; platforms?: unknown };
+      const guidance = planErrorGuidance(message, uploadArgs) ?? (await uploadErrorGuidance(client, message, uploadArgs));
       if (!guidance) return fail(err);
       return {
         isError: true,
