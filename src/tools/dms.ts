@@ -69,26 +69,29 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
     {
       title: "Manage automatic DM monitoring",
       description:
-        "Control Instagram AutoDM monitors. For action='start', provide post_url, reply_message, and profile_username. For stop/pause/resume/delete/logs, provide monitor_id. For status, optionally set include_inactive=true.",
+        "Control AutoDM monitors, which answer every comment on a post (or only those containing `trigger_keywords`). Instagram answers with a private DM; TikTok, YouTube, Facebook, Threads and Bluesky answer with a public reply under the comment. For action='start', provide profile_username, reply_message and the post (post_url on Instagram; post_id or post_url elsewhere, plus `platform`). For stop/pause/resume/delete/logs, provide monitor_id. For status, optionally set include_inactive=true.",
       inputSchema: {
         action: z.enum(["start", "stop", "pause", "resume", "delete", "status", "logs"]),
         profile_username: z
           .string()
           .optional()
           .describe("Upload-Post profile name. Required when action='start'."),
+        platform: autodmPlatformField,
         post_url: z
           .string()
           .optional()
-          .describe("Instagram post URL to monitor. Required when action='start'."),
+          .describe("Post URL to monitor. Required on Instagram when action='start'."),
+        post_id: autodmPostIdField,
         reply_message: z
           .string()
           .optional()
-          .describe("DM text sent to matching commenters. Required when action='start'."),
+          .describe("Text sent to matching commenters (a DM on Instagram, a public reply elsewhere). Required when action='start'."),
+        reply_messages: autodmReplyMessagesField,
         buttons: z
           .array(z.object({ title: z.string(), url: z.string().url() }))
           .max(3)
           .optional()
-          .describe("For action='start': up to 3 web_url buttons ({ title, url }) added to each auto-DM."),
+          .describe("Instagram only, for action='start': up to 3 web_url buttons ({ title, url }) added to each auto-DM."),
         monitoring_interval: z
           .number()
           .int()
@@ -98,7 +101,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
         trigger_keywords: z
           .union([z.string(), z.array(z.string())])
           .optional()
-          .describe("Optional keyword or keywords; only comments containing these terms receive a DM."),
+          .describe("Optional keyword or keywords; only comments containing these terms are answered (case and accents ignored)."),
         monitor_id: z
           .string()
           .optional()
@@ -146,6 +149,26 @@ async function runAutodm(
 
 const monitorIdField = z.string().describe("AutoDM monitor ID (from list_autodms or start_autodm).");
 
+const autodmPlatformField = z
+  .enum(["instagram", "tiktok", "youtube", "facebook", "threads", "bluesky"])
+  .optional()
+  .describe(
+    "Network of the post. Default instagram, which answers with a private DM. tiktok, youtube, facebook, threads and bluesky have no private reply to a comment, so matching comments get a PUBLIC reply under the comment instead."
+  );
+const autodmPostIdField = z
+  .string()
+  .optional()
+  .describe(
+    "Post to watch on tiktok/youtube/facebook/threads/bluesky (instead of post_url): TikTok video id, YouTube video id, Facebook post id ('{pageId}_{postId}'), Threads post id, Bluesky at:// URI. A TikTok or YouTube URL is also accepted."
+  );
+const autodmReplyMessagesField = z
+  .array(z.string().min(1))
+  .max(5)
+  .optional()
+  .describe(
+    "Public replies only: up to 5 alternative texts, rotated across comments so TikTok and YouTube do not see the same reply over and over."
+  );
+
 /**
  * One tool per AutoDM operation, each with its own schema and annotations.
  * manage_autodms stays registered alongside them for clients that already call it,
@@ -155,18 +178,24 @@ function registerAutodmOperationTools(server: McpServer, client: UploadPostMcpCl
   server.registerTool(
     "start_autodm",
     {
-      title: "Start an Instagram AutoDM",
+      title: "Start an AutoDM or comment auto-reply",
       description:
-        "Watch one of the profile's Instagram posts and automatically DM everyone who comments on it (optionally only comments containing `trigger_keywords`). The DM carries `reply_message` and up to 3 link buttons. Returns the monitor ID used by the other AutoDM tools.",
+        "Watch one of the profile's posts and automatically answer everyone who comments on it (optionally only comments containing `trigger_keywords`, e.g. 'comment POST'). On Instagram (default) the answer is a private DM with `reply_message` and up to 3 link buttons. On tiktok, youtube, facebook, threads and bluesky it is a PUBLIC reply under each matching comment; links in TikTok replies are not clickable, so point people to the bio. Comments are checked every `monitoring_interval` minutes (15 minimum), at most 25 replies per check (10 on YouTube), and the monitor stops after 15 days. Returns the monitor ID used by the other AutoDM tools.",
       inputSchema: {
-        profile_username: z.string().describe("Upload-Post profile name that owns the Instagram account."),
-        post_url: z.string().describe("Instagram post URL to watch."),
-        reply_message: z.string().min(1).describe("DM text sent to matching commenters."),
+        profile_username: z.string().describe("Upload-Post profile name that owns the connected account."),
+        platform: autodmPlatformField,
+        post_url: z
+          .string()
+          .optional()
+          .describe("Post URL to watch. Required on Instagram; on the other networks post_id is preferred."),
+        post_id: autodmPostIdField,
+        reply_message: z.string().min(1).describe("Text sent to matching commenters: a DM on Instagram, a public reply elsewhere."),
+        reply_messages: autodmReplyMessagesField,
         buttons: z
           .array(z.object({ title: z.string(), url: z.string().url() }))
           .max(3)
           .optional()
-          .describe("Up to 3 web_url buttons ({ title, url }) added to each DM."),
+          .describe("Instagram only: up to 3 web_url buttons ({ title, url }) added to each DM."),
         monitoring_interval: z
           .number()
           .int()
@@ -176,11 +205,11 @@ function registerAutodmOperationTools(server: McpServer, client: UploadPostMcpCl
         trigger_keywords: z
           .union([z.string(), z.array(z.string())])
           .optional()
-          .describe("Keyword or keywords; when set, only comments containing them receive a DM."),
+          .describe("Keyword or keywords; when set, only comments containing them are answered (case and accents ignored)."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
-        title: "Start an Instagram AutoDM",
+        title: "Start an AutoDM or comment auto-reply",
         readOnlyHint: false,
         openWorldHint: true,
         destructiveHint: false,
@@ -192,9 +221,9 @@ function registerAutodmOperationTools(server: McpServer, client: UploadPostMcpCl
   server.registerTool(
     "list_autodms",
     {
-      title: "List Instagram AutoDMs",
+      title: "List AutoDMs and comment auto-replies",
       description:
-        "List the account's AutoDM monitors with their state and counters. Active ones only, unless `include_inactive` is true.",
+        "List the account's AutoDM and comment auto-reply monitors with their `platform`, state and counters. Active ones only, unless `include_inactive` is true.",
       inputSchema: {
         include_inactive: z
           .boolean()
@@ -203,7 +232,7 @@ function registerAutodmOperationTools(server: McpServer, client: UploadPostMcpCl
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
-        title: "List Instagram AutoDMs",
+        title: "List AutoDMs and comment auto-replies",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,

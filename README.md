@@ -84,7 +84,7 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Posts         | `retry_post`, `unpublish_post` |
 | Comments      | `get_post_comments`, `create_comment`, `delete_comment`, `reply_to_comment`, `public_reply_to_comment`, `hide_comment`, `like_comment`, `pin_comment`, `edit_comment`, `hold_comment`, `approve_comment`, `ignore_comment`, `set_post_comments`, `comment_action` |
 | TikTok        | `tiktok_music_trending`, `tiktok_music_search`, `tiktok_location_search`, `tiktok_publishing_settings` |
-| DMs           | `send_dm`, `list_dm_conversations`, `start_autodm`, `list_autodms`, `get_autodm_logs`, `pause_autodm`, `resume_autodm`, `stop_autodm`, `delete_autodm`, `manage_autodms` |
+| DMs           | `send_dm`, `list_dm_conversations`, `start_autodm` (Instagram DM or public auto-reply on TikTok, YouTube, Facebook, Threads, Bluesky), `list_autodms`, `get_autodm_logs`, `pause_autodm`, `resume_autodm`, `stop_autodm`, `delete_autodm`, `manage_autodms` |
 | FFmpeg        | `submit_ffmpeg_job`, `get_ffmpeg_job`, `download_ffmpeg_result`, `get_ffmpeg_consumption` |
 | Queue         | `get_queue_settings`, `update_queue_settings`, `preview_queue` |
 

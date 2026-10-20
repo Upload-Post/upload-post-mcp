@@ -1,6 +1,6 @@
 {
   "name": "upload-post",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "Publish, schedule and analyze social media posts from Gemini CLI. Upload-Post's hosted MCP server posts videos, photos, carousels and text to TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X, Google Business, Telegram and Discord, and handles comments, DMs and analytics. Sign in with OAuth.",
   "mcpServers": {
     "upload-post": {
