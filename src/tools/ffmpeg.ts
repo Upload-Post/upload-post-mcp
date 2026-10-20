@@ -105,14 +105,27 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
         status.result && typeof status.result === "object"
           ? (status.result as Record<string, unknown>)
           : undefined;
-      const downloadUrl = result?.download_url ?? status.download_url;
-      if (typeof downloadUrl !== "string" || !downloadUrl) {
+      const encoderUrl = result?.download_url ?? status.download_url;
+      const state = String(status.status ?? "").toLowerCase();
+      const finished = ["finished", "completed", "done", "success"].includes(state);
+      if (!finished && (typeof encoderUrl !== "string" || !encoderUrl)) {
         throw new Error("FFmpeg result is not ready or has no download URL.");
       }
+      // Never hand back the encoder's own URL: it only answers to Upload-Post's
+      // internal key and gives the customer a 401. The documented endpoint
+      // streams the same file with the customer's API key.
+      const downloadUrl = `${client.baseUrl}/uploadposts/ffmpeg/jobs/${encodeURIComponent(
+        jobId as string
+      )}/download`;
       return {
         job_id: jobId,
         status: status.status,
         download_url: downloadUrl,
+        download_auth: "Authorization: Apikey <your Upload-Post API key>",
+        next_step:
+          "This URL requires the user's Upload-Post API key in the Authorization header, so it is not public: " +
+          "do not pass it as video_url to upload_video. Tell the user to download it with their key " +
+          "(or use the SDK/CLI already configured with it) and then upload the downloaded file.",
       };
     })
   );
