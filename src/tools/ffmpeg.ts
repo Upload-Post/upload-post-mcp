@@ -62,7 +62,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
     {
       title: "Poll FFmpeg job status",
       description:
-        "Poll the status of an FFmpeg job. When status is 'completed', call `download_ffmpeg_result` to obtain the file.",
+        "Poll the status of an FFmpeg job. When status is 'finished', call `download_ffmpeg_result` to obtain a publishable `media_url` (or the authenticated download URL).",
       inputSchema: {
         jobId: z.string(),
       },
@@ -84,7 +84,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
     {
       title: "Get FFmpeg result download URL",
       description:
-        "Returns the download URL and metadata for a completed FFmpeg job without streaming the processed file through MCP.",
+        "Returns how to get a finished FFmpeg job's output without streaming it through MCP. For video and image outputs it returns a temporary public `media_url` (signed, no API key, deleted 24 h after the job finished) that you can pass straight to upload_video / upload_photos as the video URL / photo URL. It also returns `download_url`, which needs the user's Upload-Post API key.",
       inputSchema: {
         jobId: z.string(),
       },
@@ -117,6 +117,24 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
       const downloadUrl = `${client.baseUrl}/uploadposts/ffmpeg/jobs/${encodeURIComponent(
         jobId as string
       )}/download`;
+      // The API mirrors video/image outputs into media staging and signs a
+      // temporary GET URL: that one is public, so it can be published directly.
+      const mediaUrl = typeof result?.media_url === "string" && result.media_url ? result.media_url : undefined;
+      if (mediaUrl) {
+        return {
+          job_id: jobId,
+          status: status.status,
+          media_url: mediaUrl,
+          media_url_expires_in_seconds: result?.media_url_expires_in_seconds,
+          download_url: downloadUrl,
+          download_auth: "Authorization: Apikey <your Upload-Post API key>",
+          next_step:
+            "Pass media_url as the video URL (upload_video) or photo URL (upload_photos) to publish the result; " +
+            "no API key is needed for it. It is temporary: call download_ffmpeg_result again for a fresh one if it " +
+            "expired, and note the copy is deleted 24 h after the job finished. download_url is the same file " +
+            "behind the user's API key, for a manual download.",
+        };
+      }
       return {
         job_id: jobId,
         status: status.status,
