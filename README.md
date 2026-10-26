@@ -12,9 +12,17 @@ Lets any MCP-compatible AI agent (ChatGPT, Claude Desktop, Claude Code, Cursor, 
 
 ## Use it in ChatGPT (no setup)
 
-Upload-Post is a reviewed app in the **ChatGPT app directory**. [Add Upload-Post in ChatGPT](https://chatgpt.com/plugins/plugin_asdk_app_6a1fed02ff5c8191b4060c5807221f26) — or search for *Upload-Post* under **Apps** — click **Connect** and sign in with OAuth. No Developer mode, no MCP URL to paste, and you get the [Upload Studio](#chatgpt-video-upload-ui) widget for publishing video files, photos and carousels straight from your computer.
+Upload-Post is a plugin reviewed by OpenAI, listed in ChatGPT's **Plugins** (formerly Apps). [Open Upload-Post in ChatGPT](https://chatgpt.com/plugins/plugin_asdk_app_6a1fed02ff5c8191b4060c5807221f26) or search for *Upload-Post* in **Plugins**, click **Install**, then **Connect**, and sign in with OAuth. There is no MCP URL to paste, and you get the [Upload Studio](#chatgpt-video-upload-ui) widget for publishing video files, photos and carousels straight from your computer. OpenAI dots use the same plugin: select it in your dot's **Customize → Plugins** and review its permissions.
 
-Prefer to wire it up by hand? Enable **Developer mode** in **Settings → Apps → Advanced settings**, click **Create app**, point it at `https://mcp.upload-post.com/mcp` and set authentication to **OAuth**.
+Prefer to wire it up by hand? In ChatGPT on the web, open **Plugins**, click **+**, choose **Add custom MCP server**, point it at `https://mcp.upload-post.com/mcp` and set authentication to **OAuth**. Custom MCP servers get write actions on Business, Enterprise and Edu workspaces.
+
+## Use it in Claude
+
+In claude.ai or Claude Desktop, open **Customize → Connectors**, click **+ Add**, then **Add custom connector**, paste `https://mcp.upload-post.com/mcp`, click **Continue** and sign in with OAuth. Custom connectors work on every Claude plan (the Free plan allows one). In Claude Code: `claude mcp add --transport http upload-post https://mcp.upload-post.com/mcp`.
+
+## Use it in Perplexity Computer
+
+Open **Plugins** in the sidebar (or **Customize → Connectors**), then **Add custom → Connector → Add MCP connector → Remote**. Use `https://mcp.upload-post.com/mcp` with the Streamable HTTP transport and OAuth (or your Upload-Post API key), click **Add**, then click the Upload-Post card to sign in.
 
 ## Use it in Gemini CLI
 
