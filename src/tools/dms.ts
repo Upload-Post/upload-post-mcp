@@ -97,7 +97,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
           .int()
           .min(15)
           .optional()
-          .describe("Polling interval in minutes for action='start'. Minimum is 15."),
+          .describe("Minutes between comment checks for action='start'. Minimum is 15. Instagram and TikTok answer within seconds, so there it only paces a backup check."),
         trigger_keywords: z
           .union([z.string(), z.array(z.string())])
           .optional()
@@ -180,7 +180,7 @@ function registerAutodmOperationTools(server: McpServer, client: UploadPostMcpCl
     {
       title: "Start an AutoDM or comment auto-reply",
       description:
-        "Watch one of the profile's posts and automatically answer everyone who comments on it (optionally only comments containing `trigger_keywords`, e.g. 'comment POST'). On Instagram (default) the answer is a private DM with `reply_message` and up to 3 link buttons. On tiktok, youtube, facebook, threads and bluesky it is a PUBLIC reply under each matching comment; links in TikTok replies are not clickable, so point people to the bio. Comments are checked every `monitoring_interval` minutes (15 minimum), at most 25 replies per check (10 on YouTube), and the monitor stops after 15 days. Returns the monitor ID used by the other AutoDM tools.",
+        "Watch one of the profile's posts and automatically answer everyone who comments on it (optionally only comments containing `trigger_keywords`, e.g. 'comment POST'). On Instagram (default) the answer is a private DM with `reply_message` and up to 3 link buttons. On tiktok, youtube, facebook, threads and bluesky it is a PUBLIC reply under each matching comment; links in TikTok replies are not clickable, so point people to the bio. Instagram and TikTok answer new comments within seconds; youtube, facebook, threads and bluesky check for them every `monitoring_interval` minutes (15 minimum). At most 25 replies per interval (10 on YouTube), and the monitor stops after 15 days. Returns the monitor ID used by the other AutoDM tools.",
       inputSchema: {
         profile_username: z.string().describe("Upload-Post profile name that owns the connected account."),
         platform: autodmPlatformField,
@@ -201,7 +201,7 @@ function registerAutodmOperationTools(server: McpServer, client: UploadPostMcpCl
           .int()
           .min(15)
           .optional()
-          .describe("How often to check for new comments, in minutes. Minimum is 15."),
+          .describe("Minutes between comment checks. Minimum is 15. Instagram and TikTok answer within seconds, so there it only paces a backup check."),
         trigger_keywords: z
           .union([z.string(), z.array(z.string())])
           .optional()
