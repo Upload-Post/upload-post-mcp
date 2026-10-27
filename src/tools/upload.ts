@@ -437,6 +437,47 @@ function looksLikeHostedAttachmentPath(input: string): boolean {
   );
 }
 
+/** Same test the SDK applies: anything else it opens as a local file. */
+function isHttpUrl(value: string): boolean {
+  const lower = value.toLowerCase();
+  return lower.startsWith("http://") || lower.startsWith("https://");
+}
+
+/**
+ * The SDK reads any media reference that is not an http(s) URL from the local
+ * filesystem. On the hosted (multi-tenant) server that disk is the server's,
+ * so such references are refused there before the SDK can open them. Covers
+ * the main media argument and the option fields the SDK also reads from disk.
+ */
+export function assertNoServerPaths(
+  client: Pick<UploadPostMcpClient, "allowLocalFiles">,
+  media: Record<string, unknown>,
+  options: Record<string, unknown> = {}
+): void {
+  if (client.allowLocalFiles) return;
+  const refs: Array<[string, unknown]> = [
+    ...Object.entries(media),
+    ["instagramCoverUrl", options.instagramCoverUrl],
+    ["firstCommentMedia", options.firstCommentMedia],
+  ];
+  if (Array.isArray(options.youtubeSubtitles)) {
+    for (const sub of options.youtubeSubtitles as Array<Record<string, unknown> | null>) {
+      if (sub && typeof sub === "object") refs.push(["youtubeSubtitles.file", sub.file]);
+    }
+  }
+  for (const [field, value] of refs) {
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item === undefined || item === null || item === "") continue;
+      if (typeof item === "string" && isHttpUrl(item)) continue;
+      if (typeof item !== "string" && field !== "youtubeSubtitles.file") continue;
+      throw new Error(
+        `\`${field}\` must be a public http(s) URL. This hosted server cannot read file paths. ` +
+          "To publish a file from the user's device, stage it first (create_media_upload, or open_upload_studio in ChatGPT) and pass the returned media_url."
+      );
+    }
+  }
+}
+
 /**
  * Decode inline base64 video bytes to a uniquely-named temp file and return its
  * path. Throws before allocating the full buffer is impossible, so we decode
@@ -607,6 +648,12 @@ export function registerUploadTools(
         ...(platformOptions ?? {}),
       })) as never;
 
+      assertNoServerPaths(
+        client,
+        videoPathOrUrl ? { videoPathOrUrl } : {},
+        options as unknown as Record<string, unknown>
+      );
+
       if (videoBase64) {
         const tmpPath = await writeInlineVideo(videoBase64, videoFilename);
         try {
@@ -688,6 +735,7 @@ export function registerUploadTools(
         ...(rest as Record<string, unknown>),
         ...(platformOptions ?? {}),
       })) as never;
+      assertNoServerPaths(client, { photosPathsOrUrls }, options as unknown as Record<string, unknown>);
       return client.sdk.uploadPhotos(photosPathsOrUrls, options);
     })
   );
@@ -763,6 +811,7 @@ export function registerUploadTools(
         documentPathOrUrl: string;
         [k: string]: unknown;
       };
+      assertNoServerPaths(client, { documentPathOrUrl });
       return client.sdk.uploadDocument(documentPathOrUrl, rest as never);
     })
   );

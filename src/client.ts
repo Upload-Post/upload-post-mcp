@@ -12,6 +12,13 @@ export const DEFAULT_BASE_URL = "https://api.upload-post.com/api";
 export interface UploadPostMcpClientOptions {
   apiKey: string;
   baseUrl?: string;
+  /**
+   * Whether tools may read media from this machine's filesystem (a path
+   * instead of a URL). True for stdio, where the server runs as the user on
+   * the user's own machine. The multi-tenant HTTP host turns it off: a path
+   * there would name a file of the server, not of the caller.
+   */
+  allowLocalFiles?: boolean;
 }
 
 /**
@@ -28,6 +35,7 @@ export class UploadPostMcpClient {
   readonly sdk: UploadPost;
   readonly http: AxiosInstance;
   readonly baseUrl: string;
+  readonly allowLocalFiles: boolean;
 
   constructor(opts: UploadPostMcpClientOptions) {
     if (!opts.apiKey) {
@@ -36,6 +44,7 @@ export class UploadPostMcpClient {
       );
     }
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
+    this.allowLocalFiles = opts.allowLocalFiles ?? true;
     this.sdk = new UploadPost(opts.apiKey);
     // The SDK defaults to the public API; without this, a custom baseUrl
     // applied only to the raw-HTTP endpoints and silently not to uploads.

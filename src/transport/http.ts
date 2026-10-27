@@ -62,6 +62,10 @@ const MAX_BODY_BYTES = Math.floor(Number(process.env.UPLOAD_POST_MCP_MAX_BODY_MB
 // Raw API keys are checked against the API once before a session is built
 // for them (cached). Set to "false" to skip the check (e.g. offline testing).
 const VALIDATE_API_KEYS = (process.env.UPLOAD_POST_MCP_VALIDATE_API_KEYS ?? "true").toLowerCase() !== "false";
+// Media given as a filesystem path is read from THIS machine. On a shared host
+// that is the server's disk, never the caller's, so paths are refused unless a
+// self-hoster running the HTTP transport next to their own files opts in.
+const ALLOW_LOCAL_FILES = (process.env.UPLOAD_POST_MCP_ALLOW_LOCAL_FILES ?? "false").toLowerCase() === "true";
 const KEY_CHECK_TTL_MS = Number(process.env.UPLOAD_POST_MCP_KEY_CHECK_TTL_MS ?? 10 * 60 * 1000);
 
 const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
@@ -253,16 +257,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     // transport instead made the SDK answer 400 "Server not initialized",
     // which clients surface as a fatal "session expired".
     if (!session && sessionId) {
-      res.statusCode = 404;
-      res.setHeader("content-type", "application/json");
-      res.end(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          error: { code: -32001, message: "Session not found" },
-          id: null,
-        })
-      );
-      return;
+      return sendSessionNotFound(res);
     }
 
     // The body has to be read before the session is built, so that an
@@ -304,6 +299,33 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
         return false;
       }
     };
+
+    // A session runs as the credential that opened it. Requests that carry a
+    // credential must still resolve to that same key: an OAuth token that was
+    // revoked (connector disconnected) stops working mid-session instead of
+    // riding the session it opened, and a session id cannot be used with
+    // someone else's credential. An outage of the token backend does not end
+    // a session that was already authenticated.
+    if (session && req.headers["authorization"] !== undefined) {
+      let current: Awaited<ReturnType<typeof resolveAuth>> | undefined;
+      try {
+        current = await resolveAuth(req.headers["authorization"], authDeps);
+      } catch (err) {
+        if (!(err instanceof UpstreamUnavailableError)) throw err;
+        current = undefined;
+      }
+      if (current === null) {
+        return sendUnauthorized(
+          res,
+          oauthCfg.enabled,
+          oauthCfg.issuer,
+          oauthCfg.enabled && hasOAuthBearer(req.headers["authorization"])
+        );
+      }
+      if (current && keyFingerprint(current.apiKey) !== session.keyId) {
+        return sendSessionNotFound(res);
+      }
+    }
 
     if (!session) {
       let resolution;
@@ -368,7 +390,11 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
 
       if (!(await readBody())) return;
 
-      const client = new UploadPostMcpClient({ apiKey: resolution.apiKey, baseUrl: opts.baseUrl });
+      const client = new UploadPostMcpClient({
+        apiKey: resolution.apiKey,
+        baseUrl: opts.baseUrl,
+        allowLocalFiles: ALLOW_LOCAL_FILES,
+      });
       const server = opts.buildServer(client, {
         ...clientInfoFromInitialize(body),
         userAgent: req.headers["user-agent"],
@@ -503,6 +529,18 @@ function sendBodyTooLarge(req: IncomingMessage, res: ServerResponse): void {
   );
   // Discard whatever of the body is still unread; the connection closes.
   req.resume();
+}
+
+function sendSessionNotFound(res: ServerResponse): void {
+  res.statusCode = 404;
+  res.setHeader("content-type", "application/json");
+  res.end(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      error: { code: -32001, message: "Session not found" },
+      id: null,
+    })
+  );
 }
 
 function sendRateLimited(res: ServerResponse): void {
