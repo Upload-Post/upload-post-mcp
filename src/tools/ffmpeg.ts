@@ -10,7 +10,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
     {
       title: "Submit FFmpeg processing job",
       description:
-        "Submit a private FFmpeg processing job through Upload-Post. Provide `input_url` for one input, or `files` for multiple public URLs. Optionally provide `full_command` beginning with ffmpeg for explicit trim/transcode/watermark/thumbnail commands. Returns a `job_id` you can poll with `get_ffmpeg_job`.",
+        "Process media with FFmpeg on Upload-Post's encoding servers (trim, transcode, resize, watermark, concatenate, extract a thumbnail…). Inputs are public HTTP(S) URLs: `input_url` for one file, or `files` for several. They are downloaded into a working directory of their own for this job. `full_command` is one ffmpeg invocation using the placeholders `{input}` (or `{input0}`, `{input1}`… with several files) and `{output}`, e.g. `ffmpeg -i {input} -ss 5 -t 10 -c copy {output}`. It runs without a shell: it must start with `ffmpeg`, and shell metacharacters (; | & $ `), `..`, `file:` and absolute paths outside the job directory are rejected. The output is not posted anywhere; fetch it with download_ffmpeg_result. Returns a `job_id` you can poll with `get_ffmpeg_job`.",
       inputSchema: {
         input_url: z
           .string()
@@ -24,7 +24,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
         full_command: z
           .string()
           .optional()
-          .describe("Optional explicit command. Must start with `ffmpeg`; shell metacharacters are rejected by the API."),
+          .describe("Optional ffmpeg command with `{input}` / `{input0}`… and `{output}` placeholders. Must start with `ffmpeg`; shell metacharacters, `..`, `file:` and absolute paths are rejected."),
         output_filename: z
           .string()
           .optional()

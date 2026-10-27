@@ -207,7 +207,7 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
 {
   const account = fakeAccount({ uploadError: NOT_ASSOCIATED });
   const s = await connect(account);
-  const r = await s.call("upload_text", { user: "my_profile", platforms: ["x"], title: "hola" });
+  const r = await s.call("upload_text", { confirmed: true, user: "my_profile", platforms: ["x"], title: "hola" });
   assert.equal(r.isError, true);
   assert.match(r.text, /Username not associated with any profile/, "keeps the original API error");
   assert.match(r.text, /the profile "default" was just created/);
@@ -225,7 +225,7 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
     profiles: [{ username: "marca", social_accounts: { tiktok: { handle: "marca" } } }],
   });
   const s = await connect(account);
-  const r = await s.call("upload_photos", {
+  const r = await s.call("upload_photos", { confirmed: true,
     user: "Marca Oficial",
     platforms: ["tiktok"],
     photosPathsOrUrls: ["https://example.com/a.jpg"],
@@ -245,7 +245,7 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
     profiles: [{ username: "default", social_accounts: { tiktok: "" } }],
   });
   const s = await connect(account);
-  const r = await s.call("upload_text", { user: "juan", platforms: ["linkedin"], title: "x" });
+  const r = await s.call("upload_text", { confirmed: true, user: "juan", platforms: ["linkedin"], title: "x" });
   assert.match(r.text, /None of them has a connected social account yet/);
   assert.equal(r.result.connect_url, SIGNED, "the MCP-owned default profile gets a one-click link");
   assert.equal(called(account, "createUser").length, 0);
@@ -260,7 +260,7 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
     profiles: [{ username: "marca", social_accounts: { tiktok: "", youtube: { handle: "m" } } }],
   });
   const s = await connect(account);
-  const r = await s.call("upload_video", {
+  const r = await s.call("upload_video", { confirmed: true,
     user: "marca",
     platforms: ["tiktok"],
     videoPathOrUrl: "https://example.com/v.mp4",
@@ -280,7 +280,7 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
     profiles: [{ username: "marca", social_accounts: { instagram: { handle: "m", reauth_required: true } } }],
   });
   const s = await connect(account);
-  const r = await s.call("upload_text", { user: "marca", platforms: ["threads"], title: "x" });
+  const r = await s.call("upload_text", { confirmed: true, user: "marca", platforms: ["threads"], title: "x" });
   assert.match(r.text, /connection has expired and must be reconnected/);
   assert.match(r.text, /manage-users/);
   await s.close();
@@ -304,7 +304,7 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
     },
   });
   const s = await connect(account);
-  const r = await s.call("upload_video", {
+  const r = await s.call("upload_video", { confirmed: true,
     user: "marca",
     platforms: ["youtube", "tiktok"],
     videoPathOrUrl: "https://example.com/v.mp4",
@@ -320,7 +320,7 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
 {
   const account = fakeAccount({ uploadError: "Upload-Post API error: Daily limit reached" });
   const s = await connect(account);
-  const r = await s.call("upload_text", { user: "marca", platforms: ["x"], title: "x" });
+  const r = await s.call("upload_text", { confirmed: true, user: "marca", platforms: ["x"], title: "x" });
   assert.equal(r.text, "Upload-Post API error: Daily limit reached");
   assert.equal(called(account, "listUsers").length, 0);
   await s.close();
@@ -356,7 +356,7 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
 {
   const account = fakeAccount();
   const s = await connect(account, "openai-mcp");
-  const r = await s.call("upload_photos", {
+  const r = await s.call("upload_photos", { confirmed: true,
     user: "marca",
     platforms: ["instagram", "facebook"],
     photosPathsOrUrls: ["https://example.com/a.jpg", "/mnt/data/IMG_0001.jpeg"],
@@ -366,13 +366,13 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
   assert.match(r.text, /open_upload_studio with mediaType "photos"/);
   assert.match(r.text, /carousel/);
   assert.equal(called(account, "uploadPhotos").length, 0, "nothing is sent upstream");
-  const many = await s.call("upload_photos", {
+  const many = await s.call("upload_photos", { confirmed: true,
     user: "marca",
     platforms: ["instagram"],
     photosPathsOrUrls: ["sandbox:/mnt/data/a.png", "/mnt/data/b.png"],
   });
   assert.match(many.text, /2 items look like a hosted attachment path/);
-  const fine = await s.call("upload_photos", {
+  const fine = await s.call("upload_photos", { confirmed: true,
     user: "marca",
     platforms: ["instagram"],
     photosPathsOrUrls: ["https://example.com/a.jpg", "https://example.com/b.jpg"],
@@ -386,7 +386,7 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
   await s.close();
 
   const other = await connect(fakeAccount(), "claude-ai");
-  const o = await other.call("upload_photos", {
+  const o = await other.call("upload_photos", { confirmed: true,
     user: "marca",
     platforms: ["instagram"],
     photosPathsOrUrls: ["/mnt/data/x.jpg"],

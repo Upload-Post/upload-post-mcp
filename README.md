@@ -119,7 +119,13 @@ What a TikTok account can do depends on how it is connected. `list_users` return
 
 `get_media` and `get_cached_post_analytics` are cursor-paginated: feed the response's `next_cursor` back as `cursor` until `has_more` is false. LinkedIn, Discord and Telegram do not support media cursors and accept `limit` only. Prefer `get_cached_post_analytics` over `get_post_analytics` when scanning many posts — it replays previously fetched results and so avoids the live analytics rate limit of 100 requests / 5 minutes. Only contains posts previously fetched through a live per-post endpoint; there is no background refresh, so captured_at is the last time that post was read live.
 
-FFmpeg jobs accept one public URL through `input_url` or multiple URLs through `files`. Poll `get_ffmpeg_job` until completion, then call `download_ffmpeg_result`; it returns the result URL without streaming the processed binary through MCP.
+FFmpeg jobs accept one public URL through `input_url` or multiple URLs through `files`. They run on Upload-Post's encoding servers, each in its own working directory. `full_command` is a single ffmpeg invocation with `{input}` (or `{input0}`, `{input1}`…) and `{output}` placeholders, run without a shell: it must start with `ffmpeg`, and shell metacharacters, `..`, `file:` and absolute paths outside the job directory are rejected. Poll `get_ffmpeg_job` until completion, then call `download_ffmpeg_result`; it returns the result URL without streaming the processed binary through MCP. Nothing is posted until you pass that URL to an upload tool.
+
+### Confirmation before acting
+
+Tools that publish or reach other people as the user run in two steps. Called without `confirmed: true`, they return `status: "confirmation_required"` with a preview of exactly what would go out (text, media, platforms or recipients, buttons, keywords, timing) and do nothing; the model shows it to the user and repeats the call with `confirmed: true` once they approve. This covers `upload_video`, `upload_photos`, `upload_text`, `upload_document`, `send_dm`, `reply_to_comment`, `public_reply_to_comment`, `create_comment`, `reply_to_google_business_review`, `edit_comment`, `unpublish_post`, `start_autodm` and `manage_autodms` with `action: "start"`, plus `comment_action` / `hide_comment` when they edit a comment or ban its author. `delete_user` deletes only when `confirm_username` repeats the profile name. ChatGPT, which asks the user before every write tool, keeps the single-step tools.
+
+Reddit publishing is switched off while the Reddit app is unavailable: `reddit` is not offered as a platform and asking for it fails with `reddit_unavailable`. Self-hosters can set `UPLOAD_POST_REDDIT_ENABLED=true` once it is back.
 
 ### ChatGPT video upload UI
 
@@ -270,7 +276,7 @@ To revoke a connector's access at any time, open **Connected Apps** in [app.uplo
 - In `--http` mode the server writes one stderr line per failed request and per OAuth/well-known request (method, path, status, auth scheme, user agent — never query strings or credentials). Set `UPLOAD_POST_MCP_ACCESS_LOG=all` to log every request or `off` to disable it.
 - If ChatGPT shows `redirect_uri not on allow-list` during OAuth, add the exact `redirect_uri` from the failing authorize request to the Upload-Post backend OAuth redirect allow-list. For ChatGPT clients this is typically on `https://chatgpt.com/.../oauth/callback` or `https://chat.openai.com/.../oauth/callback`.
 - OAuth redirect callbacks are pre-allowed for: Claude (claude.ai/claude.com), ChatGPT, Cursor, VS Code (stable + Insiders), Smithery, Glama, Toolhouse, Perplexity (standard + Enterprise), Mistral Studio debugger and Postman — plus any `http://localhost`/loopback redirect (RFC 8252), which covers Claude Code, Windsurf, Cline, Continue, Goose, Gemini CLI and other `mcp-remote`-style clients. Platforms without a documented fixed callback (e.g. Grok, Le Chat production) are added on request.
-- All tools declare MCP `readOnlyHint`/`destructiveHint` annotations so clients can surface confirmation prompts for destructive operations.
+- All tools declare MCP `readOnlyHint`/`destructiveHint` annotations so clients can surface confirmation prompts for destructive operations, and the tools that publish or message people also require an explicit `confirmed: true` (see [Confirmation before acting](#confirmation-before-acting)).
 
 Report a security issue: **info@upload-post.com** (encrypted PGP available on request).
 

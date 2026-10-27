@@ -14,13 +14,13 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
   server.registerTool(
     "get_account_info",
     {
-      title: "Validate API key & get account",
+      title: "Get account info",
       description:
-        "Validate the current API key and return account information. Useful as a first call to confirm credentials before doing real work.",
+        "Return the connected Upload-Post account: email, plan and usage limits. Useful as a first call to confirm the connection works before doing real work.",
       inputSchema: {},
       outputSchema: genericResultOutputSchema,
       annotations: {
-        title: "Validate API key & get account",
+        title: "Get account info",
         readOnlyHint: true,
         openWorldHint: false,
         destructiveHint: false,

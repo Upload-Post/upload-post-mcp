@@ -133,7 +133,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
     )
   );
 
-  server.registerTool(
+  const deleteTool = server.registerTool(
     "delete_media_upload",
     {
       title: "Delete media upload",
@@ -174,6 +174,8 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
       createTool.update({ description: CREATE_DESCRIPTION_OTHER, _meta: modelVisible(createTool._meta) });
       completeTool.update({ description: COMPLETE_DESCRIPTION_OTHER, _meta: modelVisible(completeTool._meta) });
       getTool.update({ _meta: modelVisible(getTool._meta) });
+      // Only the Studio widget deletes its own staging uploads; staged media expires after 24 h anyway.
+      deleteTool.disable();
     },
   };
 }

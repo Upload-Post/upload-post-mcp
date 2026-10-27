@@ -15,6 +15,7 @@ import { registerQueueTools } from "./tools/queue.js";
 import { registerUploadStudio } from "./tools/upload_studio.js";
 import { registerMediaUploadTools } from "./tools/media_uploads.js";
 import { UPGRADE_URL } from "./plan.js";
+import { applyConfirmationGates } from "./confirm.js";
 import {
   detectClientProfile,
   isChatGpt,
@@ -83,6 +84,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   // client has introduced itself, shape the surface for that host: ChatGPT keeps
   // the Studio widget and loses the multi-action tools; everyone else gets the staging tools exposed to the
   // model and no widget metadata that would fail to render.
+  let gated = false;
   const applyProfile = (info: ClientInfoLike | undefined): void => {
     const profile = detectClientProfile(info);
     if (ctx.profile?.kind === profile.kind && ctx.profile.name === profile.name) return;
@@ -101,6 +103,11 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     studio.resource.disable();
     uploadTools.applyClientProfile(ctx);
     mediaTools.applyClientProfile(ctx);
+    if (!gated) {
+      // Last, so the confirmation note lands after the per-client description rewrites.
+      applyConfirmationGates(server);
+      gated = true;
+    }
   };
 
   // HTTP sessions know the client from the `initialize` body before any

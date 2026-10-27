@@ -96,7 +96,7 @@ assert.equal(upgradeUrlFrom("no link here"), UPGRADE_URL, "falls back to the Bas
 {
   const account = fakeAccount(MONTHLY);
   const s = await connect(account);
-  const r = await s.call("upload_text", { user: "marca", title: "Hola", platforms: ["x", "linkedin", "threads"] });
+  const r = await s.call("upload_text", { confirmed: true, user: "marca", title: "Hola", platforms: ["x", "linkedin", "threads"] });
   assert.equal(r.isError, true);
   assert.equal(r.result.error_code, "monthly_limit_reached");
   assert.equal(r.result.upgrade_url, UPGRADE_URL);
@@ -116,7 +116,7 @@ assert.equal(upgradeUrlFrom("no link here"), UPGRADE_URL, "falls back to the Bas
 // --- monthly allowance used up, nothing left -------------------------------------
 {
   const s = await connect(fakeAccount(MONTHLY_NONE));
-  const r = await s.call("upload_text", { user: "marca", title: "Hola", platforms: ["x"] });
+  const r = await s.call("upload_text", { confirmed: true, user: "marca", title: "Hola", platforms: ["x"] });
   assert.equal(r.result.remaining, 0);
   assert.doesNotMatch(r.result.next_step, /fewer platforms/, "nothing left to fit into");
   assert.match(r.result.next_step, /once they confirm they have upgraded\.$/);
@@ -127,7 +127,7 @@ assert.equal(upgradeUrlFrom("no link here"), UPGRADE_URL, "falls back to the Bas
 {
   const account = fakeAccount(TIKTOK);
   const s = await connect(account);
-  const r = await s.call("upload_photos", {
+  const r = await s.call("upload_photos", { confirmed: true,
     user: "marca",
     title: "Hola",
     photosPathsOrUrls: ["https://example.invalid/a.jpg"],
@@ -148,7 +148,7 @@ assert.equal(upgradeUrlFrom("no link here"), UPGRADE_URL, "falls back to the Bas
 // --- TikTok only ---------------------------------------------------------------------
 {
   const s = await connect(fakeAccount(TIKTOK));
-  const r = await s.call("upload_photos", { user: "marca", title: "Hola", photosPathsOrUrls: ["https://example.invalid/a.jpg"], platforms: ["tiktok"] });
+  const r = await s.call("upload_photos", { confirmed: true, user: "marca", title: "Hola", photosPathsOrUrls: ["https://example.invalid/a.jpg"], platforms: ["tiktok"] });
   assert.doesNotMatch(r.result.next_step, /Offer to publish now/);
   assert.match(r.result.next_step, /Publish to TikTok once they confirm they have upgraded\./);
   await s.close();
@@ -157,7 +157,7 @@ assert.equal(upgradeUrlFrom("no link here"), UPGRADE_URL, "falls back to the Bas
 // --- other errors are left alone ---------------------------------------------------------
 {
   const s = await connect(fakeAccount("Upload-Post API error: Video duration exceeds the maximum"));
-  const r = await s.call("upload_text", { user: "marca", title: "Hola", platforms: ["x"] });
+  const r = await s.call("upload_text", { confirmed: true, user: "marca", title: "Hola", platforms: ["x"] });
   assert.equal(r.isError, true);
   assert.equal(r.result, undefined, "no plan guidance for unrelated errors");
   assert.match(r.text, /Video duration exceeds the maximum/);
