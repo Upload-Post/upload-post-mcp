@@ -185,6 +185,12 @@ npx @modelcontextprotocol/inspector node dist/index.js
 | `UPLOAD_POST_API_KEY`     | stdio   | — (required)                       | Single user's Upload-Post API key. **Ignored in `--http` mode** — keys come per request. |
 | `UPLOAD_POST_BASE_URL`    | both    | `https://api.upload-post.com/api`  | Override for self-hosted / staging.      |
 | `UPLOAD_POST_MCP_PORT`    | http    | `8080`                             | Port for `--http` mode.                  |
+| `UPLOAD_POST_MCP_MAX_BODY_MB` | http | `10`                            | Largest `/mcp` request body accepted; bigger ones get `413`. |
+| `UPLOAD_POST_MCP_VALIDATE_API_KEYS` | http | `true`                    | Check a pasted API key once against `GET /uploadposts/me` (cached) before opening a session for it; a rejected key gets `401`. |
+| `UPLOAD_POST_MCP_KEY_CHECK_TTL_MS` | http | `600000`                   | How long an accepted key is trusted before it is checked again. |
+| `UPLOAD_POST_MCP_MAX_SESSIONS` | http | `2000`                         | Live sessions kept in memory; past it the longest-idle one is closed. |
+| `UPLOAD_POST_MCP_MAX_SESSIONS_PER_KEY` | http | `200`                  | Live sessions per credential; past it that credential's own longest-idle session is closed. |
+| `UPLOAD_POST_MCP_SESSION_TTL_MS` | http | `1800000`                    | Idle time after which a session is closed. |
 | `OPENAI_APPS_CHALLENGE_TOKEN` | http | Current Upload-Post challenge token | Optional override for ChatGPT Apps domain verification at `/.well-known/openai-apps-challenge`. |
 
 CLI flags:
@@ -246,7 +252,7 @@ curl -i -X POST http://localhost:8080/mcp \
 - Prefer **public URLs** over local paths when uploading — local paths only work if the MCP server runs on the user's machine.
 - In ChatGPT Apps, prefer `open_upload_studio` for user-selected video and image files. It avoids local-path handoff issues by uploading to short-lived Upload-Post/R2 staging, then passing temporary media URLs to `upload_video` / `upload_photos`.
 - In any other client with a local file: if the client can run HTTP requests (Claude Code, Cursor, a script), stage it with `create_media_upload` → PUT the bytes to `upload_url` → `complete_media_upload`, then pass the returned `media_url` to `upload_video`. Hosted chats without that ability (claude.ai) need a public HTTPS URL or the dashboard at https://app.upload-post.com.
-- To send video **bytes directly** (a client that holds the file rather than a URL), pass `videoBase64` to `upload_video` instead of `videoPathOrUrl`. The server writes it to a temp file, uploads, then deletes it. Inline bytes are capped at `UPLOAD_POST_MAX_INLINE_MB` (default 100 MB) — for larger videos use a public URL.
+- To send video **bytes directly** (a client that holds the file rather than a URL), pass `videoBase64` to `upload_video` instead of `videoPathOrUrl`. The server writes it to a temp file, uploads, then deletes it. Inline bytes are capped at `UPLOAD_POST_MAX_INLINE_MB` (default 100 MB), and in `--http` mode the whole request at `UPLOAD_POST_MCP_MAX_BODY_MB` (default 10 MB, roughly 7 MB of video once base64-encoded) — for larger videos use a public URL.
 - Always create the profile first (`create_user`) and connect socials in the Upload-Post dashboard before publishing.
 - For scheduled posts, pass ISO 8601 dates with timezone, e.g. `"2026-12-25T10:00:00Z"` + `"timezone": "Europe/Madrid"`.
 

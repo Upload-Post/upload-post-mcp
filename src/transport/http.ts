@@ -19,6 +19,8 @@ import { sendUpstreamUnavailable } from "../oauth/http_utils.js";
 import { IntrospectCache } from "../oauth/introspect_cache.js";
 import { hasOAuthBearer, resolveAuth } from "../oauth/auth_resolver.js";
 import { stripSchemaDialect } from "./schema_dialect.js";
+import { ApiKeyChecker, keyFingerprint } from "./api_key_check.js";
+import { DEFAULT_BASE_URL } from "../client.js";
 
 export interface HttpOptions {
   port: number;
@@ -36,6 +38,8 @@ interface Session {
   transport: StreamableHTTPServerTransport;
   server: McpServer;
   lastSeenAt: number;
+  /** SHA-256 of the API key the session runs as, for the per-key cap. */
+  keyId: string;
 }
 
 // Most MCP clients never send the DELETE that ends a session — they just
@@ -48,6 +52,17 @@ const SESSION_IDLE_TTL_MS = Number(
 );
 const SESSION_SWEEP_INTERVAL_MS = 60 * 1000;
 const MAX_SESSIONS = Number(process.env.UPLOAD_POST_MCP_MAX_SESSIONS ?? 2000);
+// One credential cannot hold more than this many live sessions: past it, its
+// own longest-idle session is recycled, so no single key can fill the global
+// cap and push other users' sessions out.
+const MAX_SESSIONS_PER_KEY = Number(process.env.UPLOAD_POST_MCP_MAX_SESSIONS_PER_KEY ?? 200);
+// Largest JSON-RPC request accepted on /mcp. Media belongs in a URL; inline
+// bytes over this size are refused with a 413 instead of being buffered.
+const MAX_BODY_BYTES = Math.floor(Number(process.env.UPLOAD_POST_MCP_MAX_BODY_MB ?? 10) * 1024 * 1024);
+// Raw API keys are checked against the API once before a session is built
+// for them (cached). Set to "false" to skip the check (e.g. offline testing).
+const VALIDATE_API_KEYS = (process.env.UPLOAD_POST_MCP_VALIDATE_API_KEYS ?? "true").toLowerCase() !== "false";
+const KEY_CHECK_TTL_MS = Number(process.env.UPLOAD_POST_MCP_KEY_CHECK_TTL_MS ?? 10 * 60 * 1000);
 
 const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
 
@@ -96,6 +111,10 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
   const upstream = new UpstreamOAuthClient(oauthCfg);
   const introspectCache = new IntrospectCache(oauthCfg.introspectCacheTtlMs);
   const authDeps = { cfg: oauthCfg, upstream, cache: introspectCache };
+  const keyChecker = new ApiKeyChecker({
+    baseUrl: opts.baseUrl || DEFAULT_BASE_URL,
+    validTtlMs: KEY_CHECK_TTL_MS,
+  });
 
   // ----- Last-resort process guards -----------------------------------------
   // A single request-scoped throw/rejection (transient upstream error, a client
@@ -257,8 +276,23 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     const readBody = async (): Promise<boolean> => {
       if (bodyRead || method !== "POST") return true;
       bodyRead = true;
+      const declared = Number(req.headers["content-length"] ?? 0);
+      if (declared > MAX_BODY_BYTES) {
+        sendBodyTooLarge(req, res);
+        return false;
+      }
+      // No (or a lying) Content-Length: stop keeping chunks once over the
+      // cap and drain the rest, so the 413 still reaches the client.
       const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(chunk as Buffer);
+      let total = 0;
+      for await (const chunk of req) {
+        total += (chunk as Buffer).length;
+        if (total <= MAX_BODY_BYTES) chunks.push(chunk as Buffer);
+      }
+      if (total > MAX_BODY_BYTES) {
+        sendBodyTooLarge(req, res);
+        return false;
+      }
       const raw = Buffer.concat(chunks).toString("utf8");
       if (!raw.length) return true;
       try {
@@ -293,6 +327,31 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
         );
       }
 
+      // OAuth tokens were just resolved upstream; a pasted key has not been
+      // looked at by anyone yet. Check it once (cached) before it gets a session.
+      if (VALIDATE_API_KEYS && resolution.source !== "oauth") {
+        let verdict;
+        try {
+          verdict = await keyChecker.check(resolution.apiKey);
+        } catch (err) {
+          if (err instanceof UpstreamUnavailableError) {
+            return sendUpstreamUnavailable(res);
+          }
+          throw err;
+        }
+        if (verdict === "invalid") {
+          return sendUnauthorized(res, oauthCfg.enabled, oauthCfg.issuer, false, true);
+        }
+        if (verdict === "rate_limited") {
+          return sendRateLimited(res);
+        }
+      }
+
+      const keyId = keyFingerprint(resolution.apiKey);
+
+      // Per-key cap: recycle this key's own longest-idle session.
+      evictOldest(sessions, (s) => s.keyId === keyId, MAX_SESSIONS_PER_KEY);
+
       // Cap enforcement: evict the longest-idle session rather than refusing
       // the new one — the evicted client can always re-initialize.
       if (sessions.size >= MAX_SESSIONS) {
@@ -318,7 +377,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
         new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (id) => {
-            sessions.set(id, { transport, server, lastSeenAt: Date.now() });
+            sessions.set(id, { transport, server, lastSeenAt: Date.now(), keyId });
           },
         })
       );
@@ -326,7 +385,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
         if (transport.sessionId) sessions.delete(transport.sessionId);
       };
       await server.connect(transport);
-      session = { transport, server, lastSeenAt: Date.now() };
+      session = { transport, server, lastSeenAt: Date.now(), keyId };
     }
 
     if (!(await readBody())) return;
@@ -356,6 +415,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
 
   const sweeper = setInterval(() => {
     introspectCache.purgeExpired();
+    keyChecker.purgeExpired();
     const cutoff = Date.now() - SESSION_IDLE_TTL_MS;
     let swept = 0;
     for (const [id, s] of sessions) {
@@ -411,6 +471,53 @@ function closeSession(sessions: Map<string, Session>, id: string): void {
 }
 
 /**
+ * When `match` sessions number `cap` or more, close the longest-idle of them
+ * until there is room for one more.
+ */
+function evictOldest(
+  sessions: Map<string, Session>,
+  match: (s: Session) => boolean,
+  cap: number
+): void {
+  const owned = [...sessions].filter(([, s]) => match(s));
+  if (owned.length < cap) return;
+  owned.sort((a, b) => a[1].lastSeenAt - b[1].lastSeenAt);
+  for (const [id] of owned.slice(0, owned.length - cap + 1)) closeSession(sessions, id);
+}
+
+function sendBodyTooLarge(req: IncomingMessage, res: ServerResponse): void {
+  res.statusCode = 413;
+  res.setHeader("content-type", "application/json");
+  res.setHeader("connection", "close");
+  res.end(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      error: {
+        code: -32600,
+        message:
+          `Request body is larger than ${Math.round(MAX_BODY_BYTES / 1024 / 1024)} MB. ` +
+          "Pass media as a public URL (videoPathOrUrl / photo URLs) instead of inline bytes.",
+      },
+      id: null,
+    })
+  );
+  // Discard whatever of the body is still unread; the connection closes.
+  req.resume();
+}
+
+function sendRateLimited(res: ServerResponse): void {
+  res.statusCode = 429;
+  res.setHeader("retry-after", "60");
+  res.setHeader("content-type", "application/json");
+  res.end(
+    JSON.stringify({
+      error: "rate_limited",
+      error_description: "Too many requests for this API key. Retry in a minute.",
+    })
+  );
+}
+
+/**
  * 401 with both a legacy `ApiKey` challenge and (when OAuth is enabled) the
  * `Bearer resource_metadata=...` challenge that claude.ai needs to discover
  * the authorization server. Sending BOTH keeps the existing API-key flow
@@ -421,7 +528,8 @@ function sendUnauthorized(
   res: ServerResponse,
   oauthEnabled: boolean,
   issuer: string,
-  invalidToken = false
+  invalidToken = false,
+  invalidApiKey = false
 ): void {
   const challenges: string[] = [];
   if (oauthEnabled) {
@@ -441,6 +549,16 @@ function sendUnauthorized(
       JSON.stringify({
         error: "invalid_token",
         error_description: "The access token expired or was revoked. Refresh it or reconnect.",
+      })
+    );
+    return;
+  }
+  if (invalidApiKey) {
+    res.end(
+      JSON.stringify({
+        error: "invalid_api_key",
+        error_description:
+          "Upload-Post rejected this API key. Copy a current key from the API Keys page of your Upload-Post dashboard.",
       })
     );
     return;

@@ -485,7 +485,7 @@ function uploadVideoShape(videoPathOrUrlDescription: string) {
       .string()
       .optional()
       .describe(
-        "Video bytes as base64 (or a data: URI). Provide this OR videoPathOrUrl. The server writes it to a temp file, uploads, then deletes it. Capped by UPLOAD_POST_MAX_INLINE_MB (default 100)."
+        "Video bytes as base64 (or a data: URI). Provide this OR videoPathOrUrl. The server writes it to a temp file, uploads, then deletes it. Capped by UPLOAD_POST_MAX_INLINE_MB (default 100); over HTTP the whole request is also capped by UPLOAD_POST_MCP_MAX_BODY_MB (default 10), so use videoPathOrUrl for anything larger."
       ),
     videoFilename: z
       .string()

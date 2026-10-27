@@ -42,7 +42,7 @@ function causeOf(err: unknown): { code?: string; message: string } {
  * underlying cause: the bare "fetch failed" it used to leave behind told us
  * nothing about why.
  */
-async function fetchUpstream(url: string, init: RequestInit, label: string): Promise<Response> {
+export async function fetchUpstream(url: string, init: RequestInit, label: string): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await fetch(url, { ...init, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
