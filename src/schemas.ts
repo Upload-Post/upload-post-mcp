@@ -4,68 +4,79 @@ import { z } from "zod";
 export const REDDIT_UNAVAILABLE =
   "Reddit posting is currently unavailable (error_code=reddit_unavailable) until the Reddit app is restored. Do not use reddit as a publish target.";
 
-export const VideoPlatform = z
-  .enum([
-    "tiktok",
-    "instagram",
-    "youtube",
-    "linkedin",
-    "facebook",
-    "pinterest",
-    "threads",
-    "reddit",
-    "bluesky",
-    "x",
-    "google_business",
-    "discord",
-    "telegram",
-    "mastodon",
-    "wordpress",
-  ])
-  .describe(`Target social platform. ${REDDIT_UNAVAILABLE}`);
+/**
+ * Reddit is a state, not an instruction: while the app is down it is not a
+ * valid publish target at all, and asking for it fails with reddit_unavailable.
+ * Set UPLOAD_POST_REDDIT_ENABLED=true once the Reddit app is restored.
+ */
+export const REDDIT_ENABLED = /^(1|true|yes|on)$/i.test(process.env.UPLOAD_POST_REDDIT_ENABLED?.trim() ?? "");
 
-export const PhotoPlatform = z
-  .enum([
-    "tiktok",
-    "instagram",
-    "linkedin",
-    "facebook",
-    "pinterest",
-    "threads",
-    "reddit",
-    "bluesky",
-    "x",
-    "google_business",
-    "discord",
-    "telegram",
-    "mastodon",
-    "lemmy",
-    "wordpress",
-  ])
-  .describe(`Target social platform. ${REDDIT_UNAVAILABLE}`);
+function publishPlatforms<T extends string>(values: readonly [T, ...T[]]) {
+  const allowed = (REDDIT_ENABLED ? values : values.filter((v) => v !== "reddit")) as [T, ...T[]];
+  return z.enum(allowed, {
+    errorMap: (issue, ctx) =>
+      issue.code === "invalid_enum_value" && issue.received === "reddit"
+        ? { message: "reddit_unavailable: Reddit publishing is disabled until the Reddit app is restored." }
+        : { message: ctx.defaultError },
+  });
+}
 
-export const TextPlatform = z
-  .enum([
-    "x",
-    "linkedin",
-    "facebook",
-    "threads",
-    "reddit",
-    "bluesky",
-    "google_business",
-    "discord",
-    "telegram",
-    "slack",
-    "mastodon",
-    "nostr",
-    "lemmy",
-    "devto",
-    "hashnode",
-    "wordpress",
-    "whop",
-    "listmonk",
-  ])
-  .describe(`Target social platform. ${REDDIT_UNAVAILABLE}`);
+export const VideoPlatform = publishPlatforms([
+  "tiktok",
+  "instagram",
+  "youtube",
+  "linkedin",
+  "facebook",
+  "pinterest",
+  "threads",
+  "reddit",
+  "bluesky",
+  "x",
+  "google_business",
+  "discord",
+  "telegram",
+  "mastodon",
+  "wordpress",
+]).describe("Target social platform.");
+
+export const PhotoPlatform = publishPlatforms([
+  "tiktok",
+  "instagram",
+  "linkedin",
+  "facebook",
+  "pinterest",
+  "threads",
+  "reddit",
+  "bluesky",
+  "x",
+  "google_business",
+  "discord",
+  "telegram",
+  "mastodon",
+  "lemmy",
+  "wordpress",
+]).describe("Target social platform.");
+
+export const TextPlatform = publishPlatforms([
+  "x",
+  "linkedin",
+  "facebook",
+  "threads",
+  "reddit",
+  "bluesky",
+  "google_business",
+  "discord",
+  "telegram",
+  "slack",
+  "mastodon",
+  "nostr",
+  "lemmy",
+  "devto",
+  "hashnode",
+  "wordpress",
+  "whop",
+  "listmonk",
+]).describe("Target social platform.");
 
 export const AnalyticsPlatform = z.enum([
   "tiktok",

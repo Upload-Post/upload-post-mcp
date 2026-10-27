@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RegisteredResource, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { PhotoPlatform, REDDIT_UNAVAILABLE, VideoPlatform } from "../schemas.js";
+import { PhotoPlatform, REDDIT_ENABLED, REDDIT_UNAVAILABLE, VideoPlatform } from "../schemas.js";
 
 // The URI keeps its historical "video" name: ChatGPT caches the template by URI.
 const UPLOAD_STUDIO_URI = "ui://upload-post/video-upload-studio.html";
@@ -572,8 +572,7 @@ const uploadStudioHtml = `<!doctype html>
           ["facebook", "Facebook", true, true],
           ["pinterest", "Pinterest", true, true],
           ["threads", "Threads", true, true],
-          ["reddit", "Reddit", true, true],
-          ["bluesky", "Bluesky", true, true],
+${REDDIT_ENABLED ? `          ["reddit", "Reddit", true, true],\n` : ""}          ["bluesky", "Bluesky", true, true],
           ["x", "X", true, true],
           ["google_business", "Google Business", true, true],
           ["discord", "Discord", true, true],

@@ -269,8 +269,7 @@ const VideoPlatformOptions = z
   })
   .passthrough()
   .describe(
-    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (youtubeTitle, tiktokTitle, youtubeDescription, instagramFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream. " +
-      REDDIT_UNAVAILABLE
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (youtubeTitle, tiktokTitle, youtubeDescription, instagramFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
   );
 
 const PhotoPlatformOptions = z
@@ -334,13 +333,12 @@ const PhotoPlatformOptions = z
       .string()
       .optional()
       .describe("Media items per Threads post, e.g. '5,5'. Total must equal file count."),
-    redditSubreddit: z.string().optional().describe(REDDIT_UNAVAILABLE),
-    redditFlairId: z.string().optional().describe(REDDIT_UNAVAILABLE),
+    redditSubreddit: z.string().optional().describe("Reddit only."),
+    redditFlairId: z.string().optional().describe("Reddit only."),
   })
   .passthrough()
   .describe(
-    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (instagramTitle, xFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream. " +
-      REDDIT_UNAVAILABLE
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (instagramTitle, xFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
   );
 
 const TextPlatformOptions = z
@@ -361,14 +359,13 @@ const TextPlatformOptions = z
       .optional()
       .describe("Who can reply to the X poll."),
     xCardUri: z.string().optional().describe("Card URI for Twitter Cards."),
-    redditSubreddit: z.string().optional().describe(REDDIT_UNAVAILABLE),
-    redditFlairId: z.string().optional().describe(REDDIT_UNAVAILABLE),
-    redditLinkUrl: z.string().optional().describe(REDDIT_UNAVAILABLE),
+    redditSubreddit: z.string().optional().describe("Reddit only."),
+    redditFlairId: z.string().optional().describe("Reddit only."),
+    redditLinkUrl: z.string().optional().describe("Reddit only."),
   })
   .passthrough()
   .describe(
-    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (xTitle, linkedinTitle, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream. " +
-      REDDIT_UNAVAILABLE
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (xTitle, linkedinTitle, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
   );
 
 function truthyFlag(value: unknown): boolean {
@@ -501,7 +498,7 @@ function uploadVideoShape(videoPathOrUrlDescription: string) {
       .array(VideoPlatform)
       .min(1)
       .describe(
-        `Required array of platform identifiers, e.g. ['instagram']. Never pass a single string. ${REDDIT_UNAVAILABLE}`
+        "Required array of platform identifiers, e.g. ['instagram']. Never pass a single string."
       ),
     title: z.string().optional().describe("Caption / title."),
     description: z.string().optional(),
@@ -527,8 +524,6 @@ const UPLOAD_VIDEO_DESCRIPTION_CHATGPT =
 
 const UPLOAD_VIDEO_DESCRIPTION_OTHER =
   "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.). " +
-  REDDIT_UNAVAILABLE +
-  " " +
   LOCAL_FILE_GUIDANCE;
 
 const VIDEO_PATH_OR_URL_DESCRIPTION_CHATGPT =
@@ -549,8 +544,6 @@ const UPLOAD_PHOTOS_DESCRIPTION_CHATGPT =
 const UPLOAD_PHOTOS_DESCRIPTION_OTHER =
   "Publish one or more photos (single image or carousel; items are published in array order). Each item in `photosPathsOrUrls` must be a public/signed HTTPS URL (a staged `media_url` from complete_media_upload works), or an absolute local path only when the MCP server runs on the same machine as the file. " +
   PER_PLATFORM_CAPTIONS +
-  " " +
-  REDDIT_UNAVAILABLE +
   " " +
   LOCAL_FILE_GUIDANCE;
 
@@ -642,7 +635,7 @@ export function registerUploadTools(
         platforms: z
           .array(PhotoPlatform)
           .min(1)
-          .describe(`Required array of platform identifiers. ${REDDIT_UNAVAILABLE}`),
+          .describe("Required array of platform identifiers."),
         title: z.string().optional(),
         description: z.string().optional(),
         firstComment: z
@@ -704,15 +697,14 @@ export function registerUploadTools(
     {
       title: "Upload text post",
       description:
-        "Publish a text-only post. `linkUrl` (or platform-specific *LinkUrl) attaches a link preview where supported. " +
-        REDDIT_UNAVAILABLE,
+        "Publish a text-only post. `linkUrl` (or platform-specific *LinkUrl) attaches a link preview where supported.",
       inputSchema: {
         title: z.string().describe("Post text / caption."),
         user: z.string(),
         platforms: z
           .array(TextPlatform)
           .min(1)
-          .describe(`Required array of platform identifiers. ${REDDIT_UNAVAILABLE}`),
+          .describe("Required array of platform identifiers."),
         linkUrl: z
           .string()
           .optional()

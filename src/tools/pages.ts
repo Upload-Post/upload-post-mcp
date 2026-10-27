@@ -277,7 +277,7 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
     {
       title: "Get detailed Reddit posts",
       description:
-        `${REDDIT_UNAVAILABLE} Recent Reddit posts published from a profile, with the platform-side metadata (subreddit, flair, score, …).`,
+        `Recent Reddit posts published from a profile, with the platform-side metadata (subreddit, flair, score, …). ${REDDIT_UNAVAILABLE}`,
       inputSchema: {
         profile: z
           .string()
