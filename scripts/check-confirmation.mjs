@@ -178,13 +178,13 @@ function assertPreview(r, label) {
     buttons: [{ title: "Guía", url: "https://example.com" }],
   });
   assertPreview(start, "manage_autodms start");
-  assert.match(start.result.action, /answers comments containing LINK .* with a private Instagram DM, every 15 minutes/);
+  assert.match(start.result.action, /answers comments containing LINK .* with a private Instagram DM, within seconds of each new comment/);
   assert.equal(start.result.preview.reply_message, "Aquí tienes el enlace");
 
   const everyone = await s.call("start_autodm", {
     profile_username: "marca", platform: "youtube", post_id: "v1", reply_message: "gracias",
   });
-  assert.match(everyone.result.action, /answers EVERY comment .* with a PUBLIC reply on youtube/);
+  assert.match(everyone.result.action, /answers EVERY comment .* with a PUBLIC reply on youtube, every 15 minutes/);
 
   assertPreview(await s.call("comment_action", {
     user: "marca", platform: "facebook", commentId: "c1", action: "edit", message: "nuevo",

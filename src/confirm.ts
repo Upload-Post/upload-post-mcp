@@ -61,9 +61,15 @@ const autodmStart = (a: Args): string => {
   const platform = str(a.platform ?? "instagram");
   const answer = platform === "instagram" ? "a private Instagram DM" : `a PUBLIC reply on ${platform}`;
   const keywords = a.trigger_keywords ? `comments containing ${list(a.trigger_keywords)}` : "EVERY comment";
+  // Instagram and TikTok comments arrive by webhook and are answered within
+  // seconds; the other networks are checked every `monitoring_interval` minutes.
+  const pace =
+    platform === "instagram" || platform === "tiktok"
+      ? "within seconds of each new comment"
+      : `every ${str(a.monitoring_interval ?? 15)} minutes`;
   return (
     `Starts a monitor on profile "${str(a.profile_username)}" that answers ${keywords} on ${str(a.post_url ?? a.post_id)} ` +
-    `with ${answer}, every ${str(a.monitoring_interval ?? 15)} minutes for up to 15 days, with nobody reviewing each message.`
+    `with ${answer}, ${pace}, for up to 15 days, with nobody reviewing each message.`
   );
 };
 
