@@ -3,6 +3,8 @@
  * Regression check for how the HTTP transport scopes a session:
  *   - a session runs as the credential that opened it: a request carrying a
  *     different credential gets a 404 (re-initialize), the same one passes;
+ *   - the session id is not a credential: a request (or DELETE) that carries
+ *     the id but no Authorization is refused with a 401 and reaches nothing;
  *   - on the multi-tenant host, media given as a filesystem path is refused
  *     before the SDK opens it (the path would name a file of the server);
  *     http(s) URLs still go through, and stdio keeps local paths.
@@ -39,14 +41,14 @@ const { buildServer } = await import("../dist/server.js");
 const { assertNoServerPaths } = await import("../dist/tools/upload.js");
 await runHttp({ port: mcpPort, baseUrl: `http://127.0.0.1:${apiPort}/api`, buildServer });
 
-function post(headers, body) {
+function post(headers, body, method = "POST") {
   return new Promise((resolve, reject) => {
     const req = request(
       {
         host: "127.0.0.1",
         port: mcpPort,
         path: "/mcp",
-        method: "POST",
+        method,
         headers: {
           "content-type": "application/json",
           accept: "application/json, text/event-stream",
@@ -96,6 +98,17 @@ async function main() {
   assert.equal(r.status, 404, `foreign credential must not reach the session: ${r.body}`);
   r = await post(inSession({ authorization: "Bearer key-b" }), ping);
   assert.equal(r.status, 404, r.body);
+
+  // 1b. The session id alone is not a credential: no Authorization, no call.
+  const callsBefore = apiCalls.length;
+  r = await post(
+    inSession({}),
+    call(5, "upload_text", { user: "u", platforms: ["x"], title: "t", confirmed: true })
+  );
+  assert.equal(r.status, 401, `a session id without a credential must be refused: ${r.body}`);
+  assert.deepEqual(apiCalls.slice(callsBefore), [], "nothing may reach the API without a credential");
+  r = await post(inSession({}), "", "DELETE");
+  assert.equal(r.status, 401, `an unauthenticated DELETE must not close the session: ${r.body}`);
 
   // 2. The opening credential (either scheme) keeps working.
   r = await post(inSession(auth("key-a")), ping);

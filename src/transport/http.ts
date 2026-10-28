@@ -20,6 +20,7 @@ import { IntrospectCache } from "../oauth/introspect_cache.js";
 import { hasOAuthBearer, resolveAuth } from "../oauth/auth_resolver.js";
 import { stripSchemaDialect } from "./schema_dialect.js";
 import { ApiKeyChecker, keyFingerprint } from "./api_key_check.js";
+import { createHash } from "node:crypto";
 import { DEFAULT_BASE_URL } from "../client.js";
 
 export interface HttpOptions {
@@ -40,6 +41,16 @@ interface Session {
   lastSeenAt: number;
   /** SHA-256 of the API key the session runs as, for the per-key cap. */
   keyId: string;
+  /**
+   * SHA-256 of the Authorization header last verified for this session. Only
+   * that exact credential may keep using the session while the token backend
+   * is unreachable.
+   */
+  authHash: string;
+}
+
+function credentialHash(header: string): string {
+  return createHash("sha256").update(header).digest("hex");
 }
 
 // Most MCP clients never send the DELETE that ends a session — they just
@@ -249,7 +260,6 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
 
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     let session = sessionId ? sessions.get(sessionId) : undefined;
-    if (session) session.lastSeenAt = Date.now();
 
     // A session id we don't know means the session was swept (idle TTL) or
     // belonged to a previous deploy. The spec (and every client) expects a
@@ -300,18 +310,28 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       }
     };
 
-    // A session runs as the credential that opened it. Requests that carry a
-    // credential must still resolve to that same key: an OAuth token that was
-    // revoked (connector disconnected) stops working mid-session instead of
-    // riding the session it opened, and a session id cannot be used with
-    // someone else's credential. An outage of the token backend does not end
-    // a session that was already authenticated.
-    if (session && req.headers["authorization"] !== undefined) {
+    // A session runs as the credential that opened it, and every request has
+    // to present it again: the session id is not a credential (it shows up in
+    // client and proxy logs), so a request without Authorization is refused
+    // like any unauthenticated call. The credential must still resolve to the
+    // session's key: an OAuth token that was revoked (connector disconnected)
+    // stops working mid-session, and a session id cannot be used with someone
+    // else's credential. An outage of the token backend does not end a session
+    // that was already authenticated, but only the exact credential last
+    // verified for it rides through the outage.
+    if (session) {
+      const header = req.headers["authorization"];
+      if (header === undefined) {
+        return sendUnauthorized(res, oauthCfg.enabled, oauthCfg.issuer, false);
+      }
       let current: Awaited<ReturnType<typeof resolveAuth>> | undefined;
       try {
-        current = await resolveAuth(req.headers["authorization"], authDeps);
+        current = await resolveAuth(header, authDeps);
       } catch (err) {
         if (!(err instanceof UpstreamUnavailableError)) throw err;
+        if (credentialHash(header) !== session.authHash) {
+          return sendUpstreamUnavailable(res);
+        }
         current = undefined;
       }
       if (current === null) {
@@ -319,12 +339,14 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
           res,
           oauthCfg.enabled,
           oauthCfg.issuer,
-          oauthCfg.enabled && hasOAuthBearer(req.headers["authorization"])
+          oauthCfg.enabled && hasOAuthBearer(header)
         );
       }
       if (current && keyFingerprint(current.apiKey) !== session.keyId) {
         return sendSessionNotFound(res);
       }
+      if (current) session.authHash = credentialHash(header);
+      session.lastSeenAt = Date.now();
     }
 
     if (!session) {
@@ -370,6 +392,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       }
 
       const keyId = keyFingerprint(resolution.apiKey);
+      const authHash = credentialHash(String(req.headers["authorization"] ?? ""));
 
       // Per-key cap: recycle this key's own longest-idle session.
       evictOldest(sessions, (s) => s.keyId === keyId, MAX_SESSIONS_PER_KEY);
@@ -403,15 +426,15 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
         new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (id) => {
-            sessions.set(id, { transport, server, lastSeenAt: Date.now(), keyId });
+            sessions.set(id, session!);
           },
         })
       );
       transport.onclose = () => {
         if (transport.sessionId) sessions.delete(transport.sessionId);
       };
+      session = { transport, server, lastSeenAt: Date.now(), keyId, authHash };
       await server.connect(transport);
-      session = { transport, server, lastSeenAt: Date.now(), keyId };
     }
 
     if (!(await readBody())) return;
