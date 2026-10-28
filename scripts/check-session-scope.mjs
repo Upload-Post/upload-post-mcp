@@ -33,6 +33,7 @@ const apiPort = fakeApi.address().port;
 
 const mcpPort = 20000 + Math.floor(Math.random() * 20000);
 process.env.UPLOAD_POST_MCP_ACCESS_LOG = "off";
+process.env.UPLOAD_POST_MCP_REQUIRE_SESSION_AUTH = "true";
 process.env.OAUTH_ISSUER = "";
 delete process.env.UPLOAD_POST_MCP_ALLOW_LOCAL_FILES;
 

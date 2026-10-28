@@ -77,6 +77,10 @@ const VALIDATE_API_KEYS = (process.env.UPLOAD_POST_MCP_VALIDATE_API_KEYS ?? "tru
 // that is the server's disk, never the caller's, so paths are refused unless a
 // self-hoster running the HTTP transport next to their own files opts in.
 const ALLOW_LOCAL_FILES = (process.env.UPLOAD_POST_MCP_ALLOW_LOCAL_FILES ?? "false").toLowerCase() === "true";
+// Refuse session requests that carry no Authorization. Off by default while we
+// measure (each one is logged) which clients still rely on the session id alone.
+const REQUIRE_SESSION_AUTH =
+  (process.env.UPLOAD_POST_MCP_REQUIRE_SESSION_AUTH ?? "false").toLowerCase() === "true";
 const KEY_CHECK_TTL_MS = Number(process.env.UPLOAD_POST_MCP_KEY_CHECK_TTL_MS ?? 10 * 60 * 1000);
 
 const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
@@ -313,17 +317,24 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     // A session runs as the credential that opened it, and every request has
     // to present it again: the session id is not a credential (it shows up in
     // client and proxy logs), so a request without Authorization is refused
-    // like any unauthenticated call. The credential must still resolve to the
+    // like any unauthenticated call (logged only, until REQUIRE_SESSION_AUTH
+    // is on). The credential must still resolve to the
     // session's key: an OAuth token that was revoked (connector disconnected)
     // stops working mid-session, and a session id cannot be used with someone
     // else's credential. An outage of the token backend does not end a session
     // that was already authenticated, but only the exact credential last
     // verified for it rides through the outage.
-    if (session) {
-      const header = req.headers["authorization"];
-      if (header === undefined) {
+    const header = req.headers["authorization"];
+    if (session && header === undefined) {
+      if (REQUIRE_SESSION_AUTH) {
         return sendUnauthorized(res, oauthCfg.enabled, oauthCfg.issuer, false);
       }
+      const agent = String(req.headers["user-agent"] ?? "-").slice(0, 120);
+      process.stderr.write(
+        `[upload-post-mcp] session-without-credential ${req.method ?? "?"} ua="${agent}"\n`
+      );
+      session.lastSeenAt = Date.now();
+    } else if (session && header !== undefined) {
       let current: Awaited<ReturnType<typeof resolveAuth>> | undefined;
       try {
         current = await resolveAuth(header, authDeps);
