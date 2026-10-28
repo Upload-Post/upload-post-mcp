@@ -75,7 +75,7 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
       title: "Get post analytics",
       description:
         "Per-platform metrics for a specific post identified by `request_id`. `post_metrics` carries whatever each platform reports, so its shape is not the same everywhere: on TikTok it adds `retention` (the curve, second by second), `impression_sources` (For You, following, search, profile…), `audience_types` (followers vs non-followers), `new_followers` won by the post, `reach` and the watch times (`average_time_watched`, `total_time_watched`, `full_video_watched_rate`) on top of the usual counters. " +
-        "It fetches the metrics live from the platform and changes nothing on the post or the account; Upload-Post keeps a copy of the result, which later reads of the same post can get from get_cached_post_analytics.",
+        "It fetches the metrics live from the platform and changes nothing on the post or the account; Upload-Post keeps a copy of the result, which later reads of the same post can get from get_cached_post_analytics. Repeated calls for the same post within 5 minutes return the same result. When one platform cannot answer (for example, X's daily limit on live post reads), its entry carries `post_metrics_error` instead of `post_metrics` and the other platforms still answer.",
       inputSchema: {
         requestId: z.string(),
       },
