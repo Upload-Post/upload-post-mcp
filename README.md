@@ -16,9 +16,11 @@ Upload-Post is a plugin reviewed by OpenAI, listed in ChatGPT's **Plugins** (for
 
 Prefer to wire it up by hand? In ChatGPT on the web, open **Plugins**, click **+**, choose **Add custom MCP server**, point it at `https://mcp.upload-post.com/mcp` and set authentication to **OAuth**. Custom MCP servers get write actions on Business, Enterprise and Edu workspaces.
 
-## Use it in Claude
+## Use it in Claude (no setup)
 
-In claude.ai or Claude Desktop, open **Customize → Connectors**, click **+ Add**, then **Add custom connector**, paste `https://mcp.upload-post.com/mcp`, click **Continue** and sign in with OAuth. Custom connectors work on every Claude plan (the Free plan allows one). In Claude Code: `claude mcp add --transport http upload-post https://mcp.upload-post.com/mcp`.
+Upload-Post is an official connector in Claude's connector directory. [Add Upload-Post to Claude](https://claude.ai/directory/upload-post), or in claude.ai, Claude Desktop or Claude Cowork open **Customize → Connectors**, browse the directory and search for *Upload-Post*, then click **Connect** and sign in with OAuth. There is no MCP URL to paste. On Team and Enterprise an owner may need to allow it first in **Organization settings**.
+
+Prefer to wire it up by hand? Open **Customize → Connectors**, click **+ Add**, then **Add custom connector**, paste `https://mcp.upload-post.com/mcp`, click **Continue** and sign in with OAuth. Custom connectors work on every Claude plan (the Free plan allows one). In Claude Code: `claude mcp add --transport http upload-post https://mcp.upload-post.com/mcp`, or install the official Upload-Post plugin from the Claude directory.
 
 ## Use it in Perplexity Computer
 
