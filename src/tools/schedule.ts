@@ -46,7 +46,7 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
     {
       title: "Edit scheduled post",
       description:
-        "Edit a pending scheduled post in place, keeping its job ID and media: reschedule it (scheduledDate/timezone) and/or fix its text. `title` and `caption` rewrite the text for EVERY platform of the post; to change only some platforms, send `platformContent` instead, e.g. {\"instagram\":{\"caption\":\"...\"},\"tiktok\":{\"caption\":\"...\"}} — platforms not listed keep their text. First comments cannot be edited on a pending post.",
+        "Edit a pending scheduled post in place, keeping its job ID and media: reschedule it (scheduledDate/timezone) and/or fix its text. `title` and `caption` rewrite the text for EVERY platform of the post; to change only some platforms, send `platformContent` instead, e.g. {\"instagram\":{\"caption\":\"...\"},\"tiktok\":{\"caption\":\"...\"}} — platforms not listed keep their text. `youtubePublishAt` sets or clears the date YouTube itself makes the video public (native YouTube scheduling). First comments cannot be edited on a pending post.",
       inputSchema: {
         jobId: z.string(),
         scheduledDate: z.string().optional().describe("New date, ISO 8601."),
@@ -60,6 +60,11 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
           )
           .optional()
           .describe("Per-platform text, keyed by platform (instagram, tiktok, youtube, facebook, linkedin, x, threads…). Only the platforms listed are changed."),
+        youtubePublishAt: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("YouTube only: ISO 8601 UTC date-time at which YouTube makes the video public; YouTube applies it only to private videos. Sent as `fields.youtube_publish_at`; null removes it."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -77,7 +82,11 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
         title?: string;
         caption?: string;
         platformContent?: Record<string, { title?: string; caption?: string }>;
+        youtubePublishAt?: string | null;
       };
+      // Editable form fields go under `fields` by their API name; null clears one.
+      const fields =
+        a.youtubePublishAt !== undefined ? { youtube_publish_at: a.youtubePublishAt || null } : undefined;
       return client.request("PATCH", `/uploadposts/schedule/${encodeURIComponent(a.jobId)}`, {
         body: compact({
           scheduled_date: a.scheduledDate,
@@ -85,6 +94,7 @@ export function registerScheduleTools(server: McpServer, client: UploadPostMcpCl
           title: a.title,
           caption: a.caption,
           platform_content: a.platformContent,
+          fields,
         }),
       });
     })
