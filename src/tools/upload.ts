@@ -32,6 +32,10 @@ const FIRST_COMMENT_DESCRIPTION =
   "Comment auto-posted under the post right after publishing. Supported on every platform that has comments, TikTok included. Use `platformOptions.<platform>FirstComment` to override it for one platform. " +
   "X: links can be removed from X posts and first comments, depending on the account, so a 'link in the first comment' may go out without the URL; check `warnings` in get_status after publishing.";
 
+// The API never uses the generic description on TikTok.
+const GENERIC_DESCRIPTION =
+  "Description for the platforms that take one, unless a per-platform override is set. TikTok ignores it: set `platformOptions.tiktokDescription` for the TikTok description; the TikTok title comes from `platformOptions.tiktokTitle`, or `title`.";
+
 const MAX_INLINE_MB = Number(process.env.UPLOAD_POST_MAX_INLINE_MB ?? 100);
 
 /** Keys shared by video, photo and text posts. */
@@ -542,7 +546,7 @@ function uploadVideoShape(videoPathOrUrlDescription: string) {
         "Required array of platform identifiers, e.g. ['instagram']. Never pass a single string."
       ),
     title: z.string().optional().describe("Caption / title."),
-    description: z.string().optional(),
+    description: z.string().optional().describe(GENERIC_DESCRIPTION),
     firstComment: z
       .string()
       .optional()
@@ -684,7 +688,7 @@ export function registerUploadTools(
           .min(1)
           .describe("Required array of platform identifiers."),
         title: z.string().optional(),
-        description: z.string().optional(),
+        description: z.string().optional().describe(GENERIC_DESCRIPTION),
         firstComment: z
           .string()
           .optional()
