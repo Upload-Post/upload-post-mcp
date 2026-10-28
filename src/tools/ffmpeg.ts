@@ -10,7 +10,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
     {
       title: "Submit FFmpeg processing job",
       description:
-        "Process media with FFmpeg on Upload-Post's encoding servers (trim, transcode, resize, watermark, concatenate, extract a thumbnail…). Inputs are public HTTP(S) URLs: `input_url` for one file, or `files` for several. They are downloaded into a working directory of their own for this job. `full_command` is one ffmpeg invocation using the placeholders `{input}` (or `{input0}`, `{input1}`… with several files) and `{output}`, e.g. `ffmpeg -i {input} -ss 5 -t 10 -c copy {output}`. It runs without a shell: it must start with `ffmpeg`, and shell metacharacters (; | & $ `), `..`, `file:` and absolute paths outside the job directory are rejected. The output is not posted anywhere; fetch it with download_ffmpeg_result. Returns a `job_id` you can poll with `get_ffmpeg_job`.",
+        "Process media with FFmpeg on Upload-Post's encoding servers (trim, transcode, resize, watermark, concatenate, extract a thumbnail…). Inputs are public HTTP(S) URLs: `input_url` for one file, or `files` for several. They are downloaded into a working directory of their own for this job. `full_command` is one ffmpeg invocation using the placeholders `{input}` (or `{input0}`, `{input1}`… with several files) and `{output}`, e.g. `ffmpeg -i {input} -ss 5 -t 10 -c copy {output}`. It runs without a shell and must start with `ffmpeg`. Every `-i` must be an `{input}`/`{inputN}` placeholder or a generated `-f lavfi` source, and `{output}` is the only output. Rejected with a 400 that names the problem: shell metacharacters (; | & $ `), protocols or URLs anywhere in the command (`file:`, `concat:`, `subfile,`…), the `movie=`, `amovie=` and `sendcmd` filters, absolute paths other than fonts under /usr/share/fonts, `..`, and `-safe 0`. A command that would never end (`-stream_loop -1`, `-loop 1`, or a lavfi source without a duration) needs `-t`, `-shortest` or `-frames`; `-stream_loop` accepts -1 to 100. Usage is charged at the longer of the input and output durations, so looped or generated outputs count at their full length. The output is not posted anywhere; fetch it with download_ffmpeg_result. Returns a `job_id` you can poll with `get_ffmpeg_job`.",
       inputSchema: {
         input_url: z
           .string()
@@ -24,7 +24,7 @@ export function registerFfmpegTools(server: McpServer, client: UploadPostMcpClie
         full_command: z
           .string()
           .optional()
-          .describe("Optional ffmpeg command with `{input}` / `{input0}`… and `{output}` placeholders. Must start with `ffmpeg`; shell metacharacters, `..`, `file:` and absolute paths are rejected."),
+          .describe("Optional ffmpeg command with `{input}` / `{input0}`… and `{output}` placeholders. Must start with `ffmpeg`; each `-i` is a placeholder or `-f lavfi`. Protocols or URLs inside the command, `movie=`/`sendcmd`, absolute paths (except /usr/share/fonts), `..`, `-safe 0` and shell metacharacters are rejected. Endless inputs need `-t` or `-shortest`; `-stream_loop` is capped at 100."),
         output_filename: z
           .string()
           .optional()
