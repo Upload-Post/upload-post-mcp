@@ -10,7 +10,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Get post comments",
       description:
-        "List comments on a post. One endpoint for every network, chosen with `platform`. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn; TikTok: postId=the video id, `postUrl` is not accepted). Add `commentId` to get the REPLIES hanging off that one comment instead of the post's top-level comments — replies are the same question with one more parameter, not another tool. TikTok: " +
+        "List comments on a post. One endpoint for every network, chosen with `platform`. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn; TikTok: postId=the video id, `postUrl` is not accepted). Add `commentId` to get the REPLIES hanging off that one comment instead of the post's top-level comments — replies are the same question with one more parameter, not another tool. Reads are cached for up to 60 seconds (up to 2 minutes on X); a comment created or deleted through Upload-Post by the same account shows up on the next read. TikTok: " +
         requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
@@ -168,7 +168,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Create a comment or reply",
       description:
-        "Post a top-level comment or a reply on a post. Provide exactly ONE of `commentId` (reply to a comment), `postId`, or `postUrl` (top-level). LinkedIn: postId=the post urn. Instagram requires `commentId` (replies only). TikTok always needs `postId` (the video id); add `commentId` on top of it to reply inside that thread. TikTok: " +
+        "Post a top-level comment or a reply on a post. Provide exactly ONE of `commentId` (reply to a comment), `postId`, or `postUrl` (top-level). LinkedIn: postId=the post urn. Instagram requires `commentId` (replies only). TikTok always needs `postId` (the video id); add `commentId` on top of it to reply inside that thread. X: links are removed from the message unless the account is allowed links on X (the response then lists it in `warnings`), and a message that was only links is refused with 400 `x_links_not_allowed`. Replies on X share a daily limit per X account with post edits and reposts made through Upload-Post (20 a day on the free plan, 200 on paid plans, reset at 00:00 UTC); past it the call returns 429 `x_daily_write_limit` with `retry_after` in seconds. TikTok: " +
         requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
