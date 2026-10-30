@@ -100,6 +100,20 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 
 Async uploads return a `request_id`. The agent should poll `get_status` until `success: true`.
 
+### Per-platform: TikTok / YouTube / Instagram / LinkedIn / Facebook
+
+One server covers every network; this is what each of the big five uses. Publishing always goes through the same upload tools with a `platform` list, so a single call can post one video to TikTok, Reels and Shorts at once.
+
+| Platform | Publish | Network-specific helpers | Engage and measure |
+|----------|---------|--------------------------|--------------------|
+| TikTok | `upload_video` (videos, drafts), `upload_photos` (photo carousels) | `tiktok_publishing_settings`, `tiktok_music_trending`, `tiktok_music_search`, `tiktok_location_search` | `get_post_comments`, `create_comment`, `comment_action`, `get_post_analytics`, `get_audience`, `start_autodm` (public auto-reply) |
+| YouTube | `upload_video` (videos and Shorts, with title, description and tags) | | `get_post_comments`, `comment_action` (hide / hold), `get_post_analytics`, `get_analytics`, `start_autodm` (public auto-reply) |
+| Instagram | `upload_video` (Reels, Stories), `upload_photos` (posts, carousels, Stories) | | `get_post_comments`, `reply_to_comment`, `comment_action`, `send_dm`, `list_dm_conversations`, `start_autodm` (comment-to-DM), `get_post_analytics` |
+| LinkedIn | `upload_text`, `upload_photos`, `upload_video`, `upload_document` (PDF, PPT, DOCX documents) | `get_linkedin_pages` (post as a company page) | `get_post_comments`, `get_post_analytics`, `get_analytics` |
+| Facebook | `upload_video`, `upload_photos`, `upload_text` | `get_facebook_pages` (pick the page) | `get_post_comments`, `comment_action` (hide / like / edit), `start_autodm` (public auto-reply), `get_post_analytics` |
+
+Search terms people use for these: TikTok MCP server, YouTube MCP server / YouTube uploader MCP, Instagram MCP server, LinkedIn MCP server, Facebook MCP server.
+
 ### One tool per question, not per network
 
 The Upload-Post API has no endpoint per social network: it has an endpoint per **question**, and a `platform` parameter saying who is being asked. `get_post_comments`, `get_post_analytics`, `get_audience`, `get_suggestions` and `comment_action` all work that way, so an agent learns one shape and reuses it for every network. Only the four `tiktok_*` tools are network-specific, because what they return (the Commercial Music Library, TikTok places, TikTok's per-account publishing settings) exists only on TikTok.

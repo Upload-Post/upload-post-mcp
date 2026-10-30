@@ -11,10 +11,10 @@
   },
   "icons": [
     {
-      "src": "https://www.upload-post.com/uploadpost-80.jpeg",
-      "mimeType": "image/jpeg",
+      "src": "https://www.upload-post.com/uploadpost-logo-512.png",
+      "mimeType": "image/png",
       "sizes": [
-        "80x80"
+        "512x512"
       ]
     }
   ],
