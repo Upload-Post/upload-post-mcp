@@ -20,6 +20,7 @@ import { IntrospectCache } from "../oauth/introspect_cache.js";
 import { hasOAuthBearer, resolveAuth } from "../oauth/auth_resolver.js";
 import { stripSchemaDialect } from "./schema_dialect.js";
 import { ApiKeyChecker, keyFingerprint } from "./api_key_check.js";
+import { AuthFailureLimiter, clientAddress } from "./auth_failure_limiter.js";
 import { createHash } from "node:crypto";
 import { DEFAULT_BASE_URL } from "../client.js";
 
@@ -82,6 +83,15 @@ const ALLOW_LOCAL_FILES = (process.env.UPLOAD_POST_MCP_ALLOW_LOCAL_FILES ?? "fal
 const REQUIRE_SESSION_AUTH =
   (process.env.UPLOAD_POST_MCP_REQUIRE_SESSION_AUTH ?? "false").toLowerCase() === "true";
 const KEY_CHECK_TTL_MS = Number(process.env.UPLOAD_POST_MCP_KEY_CHECK_TTL_MS ?? 10 * 60 * 1000);
+// A source (client IP) that collects this many 401s on /mcp within the window
+// is answered 429 + Retry-After instead, apart from one probe per interval and
+// credentials already verified. 0 turns it off. See auth_failure_limiter.ts.
+const AUTH_FAIL_MAX = Number(process.env.UPLOAD_POST_MCP_AUTH_FAIL_MAX ?? 20);
+const AUTH_FAIL_WINDOW_MS = Number(process.env.UPLOAD_POST_MCP_AUTH_FAIL_WINDOW_S ?? 300) * 1000;
+const AUTH_FAIL_PROBE_MS = Number(process.env.UPLOAD_POST_MCP_AUTH_FAIL_PROBE_S ?? 30) * 1000;
+// Whether X-Forwarded-For names the client: "auto" (only when the peer is a
+// private address, i.e. a local reverse proxy), "true" or "false".
+const TRUST_PROXY = (process.env.UPLOAD_POST_MCP_TRUST_PROXY ?? "auto").toLowerCase();
 
 const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
 
@@ -134,6 +144,23 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     baseUrl: opts.baseUrl || DEFAULT_BASE_URL,
     validTtlMs: KEY_CHECK_TTL_MS,
   });
+  const authFailures = new AuthFailureLimiter({
+    maxFailures: AUTH_FAIL_MAX,
+    windowMs: AUTH_FAIL_WINDOW_MS,
+    probeIntervalMs: AUTH_FAIL_PROBE_MS,
+  });
+
+  // True for a credential this server has already accepted, recognised from
+  // its caches without calling the API. These are never held back.
+  const alreadyAccepted = (header: string | undefined): boolean => {
+    const match = header?.match(/^(ApiKey|Bearer)\s+(.+)$/i);
+    if (!match) return false;
+    const token = match[2].trim();
+    if (match[1].toLowerCase() === "bearer" && token.startsWith("up_oauth_") && oauthCfg.enabled) {
+      return introspectCache.get(token) !== null;
+    }
+    return !VALIDATE_API_KEYS || keyChecker.peek(token) === "valid";
+  };
 
   // ----- Last-resort process guards -----------------------------------------
   // A single request-scoped throw/rejection (transient upstream error, a client
@@ -274,6 +301,31 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       return sendSessionNotFound(res);
     }
 
+    // Sources that keep failing auth are slowed down (429) before anything is
+    // looked up for them; a session or credential already verified passes.
+    const header = req.headers["authorization"];
+    const source = clientAddress(req, TRUST_PROXY);
+    if (authFailures.enabled) {
+      const trusted = session
+        ? header === undefined
+          ? !REQUIRE_SESSION_AUTH
+          : credentialHash(header) === session.authHash || alreadyAccepted(header)
+        : alreadyAccepted(header);
+      if (!trusted) {
+        const wait = authFailures.admit(source);
+        if (wait > 0) return sendTooManyAuthFailures(res, wait);
+      }
+    }
+    const refuse = (invalidToken = false, invalidApiKey = false): void => {
+      if (authFailures.fail(source)) {
+        const agent = String(req.headers["user-agent"] ?? "-").slice(0, 120);
+        process.stderr.write(
+          `[upload-post-mcp] auth-failures holding ${source} after ${AUTH_FAIL_MAX} 401s ua="${agent}"\n`
+        );
+      }
+      sendUnauthorized(res, oauthCfg.enabled, oauthCfg.issuer, invalidToken, invalidApiKey);
+    };
+
     // The body has to be read before the session is built, so that an
     // `initialize` request can seed the server with the caller's `clientInfo`:
     // waiting for the `initialized` notification leaves a window in which the
@@ -324,10 +376,9 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     // else's credential. An outage of the token backend does not end a session
     // that was already authenticated, but only the exact credential last
     // verified for it rides through the outage.
-    const header = req.headers["authorization"];
     if (session && header === undefined) {
       if (REQUIRE_SESSION_AUTH) {
-        return sendUnauthorized(res, oauthCfg.enabled, oauthCfg.issuer, false);
+        return refuse();
       }
       const agent = String(req.headers["user-agent"] ?? "-").slice(0, 120);
       process.stderr.write(
@@ -346,12 +397,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
         current = undefined;
       }
       if (current === null) {
-        return sendUnauthorized(
-          res,
-          oauthCfg.enabled,
-          oauthCfg.issuer,
-          oauthCfg.enabled && hasOAuthBearer(header)
-        );
+        return refuse(oauthCfg.enabled && hasOAuthBearer(header));
       }
       if (current && keyFingerprint(current.apiKey) !== session.keyId) {
         return sendSessionNotFound(res);
@@ -374,12 +420,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
         throw err;
       }
       if (!resolution) {
-        return sendUnauthorized(
-          res,
-          oauthCfg.enabled,
-          oauthCfg.issuer,
-          oauthCfg.enabled && hasOAuthBearer(req.headers["authorization"])
-        );
+        return refuse(oauthCfg.enabled && hasOAuthBearer(header));
       }
 
       // OAuth tokens were just resolved upstream; a pasted key has not been
@@ -395,7 +436,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
           throw err;
         }
         if (verdict === "invalid") {
-          return sendUnauthorized(res, oauthCfg.enabled, oauthCfg.issuer, false, true);
+          return refuse(false, true);
         }
         if (verdict === "rate_limited") {
           return sendRateLimited(res);
@@ -476,6 +517,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
   const sweeper = setInterval(() => {
     introspectCache.purgeExpired();
     keyChecker.purgeExpired();
+    authFailures.purgeExpired();
     const cutoff = Date.now() - SESSION_IDLE_TTL_MS;
     let swept = 0;
     for (const [id, s] of sessions) {
@@ -585,6 +627,24 @@ function sendRateLimited(res: ServerResponse): void {
     JSON.stringify({
       error: "rate_limited",
       error_description: "Too many requests for this API key. Retry in a minute.",
+    })
+  );
+}
+
+/**
+ * 429 for a source held by the auth-failure limiter. Retry-After is when its
+ * next request will be looked at again.
+ */
+function sendTooManyAuthFailures(res: ServerResponse, retryAfterSeconds: number): void {
+  res.statusCode = 429;
+  res.setHeader("retry-after", String(retryAfterSeconds));
+  res.setHeader("content-type", "application/json");
+  res.end(
+    JSON.stringify({
+      error: "too_many_failed_auth",
+      error_description:
+        "Too many requests with a missing or rejected credential. Send 'Authorization: ApiKey <your_upload_post_api_key>' " +
+        "(or connect via OAuth) and retry after the Retry-After delay.",
     })
   );
 }

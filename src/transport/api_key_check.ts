@@ -63,6 +63,12 @@ export class ApiKeyChecker {
     return lookup;
   }
 
+  /** Cached verdict for a key, without asking the API. */
+  peek(apiKey: string): "valid" | "invalid" | undefined {
+    const cached = this.cache.get(keyFingerprint(apiKey));
+    return cached && cached.expiresAt > Date.now() ? cached.result : undefined;
+  }
+
   /** Drop expired entries (called from the periodic sweep). */
   purgeExpired(): void {
     const now = Date.now();
