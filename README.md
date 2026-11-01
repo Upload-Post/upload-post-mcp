@@ -208,6 +208,10 @@ npx @modelcontextprotocol/inspector node dist/index.js
 | `UPLOAD_POST_MCP_MAX_SESSIONS` | http | `2000`                         | Live sessions kept in memory; past it the longest-idle one is closed. |
 | `UPLOAD_POST_MCP_MAX_SESSIONS_PER_KEY` | http | `200`                  | Live sessions per credential; past it that credential's own longest-idle session is closed. |
 | `UPLOAD_POST_MCP_SESSION_TTL_MS` | http | `1800000`                    | Idle time after which a session is closed. |
+| `UPLOAD_POST_MCP_AUTH_FAIL_MAX` | http | `20`                          | `401`s on `/mcp` one client IP may collect per window; past it that IP gets `429` + `Retry-After` (sessions and keys already verified still pass; one request per probe interval is checked normally). `0` turns it off. |
+| `UPLOAD_POST_MCP_AUTH_FAIL_WINDOW_S` | http | `300`                    | Window for the count above; a held IP is released this long after its last failure. |
+| `UPLOAD_POST_MCP_AUTH_FAIL_PROBE_S` | http | `30`                      | While held, one request per this many seconds goes through the normal auth path. |
+| `UPLOAD_POST_MCP_TRUST_PROXY` | http | `auto`                          | Whether the client IP is the last `X-Forwarded-For` hop: `auto` (only when the peer is a private address, i.e. a local reverse proxy), `true` or `false`. |
 | `UPLOAD_POST_MCP_ALLOW_LOCAL_FILES` | http | `false`                  | Let tools read media from file paths on the server's disk. Off for a shared host (only http(s) URLs are accepted); turn it on only when the HTTP server runs next to your own files. stdio always allows paths. |
 | `OPENAI_APPS_CHALLENGE_TOKEN` | http | Current Upload-Post challenge token | Optional override for ChatGPT Apps domain verification at `/.well-known/openai-apps-challenge`. |
 
