@@ -133,6 +133,27 @@ async function main() {
         platformOptions: { firstCommentMedia: ["/etc/hosts"] },
       },
     ],
+    [
+      "upload_text",
+      {
+        title: "t",
+        user: "u",
+        platforms: ["x"],
+        confirmed: true,
+        platformOptions: { firstCommentMedia: ["/etc/hosts"] },
+      },
+    ],
+    [
+      "upload_video",
+      {
+        videoPathOrUrl: "https://example.com/v.mp4",
+        user: "u",
+        platforms: ["linkedin"],
+        title: "t",
+        confirmed: true,
+        platformOptions: { linkedinSubtitles: "/etc/hosts" },
+      },
+    ],
   ].entries()) {
     r = await post(inSession(auth("key-a")), call(10 + i, tool, args));
     assert.equal(r.status, 200, r.body);

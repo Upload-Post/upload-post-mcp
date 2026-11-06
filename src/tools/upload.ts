@@ -463,6 +463,11 @@ export function assertNoServerPaths(
     ...Object.entries(media),
     ["instagramCoverUrl", options.instagramCoverUrl],
     ["firstCommentMedia", options.firstCommentMedia],
+    // Newer SDKs also read these from disk when they are not http(s) URLs.
+    ["linkedinSubtitles", options.linkedinSubtitles],
+    ["linkedin_subtitles", options.linkedin_subtitles],
+    ["xArticleCoverMedia", options.xArticleCoverMedia],
+    ["x_article_cover_media", options.x_article_cover_media],
   ];
   if (Array.isArray(options.youtubeSubtitles)) {
     for (const sub of options.youtubeSubtitles as Array<Record<string, unknown> | null>) {
@@ -781,6 +786,8 @@ export function registerUploadTools(
         ...(rest as Record<string, unknown>),
         ...(platformOptions ?? {}),
       })) as never;
+      // Text posts take files too (firstCommentMedia): same hosted-path guard.
+      assertNoServerPaths(client, {}, options as unknown as Record<string, unknown>);
       return client.sdk.uploadText(options);
     })
   );
@@ -815,7 +822,7 @@ export function registerUploadTools(
         documentPathOrUrl: string;
         [k: string]: unknown;
       };
-      assertNoServerPaths(client, { documentPathOrUrl });
+      assertNoServerPaths(client, { documentPathOrUrl }, rest);
       return client.sdk.uploadDocument(documentPathOrUrl, rest as never);
     })
   );
