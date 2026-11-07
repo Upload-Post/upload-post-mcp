@@ -102,6 +102,11 @@ const GLAMA_WELL_KNOWN_PATH = "/.well-known/glama.json";
 const GLAMA_MAINTAINER_EMAIL = process.env.GLAMA_MAINTAINER_EMAIL ?? "jc.caverogracia@gmail.com";
 const DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN = "9O0B9c5XudnvLv1et2HdZ9WG2_H85jGPciJ7c8QBHjY";
 
+// Muse Connector Platform (Meta) server verification. Override the token via
+// MUSE_CHALLENGE_TOKEN when Muse issues a new challenge.
+const MUSE_CHALLENGE_PREFIX = "/.well-known/muse-challenge/";
+const DEFAULT_MUSE_CHALLENGE_TOKEN = "dabfa7679956682f6ba9ec6969b31301b0b0ab463de641defb56a88af47b788a";
+
 // Icon paths clients probe on the bare origin, mapped to the canonical assets
 // on the marketing site. Keep in sync with upload-post-landing/public.
 const FAVICON_REDIRECTS: Record<string, string> = {
@@ -198,6 +203,13 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       res.setHeader("allow", "GET, HEAD, OPTIONS");
       res.end("Method Not Allowed");
       return;
+    }
+
+    // ----- Muse Connector Platform server verification ------------------
+    // Muse fetches /.well-known/muse-challenge/<token> over HTTPS (no auth,
+    // no redirects) and expects the plain-text body `muse-challenge=<token>`.
+    if ((method === "GET" || method === "HEAD") && isMuseChallengePath(url)) {
+      return sendMuseChallenge(res, method);
     }
 
     // ----- Glama directory ownership verification -----------------------
@@ -742,6 +754,24 @@ function logAccess(req: IncomingMessage, res: ServerResponse): void {
 function isOpenAiAppsChallengePath(url: string): boolean {
   const path = requestPath(url).replace(/\/+$/, "");
   return path === OPENAI_APPS_CHALLENGE_PATH;
+}
+
+function museChallengeToken(): string {
+  return process.env.MUSE_CHALLENGE_TOKEN?.trim() || DEFAULT_MUSE_CHALLENGE_TOKEN;
+}
+
+function isMuseChallengePath(url: string): boolean {
+  const token = museChallengeToken();
+  return !!token && requestPath(url).replace(/\/+$/, "") === `${MUSE_CHALLENGE_PREFIX}${token}`;
+}
+
+function sendMuseChallenge(res: ServerResponse, method: string): void {
+  const body = `muse-challenge=${museChallengeToken()}`;
+  res.statusCode = 200;
+  res.setHeader("content-type", "text/plain; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.setHeader("content-length", Buffer.byteLength(body));
+  res.end(method === "HEAD" ? undefined : body);
 }
 
 function openAiAppsChallengeToken(): string {
