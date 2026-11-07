@@ -1,13 +1,16 @@
 # syntax=docker/dockerfile:1.7
+# Base images are pinned by digest (@sha256): the tag is only a label.
+# To update one: docker buildx imagetools inspect <tag> and paste the new digest.
 
 # ---- Stage 1: build ----
-FROM node:22-alpine AS builder
+FROM node:22-alpine@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202 AS builder
 
 WORKDIR /app
 
-# Install all deps (including dev) using the lockfile when present.
-COPY package.json package-lock.json* ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# Install all deps (including dev) exactly as pinned in the lockfile.
+# No fallback to `npm install`: without a lockfile the build must fail.
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY tsconfig.json ./
 COPY src ./src
@@ -18,7 +21,7 @@ RUN npm prune --omit=dev
 
 
 # ---- Stage 2: runtime ----
-FROM node:22-alpine AS runtime
+FROM node:22-alpine@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202 AS runtime
 
 ENV NODE_ENV=production \
     UPLOAD_POST_MCP_PORT=8080
