@@ -105,7 +105,7 @@ const DEFAULT_OPENAI_APPS_CHALLENGE_TOKEN = "9O0B9c5XudnvLv1et2HdZ9WG2_H85jGPciJ
 // Muse Connector Platform (Meta) server verification. Override the token via
 // MUSE_CHALLENGE_TOKEN when Muse issues a new challenge.
 const MUSE_CHALLENGE_PREFIX = "/.well-known/muse-challenge/";
-const DEFAULT_MUSE_CHALLENGE_TOKEN = "4830d484c5d25031bf05d1986f1fdc75fe683eff565980fe13b085cdbeaa6374";
+const DEFAULT_MUSE_CHALLENGE_TOKEN = "0b41a80e604042617de19cf54f102df50e5294c2506d2d7ade529e9ce398c5cc";
 
 // Icon paths clients probe on the bare origin, mapped to the canonical assets
 // on the marketing site. Keep in sync with upload-post-landing/public.
