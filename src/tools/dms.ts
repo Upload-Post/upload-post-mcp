@@ -85,7 +85,10 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
           .positive()
           .max(25)
           .optional()
-          .describe("Latest messages returned per conversation, 1-25. Default 10."),
+          .describe(
+            "Latest messages returned per conversation, 1-25. Default 10. When raising it, lower `limit` (10-20 conversations): " +
+              "a large page with many messages is slow, and Instagram may then answer with text only, without attachments."
+          ),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
