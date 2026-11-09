@@ -77,7 +77,7 @@ for (const name of ["claude-ai", "Claude Code", "cursor-vscode", "unknown-host"]
 // ChatGPT gets one tool per comment and AutoDM operation: OpenAI's review
 // rejects comment_action and manage_autodms for dispatching several operations
 // through one `action` argument. Other clients keep them, since some already call them.
-for (const name of ["comment_action", "manage_autodms"]) {
+for (const name of ["comment_action", "manage_autodms", "send_feedback"]) {
   assert.ok(!chatgpt.tools.has(name), `ChatGPT must not see ${name}`);
   for (const other of ["claude-ai", "Claude Code", "unknown-host"]) {
     assert.ok((await surfaceFor(other)).tools.has(name), `${other} must keep ${name}`);
