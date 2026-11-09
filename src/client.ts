@@ -9,6 +9,14 @@ const require_ = createRequire(import.meta.url);
 export const PACKAGE_VERSION: string = require_("../package.json").version;
 export const DEFAULT_BASE_URL = "https://api.upload-post.com/api";
 
+/**
+ * The API adds a `feedback` block to some errors, written for agents calling it
+ * over HTTP (POST /api/uploadposts/feedback with their own key). Through MCP the
+ * model has no key to call it with: it has the send_feedback tool.
+ */
+export const MCP_FEEDBACK_HINT =
+  "If this error is unclear, contradicts the tool description, or looks like a bug on Upload-Post's side, call the send_feedback tool (if you have it) once with what you tried, what you expected and what happened.";
+
 export interface UploadPostMcpClientOptions {
   apiKey: string;
   baseUrl?: string;
@@ -75,8 +83,11 @@ export class UploadPostMcpClient {
     };
     const res = await this.http.request<T>(config);
     if (res.status < 200 || res.status >= 300) {
-      const body =
-        typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+      const data = res.data as unknown;
+      if (data && typeof data === "object" && !Array.isArray(data) && "feedback" in data) {
+        (data as Record<string, unknown>).feedback = MCP_FEEDBACK_HINT;
+      }
+      const body = typeof data === "string" ? data : JSON.stringify(data);
       throw new Error(
         `Upload-Post API ${method} ${path} failed (${res.status}): ${body}`
       );
