@@ -43,11 +43,49 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
     "list_dm_conversations",
     {
       title: "List DM conversations",
-      description: "Recent DM conversations for a profile on a given platform.",
+      description:
+        "DM conversations for a profile on a given platform, newest first, each with its latest messages. " +
+        "The response carries `pagination` { next_cursor, has_more }: to read older conversations, call again with `cursor` set to " +
+        "`next_cursor` (and the same `since` / `participant_id`) until `has_more` is false. " +
+        "Media a message carries comes back in `attachments` (`type`, `url`, plus size and preview fields when the platform gives them); " +
+        "content the platform flags `is_unsupported` cannot be retrieved.",
       inputSchema: {
-        user: z.string(),
-        platform: z.string().optional(),
-        limit: z.number().int().positive().max(200).optional(),
+        user: z.string().describe("Upload-Post profile name that owns the connected account."),
+        platform: z
+          .string()
+          .optional()
+          .describe("'instagram', 'whatsapp' or 'facebook' (Messenger). Required by the Upload-Post API."),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(200)
+          .optional()
+          .describe("Conversations per page. Default 20; the API returns at most 50 per page."),
+        cursor: z
+          .string()
+          .optional()
+          .describe("`pagination.next_cursor` from the previous call, to get the next (older) page. Omit for the first page."),
+        since: z
+          .union([z.string(), z.number()])
+          .optional()
+          .describe(
+            "Only conversations with activity after this moment: Unix timestamp (seconds) or ISO 8601 date, e.g. '2026-11-01T00:00:00Z'."
+          ),
+        participant_id: z
+          .string()
+          .optional()
+          .describe(
+            "Return only the conversation with this person: the other participant's `id` from a previous listing " +
+              "(on Instagram, the same id send_dm takes as recipient_id; on WhatsApp, their phone number)."
+          ),
+        messages_limit: z
+          .number()
+          .int()
+          .positive()
+          .max(25)
+          .optional()
+          .describe("Latest messages returned per conversation, 1-25. Default 10."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
