@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ignoredPlatformOptions } from "./sdk-options.js";
 import { ok } from "./schemas.js";
 
 /**
@@ -139,11 +140,20 @@ function confirmationRequired(name: string, action: string, args: Args, field: s
     field === "confirm_username"
       ? `Nothing has been deleted. Tell the user exactly what this deletes and ask them to type the profile name to confirm. Only then call ${name} again with confirm_username set to it.`
       : `Nothing has been sent yet. Show the user this preview: the exact text, media, recipients or platforms, buttons, keywords and timing. Only after they approve it, call ${name} again with the same arguments plus confirmed: true. If they want changes, apply them and preview again.`;
+  // Say before publishing which platformOptions would be dropped, so the user
+  // is not shown an option in the preview that never reaches the platform.
+  const ignored = ignoredPlatformOptions(args.platformOptions as Record<string, unknown> | undefined);
   return {
     status: "confirmation_required",
     executed: false,
     action,
     preview: previewArgs(args),
+    ...(ignored.length
+      ? {
+          ignored_platform_options: ignored,
+          platform_options_warning: `These platformOptions keys are not supported and will NOT be sent: ${ignored.join(", ")}. Fix or remove them before asking the user to approve, or tell the user they will not be applied.`,
+        }
+      : {}),
     next_step: nextStep,
   };
 }

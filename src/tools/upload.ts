@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ignoredPlatformOptions, withIgnoredOptionsWarning } from "../sdk-options.js";
 import { randomUUID } from "node:crypto";
 import { writeFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -219,6 +220,18 @@ const VideoPlatformOptions = z
     instagramUserTags: z.string().optional().describe("Comma-separated user tags."),
     instagramLocationId: z.string().optional().describe("Instagram location ID."),
     instagramAudioName: z.string().optional().describe("Audio track name."),
+    instagramShareMode: z
+      .enum(["TRIAL_REELS_SHARE_TO_FOLLOWERS_IF_LIKED", "TRIAL_REELS_DONT_SHARE_TO_FOLLOWERS"])
+      .optional()
+      .describe(
+        "Publish the Reel as a Trial Reel, shown to non-followers first. TRIAL_REELS_SHARE_TO_FOLLOWERS_IF_LIKED shares it with followers if it performs well; TRIAL_REELS_DONT_SHARE_TO_FOLLOWERS never does. Instagram only offers trial Reels to some accounts."
+      ),
+    instagramIsAiGenerated: z
+      .boolean()
+      .optional()
+      .describe(
+        "Label the Instagram post as AI-generated. Sent as the generic is_ai_generated, which other platforms in the same post read too (it is the same media)."
+      ),
     // YouTube
     youtubePrivacyStatus: z
       .enum(["public", "private", "unlisted"])
@@ -245,6 +258,16 @@ const VideoPlatformOptions = z
     youtubeBlockedCountries: z.string().optional().describe("Comma-separated blocked country codes."),
     youtubeHasPaidProductPlacement: z.boolean().optional().describe("Paid product placement flag."),
     youtubeRecordingDate: z.string().optional().describe("Recording date, ISO 8601."),
+    youtubePublishAt: z
+      .string()
+      .optional()
+      .describe(
+        "Native YouTube scheduling: ISO 8601 UTC date-time at which YouTube makes the video public (shows as Scheduled in YouTube Studio). The video is uploaded now as private. Different from scheduledDate, which delays the whole upload."
+      ),
+    youtubeNotifySubscribers: z
+      .boolean()
+      .optional()
+      .describe("false stops YouTube from notifying subscribers about the new video. Defaults to true."),
     youtubeSubtitles: z
       .array(
         z.object({
@@ -273,7 +296,7 @@ const VideoPlatformOptions = z
   })
   .passthrough()
   .describe(
-    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (youtubeTitle, tiktokTitle, youtubeDescription, instagramFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (youtubeTitle, tiktokTitle, youtubeDescription, instagramFirstComment, …) are also accepted. Unsupported keys are not sent; the result then lists them in `ignored_platform_options`."
   );
 
 const PhotoPlatformOptions = z
@@ -324,6 +347,16 @@ const PhotoPlatformOptions = z
     instagramCollaborators: z.string().optional().describe("Comma-separated collaborator usernames."),
     instagramUserTags: z.string().optional().describe("Comma-separated user tags."),
     instagramLocationId: z.string().optional().describe("Instagram location ID."),
+    instagramIsAiGenerated: z
+      .boolean()
+      .optional()
+      .describe(
+        "Label the Instagram post as AI-generated. Sent as the generic is_ai_generated, which other platforms in the same post read too (it is the same media)."
+      ),
+    facebookMediaType: z
+      .enum(["POSTS", "STORIES"])
+      .optional()
+      .describe("Facebook photo placement: POSTS (feed, default) or STORIES for a Page photo story."),
     pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to (see get_pinterest_boards)."),
     pinterestLink: z.string().optional().describe("Destination link for the pin."),
     pinterestAltText: z.string().optional().describe("Pinterest-specific alt text."),
@@ -342,7 +375,7 @@ const PhotoPlatformOptions = z
   })
   .passthrough()
   .describe(
-    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (instagramTitle, xFirstComment, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (instagramTitle, xFirstComment, …) are also accepted. Unsupported keys are not sent; the result then lists them in `ignored_platform_options`."
   );
 
 const TextPlatformOptions = z
@@ -369,7 +402,7 @@ const TextPlatformOptions = z
   })
   .passthrough()
   .describe(
-    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (xTitle, linkedinTitle, …) are also accepted. Keys the upload-post SDK does not support are silently ignored upstream."
+    "Flat platform-specific override object with camelCase keys. Per-platform text overrides (xTitle, linkedinTitle, …) are also accepted. Unsupported keys are not sent; the result then lists them in `ignored_platform_options`."
   );
 
 function truthyFlag(value: unknown): boolean {
@@ -656,6 +689,7 @@ export function registerUploadTools(
         ...(rest as Record<string, unknown>),
         ...(platformOptions ?? {}),
       })) as never;
+      const ignored = ignoredPlatformOptions(platformOptions);
 
       assertNoServerPaths(
         client,
@@ -666,12 +700,12 @@ export function registerUploadTools(
       if (videoBase64) {
         const tmpPath = await writeInlineVideo(videoBase64, videoFilename);
         try {
-          return await client.sdk.upload(tmpPath, options);
+          return withIgnoredOptionsWarning(await client.sdk.upload(tmpPath, options), ignored);
         } finally {
           await unlink(tmpPath).catch(() => {});
         }
       }
-      return client.sdk.upload(videoPathOrUrl as string, options);
+      return withIgnoredOptionsWarning(await client.sdk.upload(videoPathOrUrl as string, options), ignored);
     })
   );
 
@@ -745,7 +779,8 @@ export function registerUploadTools(
         ...(platformOptions ?? {}),
       })) as never;
       assertNoServerPaths(client, { photosPathsOrUrls }, options as unknown as Record<string, unknown>);
-      return client.sdk.uploadPhotos(photosPathsOrUrls, options);
+      const ignored = ignoredPlatformOptions(platformOptions);
+      return withIgnoredOptionsWarning(await client.sdk.uploadPhotos(photosPathsOrUrls, options), ignored);
     })
   );
 
@@ -788,7 +823,8 @@ export function registerUploadTools(
       })) as never;
       // Text posts take files too (firstCommentMedia): same hosted-path guard.
       assertNoServerPaths(client, {}, options as unknown as Record<string, unknown>);
-      return client.sdk.uploadText(options);
+      const ignored = ignoredPlatformOptions(platformOptions);
+      return withIgnoredOptionsWarning(await client.sdk.uploadText(options), ignored);
     })
   );
 

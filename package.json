@@ -1,6 +1,6 @@
 {
   "name": "@upload-post/mcp",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "mcpName": "com.upload-post/mcp",
   "description": "Official Model Context Protocol (MCP) server for Upload-Post — publish, schedule, analyze and manage social media across TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X and more from any MCP-compatible AI agent (Claude Desktop, Claude Code, Cursor, ...).",
   "license": "MIT",
@@ -21,7 +21,7 @@
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build",
-    "check": "node scripts/check-client-profile.mjs && node scripts/check-connect-guidance.mjs && node scripts/check-plan-guidance.mjs && node scripts/check-confirmation.mjs && node scripts/check-http-limits.mjs && node scripts/check-session-scope.mjs && node scripts/check-auth-failures.mjs && node scripts/check-feedback.mjs"
+    "check": "node scripts/check-client-profile.mjs && node scripts/check-connect-guidance.mjs && node scripts/check-plan-guidance.mjs && node scripts/check-confirmation.mjs && node scripts/check-http-limits.mjs && node scripts/check-session-scope.mjs && node scripts/check-auth-failures.mjs && node scripts/check-feedback.mjs && node scripts/check-platform-options.mjs"
   },
   "engines": {
     "node": ">=18"
@@ -60,7 +60,7 @@
     "@modelcontextprotocol/sdk": "^1.0.4",
     "axios": "^1.7.7",
     "form-data": "^4.0.1",
-    "upload-post": "^2.13.0",
+    "upload-post": "^2.17.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
