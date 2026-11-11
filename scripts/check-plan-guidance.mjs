@@ -77,7 +77,13 @@ assert.equal(classifyPlanError("Upload-Post API error: Too many requests. Please
   "the per-minute rate limit is not a plan limit");
 assert.equal(upgradeUrlFrom(MONTHLY), UPGRADE_URL);
 assert.equal(upgradeUrlFrom(`Upgrade here: ${UPGRADE_URL}.`), UPGRADE_URL, "trailing full stop is not part of the link");
-assert.equal(upgradeUrlFrom(RAW_BODY), "https://app.upload-post.com/pricing?plan=pro", "link from a JSON body");
+assert.equal(upgradeUrlFrom(RAW_BODY),
+  "https://app.upload-post.com/pricing?plan=pro&utm_source=upload-post-mcp&utm_medium=mcp&utm_campaign=plan_limit",
+  "link from a JSON body, tagged");
+assert.match(UPGRADE_URL, /utm_campaign=plan_limit/, "fallback link is tagged");
+assert.equal(upgradeUrlFrom("https://app.upload-post.com/pricing?plan=basic&utm_source=x"),
+  "https://app.upload-post.com/pricing?plan=basic&utm_source=x&utm_medium=mcp&utm_campaign=plan_limit",
+  "existing utm keys are kept");
 assert.equal(upgradeUrlFrom("no link here"), UPGRADE_URL, "falls back to the Basic checkout");
 
 // --- server instructions -------------------------------------------------------

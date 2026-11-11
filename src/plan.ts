@@ -9,8 +9,25 @@
  * codes when the raw body comes through.
  */
 
+/**
+ * Campaign tags on every upgrade link this server hands out, so the pricing
+ * visits and checkouts that start from an MCP client (mostly ChatGPT) can be
+ * told apart in analytics. Keys already on the link are kept.
+ */
+const UTM = { utm_source: "upload-post-mcp", utm_medium: "mcp", utm_campaign: "plan_limit" } as const;
+
+export function tagUpgradeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    for (const [k, v] of Object.entries(UTM)) if (!u.searchParams.has(k)) u.searchParams.set(k, v);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 /** Checkout for the Basic plan, the cheapest one that lifts both limits. */
-export const UPGRADE_URL = "https://app.upload-post.com/pricing?plan=basic&interval=monthly&autostart=1";
+export const UPGRADE_URL = tagUpgradeUrl("https://app.upload-post.com/pricing?plan=basic&interval=monthly&autostart=1");
 
 /** `plan` value that `get_account_info` reports for the Free plan. */
 export const FREE_PLAN = "Default";
@@ -26,7 +43,7 @@ export function classifyPlanError(message: string): PlanErrorKind | undefined {
 /** The checkout link from the API message, or the Basic plan one. */
 export function upgradeUrlFrom(message: string): string {
   const m = message.match(/https:\/\/app\.upload-post\.com\/pricing[^\s"'\\,)]*/);
-  return m ? m[0].replace(/[.]+$/, "") : UPGRADE_URL;
+  return m ? tagUpgradeUrl(m[0].replace(/[.]+$/, "")) : UPGRADE_URL;
 }
 
 export interface PlanGuidance {
