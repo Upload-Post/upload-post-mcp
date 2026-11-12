@@ -10,7 +10,7 @@ export function registerPostTools(server: McpServer, client: UploadPostMcpClient
     {
       title: "Retry a failed upload",
       description:
-        "Retry a failed upload. Identify it by either `requestId` (async upload) or `jobId` (scheduled/queued upload).",
+        "Retry a failed upload. Identify it by either `requestId` (async upload) or `jobId` (scheduled/queued upload). Only the platforms that failed are sent again; the ones that already published are left alone and come back in `skipped_platforms`. A job that published everywhere answers 409 `nothing_to_retry`, and one that has not run yet 409 `job_not_finished` (use edit_scheduled or cancel_scheduled for those). The retry is a new upload with its own `request_id` / `job_id`: poll that one.",
       inputSchema: {
         requestId: z
           .string()

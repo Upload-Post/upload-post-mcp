@@ -10,7 +10,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Get post comments",
       description:
-        "List comments on a post. One endpoint for every network, chosen with `platform`. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn; TikTok: postId=the video id, `postUrl` is not accepted). Add `commentId` to get the REPLIES hanging off that one comment instead of the post's top-level comments — replies are the same question with one more parameter, not another tool. Reads are cached for up to 60 seconds (up to 2 minutes on X); a comment created or deleted through Upload-Post by the same account shows up on the next read. TikTok: " +
+        "List comments on a post. One endpoint for every network, chosen with `platform`. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn; TikTok: postId=the video id, `postUrl` is not accepted). Add `commentId` to get the REPLIES hanging off that one comment instead of the post's top-level comments — replies are the same question with one more parameter, not another tool. Replies can be listed on TikTok, Threads and YouTube only; on the other networks `commentId` returns 400 `platform_not_supported`. Reads are cached for up to 60 seconds (up to 2 minutes on X); a comment created or deleted through Upload-Post by the same account shows up on the next read. TikTok: " +
         requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
@@ -26,7 +26,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         commentId: z
           .string()
           .optional()
-          .describe("Return the replies under this comment instead of the post's top-level comments. Sent as `comment_id`."),
+          .describe("Return the replies under this comment instead of the post's top-level comments. TikTok, Threads and YouTube only. Sent as `comment_id`."),
         after: z
           .string()
           .optional()
@@ -168,7 +168,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Create a comment or reply",
       description:
-        "Post a top-level comment or a reply on a post. Provide exactly ONE of `commentId` (reply to a comment), `postId`, or `postUrl` (top-level). LinkedIn: postId=the post urn. Instagram requires `commentId` (replies only). TikTok always needs `postId` (the video id); add `commentId` on top of it to reply inside that thread. X: links are removed from the message unless the account is allowed links on X (the response then lists it in `warnings`), and a message that was only links is refused with 400 `x_links_not_allowed`. Replies on X share a daily limit per X account with post edits and reposts made through Upload-Post (20 a day on the free plan, 200 on paid plans, reset at 00:00 UTC); past it the call returns 429 `x_daily_write_limit` with `retry_after` in seconds. TikTok: " +
+        "Post a top-level comment or a reply on a post. Provide exactly ONE of `commentId` (reply to a comment), `postId`, or `postUrl` (top-level). LinkedIn: postId=the post urn; the comment is made as whoever published the post (the member on a personal post, the Page on a Page post) unless `linkedinPageId` says otherwise. Instagram requires `commentId` (replies only). TikTok always needs `postId` (the video id); add `commentId` on top of it to reply inside that thread. X: links are removed from the message unless the account is allowed links on X (the response then lists it in `warnings`), and a message that was only links is refused with 400 `x_links_not_allowed`. Replies on X share a daily limit per X account with post edits and reposts made through Upload-Post (20 a day on the free plan, 200 on paid plans, reset at 00:00 UTC); past it the call returns 429 `x_daily_write_limit` with `retry_after` in seconds. TikTok: " +
         requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
@@ -186,6 +186,10 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           .optional()
           .describe("Top-level comment on this post ID. LinkedIn: the post urn. TikTok: the video id, always required."),
         postUrl: z.string().optional().describe("Top-level comment on this post URL."),
+        linkedinPageId: z
+          .string()
+          .optional()
+          .describe("LinkedIn only: who the comment is made as. `personal` = the member's own profile; a numeric organization id (from get_linkedin_pages) = that company Page. Leave it out to comment as the author of the post. A Page pinned to the profile wins over a page id sent here, but not over `personal`. Sent as `target_linkedin_page_id`."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -203,6 +207,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         commentId?: string;
         postId?: string;
         postUrl?: string;
+        linkedinPageId?: string;
       };
       return client.request("POST", "/uploadposts/comments/create", {
         body: compact({
@@ -212,6 +217,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           comment_id: a.commentId,
           post_id: a.postId,
           post_url: a.postUrl,
+          target_linkedin_page_id: a.linkedinPageId,
         }),
       });
     })

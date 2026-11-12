@@ -54,7 +54,7 @@ export function registerDmTools(server: McpServer, client: UploadPostMcpClient):
         platform: z
           .string()
           .optional()
-          .describe("'instagram', 'whatsapp' or 'facebook' (Messenger). Required by the Upload-Post API."),
+          .describe("'instagram', 'whatsapp' or 'facebook' (Messenger). Required by the Upload-Post API. Messenger is in a limited rollout: an account without access gets 403 `messenger_not_enabled`, and no plan, setting or reconnect changes that (the user can ask Upload-Post support for access)."),
         limit: z
           .number()
           .int()
