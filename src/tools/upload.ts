@@ -833,12 +833,16 @@ export function registerUploadTools(
     {
       title: "Upload document (LinkedIn)",
       description:
-        "Publish a document (PDF / PPT / PPTX / DOC / DOCX) to LinkedIn. Title is required.",
+        "Publish a document (PDF / PPT / PPTX / DOC / DOCX) to LinkedIn. Title is required. `firstComment` posts a comment under the document right after it is published.",
       inputSchema: {
         documentPathOrUrl: z.string(),
         title: z.string(),
         user: z.string(),
         description: z.string().optional(),
+        firstComment: z
+          .string()
+          .optional()
+          .describe("Comment posted under the document post right after publishing (e.g. the link you kept out of the post text). Cannot be changed once the post is scheduled."),
         linkedinVisibility: z
           .enum(["PUBLIC", "CONNECTIONS", "LOGGED_IN", "CONTAINER"])
           .optional(),
