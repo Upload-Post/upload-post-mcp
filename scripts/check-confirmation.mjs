@@ -72,7 +72,7 @@ function assertPreview(r, label) {
     assert.ok(tool, `claude-ai must see ${name}`);
     const field = gate.field ?? "confirmed";
     assert.ok(tool.inputSchema.properties[field], `${name} must accept ${field}`);
-    assert.match(tool.description, /Needs the user's approval/, `${name} description must say so`);
+    assert.match(tool.description, /[Nn]eeds the user's approval/, `${name} description must say so`);
   }
   assert.ok(!s.tools.has("delete_media_upload"), "delete_media_upload is a Studio helper, not for Claude");
   assert.equal(s.tools.get("get_account_info").title, "Get account info");
@@ -89,7 +89,7 @@ function assertPreview(r, label) {
     const tool = s.tools.get(name);
     if (!tool) continue; // comment_action / manage_autodms are not served to ChatGPT
     assert.ok(!tool.inputSchema.properties.confirmed, `ChatGPT ${name} must not gain confirmed`);
-    assert.doesNotMatch(tool.description, /Needs the user's approval/, `ChatGPT ${name} description unchanged`);
+    assert.doesNotMatch(tool.description, /[Nn]eeds the user's approval/, `ChatGPT ${name} description unchanged`);
   }
   assert.ok(s.tools.has("delete_media_upload"), "the Studio still deletes its staging uploads");
   const r = await s.call("upload_text", { user: "marca", platforms: ["x"], title: "hola" });
@@ -112,14 +112,28 @@ function assertPreview(r, label) {
   assertPreview(notYet, "upload_text confirmed:false");
   assert.equal(s.calls.length, 0);
 
-  const scheduled = await s.call("upload_text", { ...args, scheduledDate: "2026-12-25T10:00:00Z" });
-  assert.match(scheduled.result.action, /^Schedules for 2026-12-25T10:00:00Z/);
+  const blankDate = await s.call("upload_text", { ...args, scheduledDate: "  " });
+  assertPreview(blankDate, "upload_text blank scheduledDate");
+  assert.equal(s.calls.length, 0);
 
   const done = await s.call("upload_text", { ...args, confirmed: true });
   assert.equal(done.isError, false);
   assert.equal(s.calls.length, 1);
   assert.equal(s.calls[0][0], "uploadText");
   assert.ok(!JSON.stringify(s.calls[0]).includes("confirmed"), "confirmed never reaches the API");
+
+  // Scheduled or queued posts can still be cancelled: they run without confirmed,
+  // so unattended (scheduled) runs can post.
+  const scheduled = await s.call("upload_text", { ...args, scheduledDate: "2026-12-25T10:00:00Z" });
+  assert.equal(scheduled.isError, false);
+  assert.notEqual(scheduled.result?.status, "confirmation_required", "scheduled upload runs straight away");
+  assert.equal(s.calls.length, 2);
+  const queued = await s.call("upload_photos", { user: "marca", platforms: ["instagram"], photosPathsOrUrls: ["https://example.invalid/a.jpg"], addToQueue: true });
+  assert.equal(queued.isError, false);
+  assert.notEqual(queued.result?.status, "confirmation_required", "queued upload runs straight away");
+  assert.equal(s.calls.length, 3);
+  assert.equal(s.calls[2][0], "uploadPhotos");
+  assert.match(s.tools.get("upload_video").description, /`scheduledDate` or `addToQueue` run straight away/);
 
   const video = await s.call("upload_video", {
     user: "marca", platforms: ["tiktok"], title: "x", firstComment: "primero", videoBase64: "A".repeat(5000),
