@@ -14,6 +14,11 @@ import { ok } from "./schemas.js";
  * Requested by Anthropic's directory review (2026-10-27). ChatGPT does not get
  * the gates: its tool surface is the one OpenAI reviewed, and ChatGPT already
  * asks the user before every write tool.
+ *
+ * Uploads with a `scheduledDate` or `addToQueue` are not gated: the review's
+ * concern was a post going out immediately, and a scheduled or queued post can
+ * still be reviewed and cancelled before it publishes. Without this, scheduled
+ * unattended runs (nobody there to approve) could not post at all.
  */
 
 type Args = Record<string, unknown>;
@@ -23,6 +28,8 @@ interface Gate {
   describe(args: Args): string | undefined;
   /** Argument that unlocks the call. Default: `confirmed: true`. */
   field?: "confirmed" | "confirm_username";
+  /** Description note replacing the default one. */
+  note?: string;
 }
 
 const CONFIRMED_FIELD = z
@@ -42,20 +49,25 @@ const CONFIRM_USERNAME_FIELD = z
 const CONFIRMED_NOTE =
   "Needs the user's approval: call it first without `confirmed` to get a preview (nothing is sent), show the user exactly what will go out, and repeat the call with `confirmed: true` only after they approve.";
 
+const UPLOAD_NOTE =
+  "Publishing now needs the user's approval: call it first without `confirmed` to get a preview (nothing is sent), show the user exactly what will go out, and repeat the call with `confirmed: true` only after they approve. Calls with `scheduledDate` or `addToQueue` run straight away, since the post can still be reviewed and cancelled before it goes out.";
+
 const CONFIRM_USERNAME_NOTE =
   "Needs the user's approval: the call only deletes when `confirm_username` repeats the profile name, typed or approved by the user. Without it the response says what would be deleted.";
 
 const str = (v: unknown): string => (typeof v === "string" ? v : JSON.stringify(v));
 const list = (v: unknown): string => (Array.isArray(v) ? v.join(", ") : str(v));
 
-function publishWhen(a: Args): string {
-  if (a.scheduledDate) return `Schedules for ${str(a.scheduledDate)}${a.timezone ? ` (${str(a.timezone)})` : ""}`;
-  if (a.addToQueue) return "Adds to the posting queue";
-  return "Publishes IMMEDIATELY";
-}
+/** Scheduled or queued: the post can still be cancelled before it goes out. */
+const isDeferred = (a: Args): boolean =>
+  (typeof a.scheduledDate === "string" && a.scheduledDate.trim() !== "") || a.addToQueue === true;
 
 const upload = (what: string): Gate => ({
-  describe: (a) => `${publishWhen(a)} ${what} as profile "${str(a.user)}" on ${a.platforms ? list(a.platforms) : "LinkedIn"}.`,
+  note: UPLOAD_NOTE,
+  describe: (a) =>
+    isDeferred(a)
+      ? undefined
+      : `Publishes IMMEDIATELY ${what} as profile "${str(a.user)}" on ${a.platforms ? list(a.platforms) : "LinkedIn"}.`,
 });
 
 const autodmStart = (a: Args): string => {
@@ -180,7 +192,7 @@ export function applyConfirmationGates(server: McpServer): void {
     const shape = (tool.inputSchema as z.AnyZodObject).shape;
     const original = tool.handler as (args: Args, extra: unknown) => Promise<unknown>;
     tool.update({
-      description: `${tool.description ?? ""} ${field === "confirmed" ? CONFIRMED_NOTE : CONFIRM_USERNAME_NOTE}`,
+      description: `${tool.description ?? ""} ${gate.note ?? (field === "confirmed" ? CONFIRMED_NOTE : CONFIRM_USERNAME_NOTE)}`,
       paramsSchema: { ...shape, [field]: field === "confirmed" ? CONFIRMED_FIELD : CONFIRM_USERNAME_FIELD },
       callback: (async (args: Args, extra: unknown) => {
         const action = gate.describe(args);
