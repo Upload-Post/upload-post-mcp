@@ -102,7 +102,24 @@ const commonPlatformOptionFields = {
   xLongTextAsPost: z.boolean().optional().describe("Post long X text as a single post instead of a thread."),
   threadsLongTextAsPost: z.boolean().optional().describe("Post long Threads text as a single post instead of a thread."),
   threadsTopicTag: z.string().optional().describe("Threads topic tag."),
-  brandContentToggle: z.boolean().optional().describe("TikTok branded content disclosure."),
+  paidPartnership: z
+    .boolean()
+    .optional()
+    .describe(
+      "Mark the post as a paid partnership / sponsored content. Mapped to each network's native field: TikTok brand_content_toggle (direct posts only, never with tiktokPrivacyLevel SELF_ONLY: that is a 400 commercial_disclosure_privacy_conflict), YouTube hasPaidProductPlacement, X x_paid_partnership. A network-specific option sent too wins. Networks with no native label (Instagram, Facebook Reels, LinkedIn, Threads, Bluesky, Reddit, Google Business Profile) add a `warnings` entry and the post still goes out: Instagram's paid-partnership label cannot be set through the API, it has to be turned on in the Instagram app. Facebook and Pinterest need the sponsor id (facebookSponsorId, pinterestSponsorId). A value that is not a boolean is a 400 commercial_disclosure_invalid_value."
+    ),
+  facebookSponsorId: z
+    .string()
+    .optional()
+    .describe(
+      "Numeric Page id of the sponsor, sent to Meta as sponsor_id to tag the post as branded content. Page photos, Page videos (facebookMediaType VIDEO) and text posts only: Reels and Stories have no sponsor field, so it is ignored there with a warning. The publishing Page needs access to Meta's branded content tools."
+    ),
+  brandContentToggle: z
+    .boolean()
+    .optional()
+    .describe(
+      "TikTok branded content disclosure ('Paid partnership'). Cannot be private and is not sent on drafts. TikTok's Music Usage Confirmation is a consent line shown to the user, not an API field: nothing to send. The label TikTok applied is not returned: check it on the post in the TikTok app."
+    ),
   brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure."),
   // NOTE: uploads go through the `upload-post` npm SDK, which appends form
   // fields from a fixed allowlist. `tiktok_first_comment` has to be added there
@@ -256,7 +273,12 @@ const VideoPlatformOptions = z
     youtubeDefaultAudioLanguage: z.string().optional().describe("BCP-47 language of the audio."),
     youtubeAllowedCountries: z.string().optional().describe("Comma-separated allowed country codes."),
     youtubeBlockedCountries: z.string().optional().describe("Comma-separated blocked country codes."),
-    youtubeHasPaidProductPlacement: z.boolean().optional().describe("Paid product placement flag."),
+    youtubeHasPaidProductPlacement: z
+      .boolean()
+      .optional()
+      .describe(
+        "Paid promotion declaration, sent on upload as paidProductPlacementDetails.hasPaidProductPlacement. YouTube does not document the field as writable and can leave it off: the result then carries a warning, and the user can turn on 'Paid promotion' in YouTube Studio (Details > Show more)."
+      ),
     youtubeRecordingDate: z.string().optional().describe("Recording date, ISO 8601."),
     youtubePublishAt: z
       .string()
@@ -287,6 +309,10 @@ const VideoPlatformOptions = z
       .describe("Thumbnail URL for normal Facebook page videos (facebookMediaType VIDEO)."),
     // Pinterest
     pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to (see get_pinterest_boards)."),
+    pinterestSponsorId: z
+      .string()
+      .optional()
+      .describe("Numeric id of the sponsor's Pinterest account, for a paid partnership pin (Pinterest closed beta)."),
     pinterestLink: z.string().optional().describe("Destination link for the pin."),
     pinterestCoverImageUrl: z.string().optional().describe("Cover image URL for the video pin."),
     pinterestCoverImageKeyFrameTime: z.number().optional().describe("Key frame time in ms for the cover."),
@@ -358,6 +384,10 @@ const PhotoPlatformOptions = z
       .optional()
       .describe("Facebook photo placement: POSTS (feed, default) or STORIES for a Page photo story."),
     pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to (see get_pinterest_boards)."),
+    pinterestSponsorId: z
+      .string()
+      .optional()
+      .describe("Numeric id of the sponsor's Pinterest account, for a paid partnership pin (Pinterest closed beta)."),
     pinterestLink: z.string().optional().describe("Destination link for the pin."),
     pinterestAltText: z.string().optional().describe("Pinterest-specific alt text."),
     blueskyGallery: z
