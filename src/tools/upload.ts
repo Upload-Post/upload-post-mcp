@@ -256,7 +256,9 @@ const VideoPlatformOptions = z
     youtubeDefaultAudioLanguage: z.string().optional().describe("BCP-47 language of the audio."),
     youtubeAllowedCountries: z.string().optional().describe("Comma-separated allowed country codes."),
     youtubeBlockedCountries: z.string().optional().describe("Comma-separated blocked country codes."),
-    youtubeHasPaidProductPlacement: z.boolean().optional().describe("Paid product placement flag."),
+    youtubeHasPaidProductPlacement: z.boolean().optional().describe(
+      "YouTube \"Paid promotion\" disclosure. YouTube does not document the flag as settable, so the upload reads it back: check `youtube_paid_product_placement.applied` (true/false/null) in the YouTube result, not only `success`; `warnings` says how to set it in YouTube Studio if it was not applied.",
+    ),
     youtubeRecordingDate: z.string().optional().describe("Recording date, ISO 8601."),
     youtubePublishAt: z
       .string()
