@@ -52,6 +52,12 @@ const commonPlatformOptionFields = {
     .optional()
     .describe("Alias of replyToId, scoped to X: the tweet ID to reply to."),
   facebookPageId: z.string().optional().describe("Facebook Page ID to publish to (see get_facebook_pages)."),
+  facebookSponsorId: z
+    .string()
+    .optional()
+    .describe(
+      "Sponsor's Page ID (digits) for Facebook's branded content tag. Page photos, videos (facebookMediaType VIDEO) and text posts only: Reels and Stories have no such field. The Page needs access to Meta's branded content tool."
+    ),
   linkedinPageId: z
     .string()
     .optional()
@@ -102,7 +108,16 @@ const commonPlatformOptionFields = {
   xLongTextAsPost: z.boolean().optional().describe("Post long X text as a single post instead of a thread."),
   threadsLongTextAsPost: z.boolean().optional().describe("Post long Threads text as a single post instead of a thread."),
   threadsTopicTag: z.string().optional().describe("Threads topic tag."),
-  brandContentToggle: z.boolean().optional().describe("TikTok branded content disclosure."),
+  paidPartnership: z
+    .boolean()
+    .optional()
+    .describe(
+      "Mark the post as paid or sponsored on every platform in the request that has a native label: TikTok branded content (direct posts only; refused with privacy SELF_ONLY), YouTube paid promotion and X paid partnership. A platform's own field (brandContentToggle, youtubeHasPaidProductPlacement, xPaidPartnership) wins when also set. Other platforms add a warning to the result: Instagram has no API field for it (turn the label on in the Instagram app), Facebook needs facebookSponsorId, Pinterest needs pinterestSponsorId. Use this, not a #ad hashtag, when the user asks for the platform's own paid-partnership label."
+    ),
+  brandContentToggle: z
+    .boolean()
+    .optional()
+    .describe("TikTok branded content disclosure (paid partnership with a third-party brand). Direct posts only; TikTok does not allow it with privacy SELF_ONLY."),
   brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure."),
   // NOTE: uploads go through the `upload-post` npm SDK, which appends form
   // fields from a fixed allowlist. `tiktok_first_comment` has to be added there
@@ -256,7 +271,10 @@ const VideoPlatformOptions = z
     youtubeDefaultAudioLanguage: z.string().optional().describe("BCP-47 language of the audio."),
     youtubeAllowedCountries: z.string().optional().describe("Comma-separated allowed country codes."),
     youtubeBlockedCountries: z.string().optional().describe("Comma-separated blocked country codes."),
-    youtubeHasPaidProductPlacement: z.boolean().optional().describe("Paid product placement flag."),
+    youtubeHasPaidProductPlacement: z
+      .boolean()
+      .optional()
+      .describe("YouTube paid promotion declaration (paid product placement). If YouTube visibly did not keep it, the result carries a warning."),
     youtubeRecordingDate: z.string().optional().describe("Recording date, ISO 8601."),
     youtubePublishAt: z
       .string()
@@ -287,6 +305,10 @@ const VideoPlatformOptions = z
       .describe("Thumbnail URL for normal Facebook page videos (facebookMediaType VIDEO)."),
     // Pinterest
     pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to (see get_pinterest_boards)."),
+    pinterestSponsorId: z
+      .string()
+      .optional()
+      .describe("Sponsor's Pinterest account ID (digits) for a paid partnership. Pinterest keeps this to a closed beta."),
     pinterestLink: z.string().optional().describe("Destination link for the pin."),
     pinterestCoverImageUrl: z.string().optional().describe("Cover image URL for the video pin."),
     pinterestCoverImageKeyFrameTime: z.number().optional().describe("Key frame time in ms for the cover."),
@@ -358,6 +380,10 @@ const PhotoPlatformOptions = z
       .optional()
       .describe("Facebook photo placement: POSTS (feed, default) or STORIES for a Page photo story."),
     pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to (see get_pinterest_boards)."),
+    pinterestSponsorId: z
+      .string()
+      .optional()
+      .describe("Sponsor's Pinterest account ID (digits) for a paid partnership. Pinterest keeps this to a closed beta."),
     pinterestLink: z.string().optional().describe("Destination link for the pin."),
     pinterestAltText: z.string().optional().describe("Pinterest-specific alt text."),
     blueskyGallery: z
