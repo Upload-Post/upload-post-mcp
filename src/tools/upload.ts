@@ -104,6 +104,27 @@ const commonPlatformOptionFields = {
   threadsTopicTag: z.string().optional().describe("Threads topic tag."),
   brandContentToggle: z.boolean().optional().describe("TikTok branded content disclosure."),
   brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure."),
+  // Paid partnership / branded content. One switch that Upload-Post maps to each network's own
+  // field, plus the sponsor ids two networks need. Instagram has no API-level label (Meta only
+  // offers it with Facebook Login), so it is stated here for the agent to tell the user.
+  paidPartnership: z
+    .boolean()
+    .optional()
+    .describe(
+      "Mark the post as paid or sponsored. Sets the native label on TikTok (direct posts only; TikTok does not allow it on private posts), YouTube (paid promotion; YouTube may ignore it, so check the result's warnings) and X. " +
+        "Instagram, Facebook Reels, LinkedIn, Threads and other networks have no label the API can set: the post is published without it and the result carries a warning, so tell the user to turn it on in the app. " +
+        "Facebook and Pinterest also need a sponsor id (facebookSponsorId, pinterestSponsorId)."
+    ),
+  facebookSponsorId: z
+    .string()
+    .optional()
+    .describe(
+      "Sponsor's numeric Facebook Page id, to tag the post as branded content. Works on Page videos (facebookMediaType VIDEO), photos and text posts; Reels and Stories have no sponsor field. The Page needs access to Meta's branded content tool."
+    ),
+  pinterestSponsorId: z
+    .string()
+    .optional()
+    .describe("Sponsor's numeric Pinterest account id for a paid partnership Pin. Pinterest only opens this to accounts in its closed beta."),
   // NOTE: uploads go through the `upload-post` npm SDK, which appends form
   // fields from a fixed allowlist. `tiktok_first_comment` has to be added there
   // before this reaches the API; the generic `firstComment` already does.
