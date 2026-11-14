@@ -102,8 +102,29 @@ const commonPlatformOptionFields = {
   xLongTextAsPost: z.boolean().optional().describe("Post long X text as a single post instead of a thread."),
   threadsLongTextAsPost: z.boolean().optional().describe("Post long Threads text as a single post instead of a thread."),
   threadsTopicTag: z.string().optional().describe("Threads topic tag."),
-  brandContentToggle: z.boolean().optional().describe("TikTok branded content disclosure."),
-  brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure."),
+  brandContentToggle: z
+    .boolean()
+    .optional()
+    .describe(
+      "TikTok branded content disclosure (a paid partnership that promotes a third-party brand). Direct posts only, and TikTok does not allow it with tiktokPrivacyLevel SELF_ONLY. TikTok does not return the label it applied: it can only be checked in the TikTok app."
+    ),
+  brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure (promoting the creator's own business)."),
+  paidPartnership: z
+    .boolean()
+    .optional()
+    .describe(
+      "Mark the post as paid or sponsored on every network that has a native label: TikTok branded content (direct posts only; with tiktokPrivacyLevel SELF_ONLY the API answers 400 commercial_disclosure_privacy_conflict), YouTube paid promotion and the X paid partnership label. Networks without one (Instagram, Threads, LinkedIn, Reels and Stories on Facebook, …) add a warning to the result and the post still publishes: tell the user to turn the label on in that app. A network-specific field (brandContentToggle, youtubeHasPaidProductPlacement, xPaidPartnership) always wins over it. false does nothing: leave it out for unpaid posts."
+    ),
+  facebookSponsorId: z
+    .string()
+    .optional()
+    .describe(
+      "Sponsor's numeric Page ID, for Facebook's branded content tag. Applies to Page photos, Page videos (facebookMediaType VIDEO) and text posts; Reels and Stories have no sponsor field, so it is ignored there with a warning. The Page needs access to Meta's branded content tool."
+    ),
+  pinterestSponsorId: z
+    .string()
+    .optional()
+    .describe("Sponsor's numeric account ID, for a Pinterest paid partnership. Pinterest keeps this to a closed beta."),
   // NOTE: uploads go through the `upload-post` npm SDK, which appends form
   // fields from a fixed allowlist. `tiktok_first_comment` has to be added there
   // before this reaches the API; the generic `firstComment` already does.
@@ -256,7 +277,12 @@ const VideoPlatformOptions = z
     youtubeDefaultAudioLanguage: z.string().optional().describe("BCP-47 language of the audio."),
     youtubeAllowedCountries: z.string().optional().describe("Comma-separated allowed country codes."),
     youtubeBlockedCountries: z.string().optional().describe("Comma-separated blocked country codes."),
-    youtubeHasPaidProductPlacement: z.boolean().optional().describe("Paid product placement flag."),
+    youtubeHasPaidProductPlacement: z
+      .boolean()
+      .optional()
+      .describe(
+        "Paid promotion declaration (paidProductPlacementDetails.hasPaidProductPlacement). YouTube's docs do not list it as a writable property, so it can be ignored: when its answer to the upload shows that, the YouTube result carries a warning. The user can read it back with YouTube's videos.list (part=paidProductPlacementDetails) or check Studio (Details > Show more > Paid promotion)."
+      ),
     youtubeRecordingDate: z.string().optional().describe("Recording date, ISO 8601."),
     youtubePublishAt: z
       .string()
