@@ -102,8 +102,8 @@ const commonPlatformOptionFields = {
   xLongTextAsPost: z.boolean().optional().describe("Post long X text as a single post instead of a thread."),
   threadsLongTextAsPost: z.boolean().optional().describe("Post long Threads text as a single post instead of a thread."),
   threadsTopicTag: z.string().optional().describe("Threads topic tag."),
-  brandContentToggle: z.boolean().optional().describe("TikTok branded content disclosure."),
-  brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure."),
+  brandContentToggle: z.boolean().optional().describe("TikTok branded content: native \"Paid partnership\" label (is_branded_content). Cannot be private. The applied label is not readable afterwards; check the post in the TikTok app."),
+  brandOrganicToggle: z.boolean().optional().describe("TikTok \"Promotional content\" label for your own business (is_brand_organic)."),
   // NOTE: uploads go through the `upload-post` npm SDK, which appends form
   // fields from a fixed allowlist. `tiktok_first_comment` has to be added there
   // before this reaches the API; the generic `firstComment` already does.
@@ -256,7 +256,7 @@ const VideoPlatformOptions = z
     youtubeDefaultAudioLanguage: z.string().optional().describe("BCP-47 language of the audio."),
     youtubeAllowedCountries: z.string().optional().describe("Comma-separated allowed country codes."),
     youtubeBlockedCountries: z.string().optional().describe("Comma-separated blocked country codes."),
-    youtubeHasPaidProductPlacement: z.boolean().optional().describe("Paid product placement flag."),
+    youtubeHasPaidProductPlacement: z.boolean().optional().describe("YouTube \"Includes paid promotion\". Read back and, if it did not stick, set with one extra videos.update (50 quota units); the YouTube result reports youtube_paid_product_placement (applied, not_applied or unverified)."),
     youtubeRecordingDate: z.string().optional().describe("Recording date, ISO 8601."),
     youtubePublishAt: z
       .string()
