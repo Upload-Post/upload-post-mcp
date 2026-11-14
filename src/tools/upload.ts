@@ -52,6 +52,12 @@ const commonPlatformOptionFields = {
     .optional()
     .describe("Alias of replyToId, scoped to X: the tweet ID to reply to."),
   facebookPageId: z.string().optional().describe("Facebook Page ID to publish to (see get_facebook_pages)."),
+  facebookSponsorId: z
+    .string()
+    .optional()
+    .describe(
+      "Facebook branded content: Page ID (digits) of the sponsor, sent as sponsor_id. Works on Page photos, normal Page videos (facebookMediaType VIDEO) and text/link posts; Reels and Stories have no sponsor field (ignored, with a warning). The Page needs access to Meta's branded content tool."
+    ),
   linkedinPageId: z
     .string()
     .optional()
@@ -104,6 +110,12 @@ const commonPlatformOptionFields = {
   threadsTopicTag: z.string().optional().describe("Threads topic tag."),
   brandContentToggle: z.boolean().optional().describe("TikTok branded content disclosure."),
   brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure."),
+  paidPartnership: z
+    .boolean()
+    .optional()
+    .describe(
+      "Mark the post with the native paid-partnership / branded-content label on every network that has one: TikTok (brandContentToggle), YouTube (hasPaidProductPlacement) and X (paid partnership). A network-specific option wins over this. Instagram, LinkedIn, Threads and the other networks have no native label through the API: the post still publishes and the result carries a warning. TikTok direct posts only, and not with privacy SELF_ONLY (400 commercial_disclosure_privacy_conflict). Use only when the post really is paid or sponsored."
+    ),
   // NOTE: uploads go through the `upload-post` npm SDK, which appends form
   // fields from a fixed allowlist. `tiktok_first_comment` has to be added there
   // before this reaches the API; the generic `firstComment` already does.
@@ -256,7 +268,12 @@ const VideoPlatformOptions = z
     youtubeDefaultAudioLanguage: z.string().optional().describe("BCP-47 language of the audio."),
     youtubeAllowedCountries: z.string().optional().describe("Comma-separated allowed country codes."),
     youtubeBlockedCountries: z.string().optional().describe("Comma-separated blocked country codes."),
-    youtubeHasPaidProductPlacement: z.boolean().optional().describe("Paid product placement flag."),
+    youtubeHasPaidProductPlacement: z
+      .boolean()
+      .optional()
+      .describe(
+        "YouTube paid promotion declaration (paidProductPlacementDetails.hasPaidProductPlacement). YouTube does not list this property as settable, so it may ignore it: when its reply shows false the result carries a warning, and the label can be set in YouTube Studio (Details > Show more > Paid promotion)."
+      ),
     youtubeRecordingDate: z.string().optional().describe("Recording date, ISO 8601."),
     youtubePublishAt: z
       .string()
@@ -287,6 +304,10 @@ const VideoPlatformOptions = z
       .describe("Thumbnail URL for normal Facebook page videos (facebookMediaType VIDEO)."),
     // Pinterest
     pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to (see get_pinterest_boards)."),
+    pinterestSponsorId: z
+      .string()
+      .optional()
+      .describe("Pinterest paid partnership: account ID (digits) of the sponsor. Pinterest only opens it to accounts in its closed beta."),
     pinterestLink: z.string().optional().describe("Destination link for the pin."),
     pinterestCoverImageUrl: z.string().optional().describe("Cover image URL for the video pin."),
     pinterestCoverImageKeyFrameTime: z.number().optional().describe("Key frame time in ms for the cover."),
@@ -358,6 +379,10 @@ const PhotoPlatformOptions = z
       .optional()
       .describe("Facebook photo placement: POSTS (feed, default) or STORIES for a Page photo story."),
     pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to (see get_pinterest_boards)."),
+    pinterestSponsorId: z
+      .string()
+      .optional()
+      .describe("Pinterest paid partnership: account ID (digits) of the sponsor. Pinterest only opens it to accounts in its closed beta."),
     pinterestLink: z.string().optional().describe("Destination link for the pin."),
     pinterestAltText: z.string().optional().describe("Pinterest-specific alt text."),
     blueskyGallery: z
