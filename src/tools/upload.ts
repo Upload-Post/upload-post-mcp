@@ -102,7 +102,7 @@ const commonPlatformOptionFields = {
   xLongTextAsPost: z.boolean().optional().describe("Post long X text as a single post instead of a thread."),
   threadsLongTextAsPost: z.boolean().optional().describe("Post long Threads text as a single post instead of a thread."),
   threadsTopicTag: z.string().optional().describe("Threads topic tag."),
-  brandContentToggle: z.boolean().optional().describe("TikTok branded content disclosure."),
+  brandContentToggle: z.boolean().optional().describe("TikTok branded content disclosure (paid partnership promoting a third-party brand). TikTok does not return the applied label: check the post in the TikTok app. TikTok's Music Usage Confirmation is not an API field."),
   brandOrganicToggle: z.boolean().optional().describe("TikTok brand organic disclosure."),
   // NOTE: uploads go through the `upload-post` npm SDK, which appends form
   // fields from a fixed allowlist. `tiktok_first_comment` has to be added there
@@ -256,7 +256,7 @@ const VideoPlatformOptions = z
     youtubeDefaultAudioLanguage: z.string().optional().describe("BCP-47 language of the audio."),
     youtubeAllowedCountries: z.string().optional().describe("Comma-separated allowed country codes."),
     youtubeBlockedCountries: z.string().optional().describe("Comma-separated blocked country codes."),
-    youtubeHasPaidProductPlacement: z.boolean().optional().describe("Paid product placement flag."),
+    youtubeHasPaidProductPlacement: z.boolean().optional().describe("YouTube \"Includes paid promotion\" label. After publishing, Upload-Post reads the value back and, if YouTube did not keep it, sets it with videos.update (50 quota units). The result carries youtube_has_paid_product_placement and warnings; a missing label never fails the upload. Instagram and Facebook Reels have no equivalent native label."),
     youtubeRecordingDate: z.string().optional().describe("Recording date, ISO 8601."),
     youtubePublishAt: z
       .string()
