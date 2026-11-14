@@ -74,10 +74,26 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
     {
       title: "Get post analytics",
       description:
-        "Per-platform metrics for a specific post identified by `request_id`. `post_metrics` carries whatever each platform reports, so its shape is not the same everywhere: on TikTok it adds `retention` (the curve, second by second), `impression_sources` (For You, following, search, profile…), `audience_types` (followers vs non-followers), `new_followers` won by the post, `reach` and the watch times (`average_time_watched`, `total_time_watched`, `full_video_watched_rate`) on top of the usual counters. " +
-        "It fetches the metrics live from the platform and changes nothing on the post or the account; Upload-Post keeps a copy of the result, which later reads of the same post can get from get_cached_post_analytics. Repeated calls for the same post within 5 minutes return the same result. When one platform cannot answer (for example, X's daily limit on live post reads), its entry carries `post_metrics_error` instead of `post_metrics` and the other platforms still answer.",
+        "Per-platform metrics for one post. Identify it EITHER by `requestId` (a post published through Upload-Post, including TikTok drafts once they are published publicly from the TikTok app; add `platform` to read only that platform) OR by `platformPostId` + `platform` + `user` together (any post on the connected account, e.g. one returned by get_media, even if it was not published through Upload-Post). `post_metrics` carries whatever each platform reports, so its shape is not the same everywhere: on TikTok it adds `retention` (the curve, second by second), `impression_sources` (For You, following, search, profile…), `audience_types` (followers vs non-followers), `new_followers` won by the post, `reach` and the watch times (`average_time_watched`, `total_time_watched`, `full_video_watched_rate`) on top of the usual counters. " +
+        "TikTok drafts: until the draft is published from the TikTok app, `post_metrics_error` says it is still in the inbox; a draft published as private has no per-post analytics; once published publicly the entry carries the real `platform_post_id`, `post_url`, `draft_published_at` and `original_publish_id` (the TikTok publish id the upload started with). A TikTok upload more than 30 days old that never got a post id is no longer looked up: read it by `platformPostId`. " +
+        "It fetches the metrics live from the platform and changes nothing on the post or the account; Upload-Post keeps a copy of the result, which later reads of the same post can get from get_cached_post_analytics. Repeated calls for the same post within 5 minutes return the same result; live reads are limited to 100 per 5 minutes. When one platform cannot answer (for example, X's daily limit on live post reads), its entry carries `post_metrics_error` instead of `post_metrics` and the other platforms still answer.",
       inputSchema: {
-        requestId: z.string(),
+        requestId: z
+          .string()
+          .optional()
+          .describe("`request_id` of an upload made through Upload-Post. Use this OR platformPostId + platform + user."),
+        platformPostId: z
+          .string()
+          .optional()
+          .describe("The post's own id on the platform (e.g. Instagram media id, TikTok video id). Needs `platform` and `user` too."),
+        platform: z
+          .enum(["instagram", "tiktok", "youtube", "facebook", "linkedin", "x", "threads", "pinterest", "reddit", "bluesky"])
+          .optional()
+          .describe("Platform of the post. Required with platformPostId; with requestId it limits the answer to that platform."),
+        user: z
+          .string()
+          .optional()
+          .describe("Upload-Post profile name that owns the account. Required with platformPostId."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -87,7 +103,30 @@ export function registerAnalyticsTools(server: McpServer, client: UploadPostMcpC
         destructiveHint: false,
       },
     },
-    safe(async ({ requestId }) => client.sdk.getPostAnalytics(requestId as string))
+    safe(async (args) => {
+      const a = args as { requestId?: string; platformPostId?: string; platform?: string; user?: string };
+      if (a.requestId && a.platformPostId) {
+        throw new Error("Pass either requestId or platformPostId (with platform and user), not both.");
+      }
+      if (a.platformPostId || (!a.requestId && (a.platform || a.user))) {
+        const missing = (["platformPostId", "platform", "user"] as const).filter((k) => !a[k]);
+        if (missing.length) {
+          throw new Error(
+            `Reading a post by its platform id needs platformPostId, platform and user together; missing: ${missing.join(", ")}. Or pass requestId.`
+          );
+        }
+        return client.sdk.getPostAnalyticsByPlatformId(a.platformPostId as string, a.platform as string, a.user as string);
+      }
+      if (!a.requestId) {
+        throw new Error("Pass requestId, or platformPostId + platform + user.");
+      }
+      if (a.platform) {
+        return client.request("GET", `/uploadposts/post-analytics/${encodeURIComponent(a.requestId)}`, {
+          query: { platform: a.platform },
+        });
+      }
+      return client.sdk.getPostAnalytics(a.requestId);
+    })
   );
 
   server.registerTool(

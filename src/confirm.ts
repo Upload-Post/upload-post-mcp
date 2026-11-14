@@ -86,14 +86,42 @@ const autodmStart = (a: Args): string => {
   );
 };
 
+/** Bluesky sender actions that change nothing the other person sees run without a preview. */
+const SILENT_SENDER_ACTIONS = new Set(["mark_seen", "mark_read", "mute", "unmute"]);
+
+const sendDm = (a: Args): string | undefined => {
+  const platform = str(a.platform ?? "instagram");
+  const network = platform === "bluesky" ? "Bluesky" : "Instagram";
+  const to = a.recipient_id !== undefined ? `recipient ${str(a.recipient_id)}` : `conversation ${str(a.conversation_id)}`;
+  const action = typeof a.sender_action === "string" ? a.sender_action : undefined;
+  if (action) {
+    if (SILENT_SENDER_ACTIONS.has(action)) return undefined;
+    if (action === "react" || action === "unreact") {
+      return `${action === "react" ? "Adds" : "Removes"} the reaction ${str(a.reaction ?? "")} on message ${str(a.message_id)} in the ${network} chat with ${to}, as profile "${str(a.user)}"; the other participant sees it.`;
+    }
+    if (action === "accept") return `Accepts the ${network} message request from ${to} as profile "${str(a.user)}".`;
+    if (action === "leave") return `Leaves the ${network} conversation with ${to} as profile "${str(a.user)}"; it disappears from the account's inbox.`;
+    if (action === "delete") return `Deletes message ${str(a.message_id)} for profile "${str(a.user)}" only (the other participant keeps it).`;
+    return `Runs ${action} on the ${network} conversation with ${to} as profile "${str(a.user)}".`;
+  }
+  return `Sends a ${network} DM as profile "${str(a.user)}" to ${to}.`;
+};
+
+const autodmRule = (a: Args): string => {
+  const triggers = a.triggers ? list(a.triggers) : "comment";
+  const keywords = a.trigger_keywords ? `only when the text contains ${list(a.trigger_keywords)}` : "to EVERYONE who triggers it";
+  return (
+    `Creates an account-wide Instagram rule on profile "${str(a.profile_username)}" that sends a private DM, ${keywords}, ` +
+    `for these triggers: ${triggers}, on every post and story of the account, present and future, with no end date and nobody reviewing each message.`
+  );
+};
+
 export const GATES: Record<string, Gate> = {
   upload_video: upload("a video"),
   upload_photos: upload("photos"),
   upload_text: upload("a text post"),
   upload_document: upload("a document"),
-  send_dm: {
-    describe: (a) => `Sends an Instagram DM as profile "${str(a.user)}" to recipient ${str(a.recipient_id)}.`,
-  },
+  send_dm: { describe: sendDm },
   reply_to_comment: {
     describe: (a) => `Sends a private DM as profile "${str(a.user)}" to the author of comment ${str(a.commentId)}.`,
   },
@@ -125,6 +153,11 @@ export const GATES: Record<string, Gate> = {
     },
   },
   start_autodm: { describe: autodmStart },
+  create_autodm_rule: { describe: autodmRule },
+  redeliver_webhook: {
+    describe: (a) =>
+      `Sends webhook delivery ${str(a.delivery_id)} again, with the same body, to the webhook URL configured now; the receiver gets the event a second time.`,
+  },
   manage_autodms: { describe: (a) => (a.action === "start" ? autodmStart(a) : undefined) },
   unpublish_post: {
     describe: (a) =>
