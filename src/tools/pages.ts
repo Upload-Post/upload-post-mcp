@@ -1,10 +1,13 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
 import { genericResultOutputSchema, REDDIT_UNAVAILABLE, safe } from "../schemas.js";
 
-export function registerPagesTools(server: McpServer, client: UploadPostMcpClient): void {
+export function registerPagesTools(
+  server: McpServer,
+  client: UploadPostMcpClient
+): { resolveLinkedinOrganization: RegisteredTool } {
   server.registerTool(
     "get_facebook_pages",
     {
@@ -41,6 +44,37 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       },
     },
     safe(async ({ profile }) => client.sdk.getLinkedinPages(profile as string | undefined))
+  );
+
+  const resolveLinkedinOrganization = server.registerTool(
+    "resolve_linkedin_organization",
+    {
+      title: "Resolve a LinkedIn company Page",
+      description:
+        "Turn any LinkedIn company, showcase or school Page (its URL, vanity name, numeric id or urn:li:organization:ID) into `{ urn, id, name, vanity_name, mention }`, so it can be @mentioned in a LinkedIn post. " +
+        "LinkedIn only links a company mention when the name matches the Page's name exactly, capitals included; otherwise it is published as plain text. Put the returned `mention` (`@[Exact Name](urn:li:organization:ID)`) in the LinkedIn text of upload_text, upload_photos, upload_video or upload_document. " +
+        "Works for any public Page, not only the ones the user administers. People cannot be resolved (400 `linkedin_person_not_resolvable`): a person can only be mentioned with an urn:li:person id Upload-Post already returned, such as a comment author. " +
+        "Uses the profile's LinkedIn connection; results are cached (`cached`). Errors: 404 `organization_not_found`, 403 `linkedin_permission_missing` (reconnect LinkedIn), 401 `linkedin_reauth_required`, 429 `rate_limited` / `linkedin_rate_limited`.",
+      inputSchema: {
+        user: z.string().describe("Upload-Post profile name with a connected LinkedIn account."),
+        url: z
+          .string()
+          .min(1)
+          .describe("The Page to resolve: linkedin.com/company/<vanity> (or /showcase/, /school/) URL, the vanity name (with or without @), the numeric organization id, or urn:li:organization:ID."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Resolve a LinkedIn company Page",
+        readOnlyHint: true,
+        openWorldHint: true,
+        destructiveHint: false,
+      },
+    },
+    safe(async (args) =>
+      client.request("GET", "/uploadposts/linkedin/resolve-organization", {
+        query: compact(args as Record<string, unknown>),
+      })
+    )
   );
 
   server.registerTool(
@@ -300,4 +334,6 @@ export function registerPagesTools(server: McpServer, client: UploadPostMcpClien
       });
     })
   );
+
+  return { resolveLinkedinOrganization };
 }

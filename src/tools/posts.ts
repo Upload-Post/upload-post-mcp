@@ -45,7 +45,7 @@ export function registerPostTools(server: McpServer, client: UploadPostMcpClient
     {
       title: "Delete a published post",
       description:
-        "Delete a post already published to a platform. Supported: facebook, youtube, x, linkedin, pinterest, bluesky, google_business. Instagram, TikTok, Threads and Reddit posts cannot be deleted through the API; they have to be removed in the platform's own app.",
+        "Delete a post already published to a platform. Supported: facebook, youtube, x, linkedin, pinterest, bluesky, google_business. Instagram, TikTok, Threads and Reddit posts cannot be deleted through Upload-Post; they have to be removed in the platform's own app.",
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         platform: z

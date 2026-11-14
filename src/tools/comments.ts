@@ -10,7 +10,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Get post comments",
       description:
-        "List comments on a post. One endpoint for every network, chosen with `platform`. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn; TikTok: postId=the video id, `postUrl` is not accepted). Add `commentId` to get the REPLIES hanging off that one comment instead of the post's top-level comments — replies are the same question with one more parameter, not another tool. Replies can be listed on TikTok, Threads and YouTube only; on the other networks `commentId` returns 400 `platform_not_supported`. Reads are cached for up to 60 seconds (up to 2 minutes on X); a comment created or deleted through Upload-Post by the same account shows up on the next read. TikTok: " +
+        "List comments on a post. One endpoint for every network, chosen with `platform`. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn; TikTok: postId=the video id, `postUrl` is not accepted). Add `commentId` to get the REPLIES hanging off that one comment instead of the post's top-level comments — replies are the same question with one more parameter, not another tool. Replies can be listed on TikTok, Threads, YouTube, Instagram, Facebook and LinkedIn (company Page posts only: a personal-profile post returns 403 `linkedin_personal_not_supported`), so you can check whether a comment already has an answer before replying; on X and Bluesky `commentId` returns 400 `platform_not_supported`. `postId` or `postUrl` is still required with `commentId` (on Facebook it picks the Page). A comment with no replies returns an empty list; a malformed id returns 400 `invalid_comment_id`, an unknown one 404 `comment_not_found` (LinkedIn: 404 `linkedin_comment_not_found`, pass the full `comment_urn` instead). Reads are cached for up to 60 seconds (up to 2 minutes on X); a comment created or deleted through Upload-Post by the same account shows up on the next read. TikTok: " +
         requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
@@ -26,11 +26,11 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         commentId: z
           .string()
           .optional()
-          .describe("Return the replies under this comment instead of the post's top-level comments. TikTok, Threads and YouTube only. Sent as `comment_id`."),
+          .describe("Return the replies under this comment instead of the post's top-level comments. TikTok, Threads, YouTube, Instagram, Facebook and LinkedIn (Page posts). LinkedIn: preferably the comment's full `comment_urn` (urn:li:comment:(...)); a bare numeric id is looked up among the post's first 250 comments. Sent as `comment_id`."),
         after: z
           .string()
           .optional()
-          .describe("Pagination cursor returned by a previous call."),
+          .describe("Pagination cursor returned by a previous call (`next_cursor`). For LinkedIn replies it is a numeric offset."),
         limit: z
           .number()
           .int()

@@ -15,6 +15,7 @@ import { registerQueueTools } from "./tools/queue.js";
 import { registerUploadStudio } from "./tools/upload_studio.js";
 import { registerMediaUploadTools } from "./tools/media_uploads.js";
 import { registerFeedbackTools } from "./tools/feedback.js";
+import { registerWebhookTools } from "./tools/webhooks.js";
 import { UPGRADE_URL } from "./plan.js";
 import { applyConfirmationGates } from "./confirm.js";
 import {
@@ -73,7 +74,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   registerAnalyticsTools(server, client);
   registerAudienceTools(server, client);
   registerUserTools(server, client);
-  registerPagesTools(server, client);
+  const pagesTools = registerPagesTools(server, client);
   const commentTools = registerCommentTools(server, client);
   registerPostTools(server, client);
   const dmTools = registerDmTools(server, client);
@@ -81,6 +82,14 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   registerQueueTools(server, client);
   const mediaTools = registerMediaUploadTools(server, client);
   const feedbackTool = registerFeedbackTools(server, client);
+  const webhookTools = registerWebhookTools(server, client);
+  // Added after the ChatGPT app review: they join ChatGPT's surface with the
+  // next submission (chatgpt-app-submission.json), not before.
+  const notYetReviewedForChatGpt = [
+    ...webhookTools,
+    ...dmTools.autodmRuleTools,
+    pagesTools.resolveLinkedinOrganization,
+  ];
   const studio = registerUploadStudio(server);
 
   // Tools are registered before we know who is on the other end. Once the
@@ -102,6 +111,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
       dmTools.manageAutodms.disable();
       // Not in the tool surface OpenAI reviewed; adding it needs a new review.
       feedbackTool.disable();
+      for (const tool of notYetReviewedForChatGpt) tool.disable();
       return;
     }
     studio.tool.disable();

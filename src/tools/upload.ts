@@ -360,6 +360,10 @@ const PhotoPlatformOptions = z
     pinterestBoardId: z.string().optional().describe("Pinterest board ID to publish to (see get_pinterest_boards)."),
     pinterestLink: z.string().optional().describe("Destination link for the pin."),
     pinterestAltText: z.string().optional().describe("Pinterest-specific alt text."),
+    blueskyGallery: z
+      .boolean()
+      .optional()
+      .describe("Bluesky: publish more than 4 images (up to 10) as one gallery post. Without it Bluesky keeps the first 4."),
     xTaggedUserIds: z.union([z.string(), z.array(z.string())]).optional().describe("X user IDs to tag in the media."),
     xPlaceId: z.string().optional().describe("X location place ID."),
     xThreadImageLayout: z
@@ -600,6 +604,12 @@ function uploadVideoShape(videoPathOrUrlDescription: string) {
   };
 }
 
+const BLUESKY_PHOTO_LIMITS =
+  "Bluesky shows at most 4 images per post: with more, the first 4 are published and the result carries a warning, unless `platformOptions.blueskyGallery` is true, which publishes up to 10 as a gallery (the first 10 when more are sent).";
+
+const LINKEDIN_MENTIONS =
+  "LinkedIn mentions: write @[Exact Page Name](urn:li:organization:ID), @[Name](urn:li:person:ID) or @company-vanity in the LinkedIn text. A company name must match the Page's name on LinkedIn exactly, capitals included, or it is published as plain text.";
+
 // Kept verbatim: this is the description ChatGPT has always seen, and the
 // Studio flow depends on it. Other clients get the variant below.
 const UPLOAD_VIDEO_DESCRIPTION_CHATGPT =
@@ -607,6 +617,8 @@ const UPLOAD_VIDEO_DESCRIPTION_CHATGPT =
 
 const UPLOAD_VIDEO_DESCRIPTION_OTHER =
   "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.). " +
+  LINKEDIN_MENTIONS +
+  " " +
   LOCAL_FILE_GUIDANCE;
 
 const VIDEO_PATH_OR_URL_DESCRIPTION_CHATGPT =
@@ -622,11 +634,17 @@ const UPLOAD_PHOTOS_DESCRIPTION_CHATGPT =
   "Publish one or more photos (single image or carousel; items are published in array order). Each item in `photosPathsOrUrls` must be a public/signed HTTPS URL (a staged `media_url` works), or an absolute local path only when the MCP server runs on the same machine as the file. A hosted MCP server cannot read images the user attached in the chat (`/mnt/data`, sandbox, or other mounted paths); for attached images, ALWAYS call `open_upload_studio` with `mediaType: \"photos\"` first so the user selects the image(s) in the browser (several for a carousel) and the Studio stages them, then either publishes them or hands back the staged media URLs in order to pass here. " +
   PER_PLATFORM_CAPTIONS +
   " " +
+  BLUESKY_PHOTO_LIMITS +
+  " " +
   REDDIT_UNAVAILABLE;
 
 const UPLOAD_PHOTOS_DESCRIPTION_OTHER =
   "Publish one or more photos (single image or carousel; items are published in array order). Each item in `photosPathsOrUrls` must be a public/signed HTTPS URL (a staged `media_url` from complete_media_upload works), or an absolute local path only when the MCP server runs on the same machine as the file. " +
   PER_PLATFORM_CAPTIONS +
+  " " +
+  BLUESKY_PHOTO_LIMITS +
+  " " +
+  LINKEDIN_MENTIONS +
   " " +
   LOCAL_FILE_GUIDANCE;
 
@@ -789,7 +807,8 @@ export function registerUploadTools(
     {
       title: "Upload text post",
       description:
-        "Publish a text-only post. `linkUrl` (or platform-specific *LinkUrl) attaches a link preview where supported.",
+        "Publish a text-only post. `linkUrl` (or platform-specific *LinkUrl) attaches a link preview where supported. " +
+        LINKEDIN_MENTIONS,
       inputSchema: {
         title: z.string().describe("Post text / caption."),
         user: z.string(),
@@ -833,7 +852,8 @@ export function registerUploadTools(
     {
       title: "Upload document (LinkedIn)",
       description:
-        "Publish a document (PDF / PPT / PPTX / DOC / DOCX) to LinkedIn. Title is required. `firstComment` posts a comment under the document right after it is published.",
+        "Publish a document (PDF / PPT / PPTX / DOC / DOCX) to LinkedIn. Title is required. `firstComment` posts a comment under the document right after it is published. " +
+        LINKEDIN_MENTIONS,
       inputSchema: {
         documentPathOrUrl: z.string(),
         title: z.string(),
