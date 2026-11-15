@@ -159,6 +159,22 @@ export const GATES: Record<string, Gate> = {
       `Sends webhook delivery ${str(a.delivery_id)} again, with the same body, to the webhook URL configured now; the receiver gets the event a second time.`,
   },
   manage_autodms: { describe: (a) => (a.action === "start" ? autodmStart(a) : undefined) },
+  edit_post: {
+    describe: (a) =>
+      `Changes the live post ${str(a.post_id)} on ${str(a.platform)} as profile "${str(a.user)}"${a.text !== undefined ? ` to the text: ${str(a.text)}` : ""}${a.telegram_action ? ` (${str(a.telegram_action)})` : ""}; the previous version is not kept.`,
+  },
+  repost_post: {
+    describe: (a) =>
+      `Reposts ${a.post_ids ? `messages ${list(a.post_ids)}` : `post ${str(a.post_id)}`} on ${str(a.platform)} as profile "${str(a.user)}"${a.target_chat_id ? ` into chat ${str(a.target_chat_id)}` : ""}${a.target_user ? ` into the Telegram chat of profile "${str(a.target_user)}"` : ""}; its followers see it.`,
+  },
+  post_action: {
+    describe: (a) => {
+      // Bookmarks are private; delete_reaction carries the API's own `confirm`.
+      if (a.action === "bookmark" || a.action === "unbookmark" || a.action === "delete_reaction") return undefined;
+      if (a.action === "react") return `Reacts ${str(a.emoji ?? "")} to message ${str(a.post_id)} on Telegram as profile "${str(a.user)}"; the chat sees it.`;
+      return `Runs ${str(a.action)} on Bluesky post ${str(a.post_id ?? "(pinned)")} as profile "${str(a.user)}"; it changes what others see on the post or profile.`;
+    },
+  },
   unpublish_post: {
     describe: (a) =>
       `Permanently deletes post ${str(a.postId)} from ${str(a.platform)} (profile "${str(a.user)}"). It cannot be restored.`,

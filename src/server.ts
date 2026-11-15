@@ -16,6 +16,11 @@ import { registerUploadStudio } from "./tools/upload_studio.js";
 import { registerMediaUploadTools } from "./tools/media_uploads.js";
 import { registerFeedbackTools } from "./tools/feedback.js";
 import { registerWebhookTools } from "./tools/webhooks.js";
+import { registerPostActionTools } from "./tools/post_actions.js";
+import { registerTelegramTools } from "./tools/telegram.js";
+import { registerBlueskyTools } from "./tools/bluesky.js";
+import { registerGoogleBusinessTools } from "./tools/google_business.js";
+import { applySecondWaveParameters } from "./extensions.js";
 import { UPGRADE_URL } from "./plan.js";
 import { applyConfirmationGates } from "./confirm.js";
 import {
@@ -83,12 +88,20 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   const mediaTools = registerMediaUploadTools(server, client);
   const feedbackTool = registerFeedbackTools(server, client);
   const webhookTools = registerWebhookTools(server, client);
+  const postActionTools = registerPostActionTools(server, client);
+  const telegramTools = registerTelegramTools(server, client);
+  const blueskyTools = registerBlueskyTools(server, client);
+  const googleBusinessTools = registerGoogleBusinessTools(server, client);
   // Added after the ChatGPT app review: they join ChatGPT's surface with the
   // next submission (chatgpt-app-submission.json), not before.
   const notYetReviewedForChatGpt = [
     ...webhookTools,
     ...dmTools.autodmRuleTools,
     pagesTools.resolveLinkedinOrganization,
+    ...postActionTools,
+    ...telegramTools,
+    ...blueskyTools,
+    ...googleBusinessTools,
   ];
   const studio = registerUploadStudio(server);
 
@@ -119,6 +132,8 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     uploadTools.applyClientProfile(ctx);
     mediaTools.applyClientProfile(ctx);
     if (!gated) {
+      // Parameters added after the ChatGPT review: every client but ChatGPT.
+      applySecondWaveParameters(server);
       // Last, so the confirmation note lands after the per-client description rewrites.
       applyConfirmationGates(server);
       gated = true;

@@ -1,0 +1,4713 @@
+[
+ {
+  "name": "upload_video",
+  "title": "Upload video",
+  "description": "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. A hosted MCP server cannot publish attached files passed as `/mnt/data`, sandbox, or other mounted local paths; for those files, ALWAYS call `open_upload_studio` first so the browser stages the video, then publishes it. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "videoPathOrUrl": {
+     "type": "string",
+     "description": "Public/signed HTTPS URL of the video. Absolute local paths are supported only for local/self-hosted MCP clients sharing the same filesystem. Do not pass `/mnt/data`, sandbox, or other mounted attachment paths; use open_upload_studio instead."
+    },
+    "videoBase64": {
+     "type": "string",
+     "description": "Video bytes as base64 (or a data: URI). Provide this OR videoPathOrUrl. The server writes it to a temp file, uploads, then deletes it. Capped by UPLOAD_POST_MAX_INLINE_MB (default 100); over HTTP the whole request is also capped by UPLOAD_POST_MCP_MAX_BODY_MB (default 10), so use videoPathOrUrl for anything larger."
+    },
+    "videoFilename": {
+     "type": "string",
+     "description": "Optional filename (e.g. 'clip.mp4') used only to pick the temp file extension when videoBase64 is given. Defaults to .mp4."
+    },
+    "user": {
+     "type": "string",
+     "description": "Profile name (Upload-Post user)."
+    },
+    "platforms": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "tiktok",
+       "instagram",
+       "youtube",
+       "linkedin",
+       "facebook",
+       "pinterest",
+       "threads",
+       "bluesky",
+       "x",
+       "google_business",
+       "discord",
+       "telegram",
+       "mastodon",
+       "wordpress"
+      ],
+      "description": "Target social platform."
+     },
+     "minItems": 1,
+     "description": "Required array of platform identifiers, e.g. ['instagram']. Never pass a single string."
+    },
+    "title": {
+     "type": "string",
+     "description": "Caption / title."
+    },
+    "description": {
+     "type": "string",
+     "description": "Description for the platforms that take one, unless a per-platform override is set. TikTok ignores it: set `platformOptions.tiktokDescription` for the TikTok description; the TikTok title comes from `platformOptions.tiktokTitle`, or `title`."
+    },
+    "firstComment": {
+     "type": "string",
+     "description": "Comment auto-posted under the post right after publishing. Supported on every platform that has comments, TikTok included. Use `platformOptions.<platform>FirstComment` to override it for one platform. X: links can be removed from X posts and first comments, depending on the account, so a 'link in the first comment' may go out without the URL; check `warnings` in get_status after publishing."
+    },
+    "scheduledDate": {
+     "type": "string",
+     "description": "ISO 8601 date for scheduled publishing, e.g. '2026-12-25T10:00:00Z'. Omit for immediate post."
+    },
+    "timezone": {
+     "type": "string",
+     "description": "IANA timezone for scheduled date, e.g. 'Europe/Madrid'."
+    },
+    "addToQueue": {
+     "type": "boolean",
+     "description": "Insert into the user's posting queue instead of publishing now."
+    },
+    "maxPostsPerSlot": {
+     "type": "integer",
+     "exclusiveMinimum": 0
+    },
+    "asyncUpload": {
+     "type": "boolean",
+     "description": "Return immediately with request_id (default true)."
+    },
+    "platformOptions": {
+     "type": "object",
+     "properties": {
+      "replyToId": {
+       "type": "string",
+       "description": "Publish as a reply to an existing post (X: tweet ID; Bluesky: post URL or AT-URI). On X's Pay-Per-Use tier a reply to an author the account has not engaged with is rejected with 403."
+      },
+      "xReplyToId": {
+       "type": "string",
+       "description": "Alias of replyToId, scoped to X: the tweet ID to reply to."
+      },
+      "facebookPageId": {
+       "type": "string",
+       "description": "Facebook Page ID to publish to (see get_facebook_pages)."
+      },
+      "linkedinPageId": {
+       "type": "string",
+       "description": "Alias of targetLinkedinPageId: LinkedIn organization/page ID to publish to."
+      },
+      "targetLinkedinPageId": {
+       "type": "string",
+       "description": "LinkedIn organization/page ID to publish to (see get_linkedin_pages)."
+      },
+      "linkedinVisibility": {
+       "type": "string",
+       "enum": [
+        "PUBLIC",
+        "CONNECTIONS",
+        "LOGGED_IN",
+        "CONTAINER"
+       ],
+       "description": "LinkedIn post visibility."
+      },
+      "googleBusinessLocationId": {
+       "type": "string",
+       "description": "Google Business location ID (see get_google_business_locations). Selected on the profile before publishing."
+      },
+      "gbpPostType": {
+       "type": "string",
+       "enum": [
+        "MEDIA",
+        "PHOTO",
+        "GALLERY"
+       ],
+       "description": "Publish into the Google Business location's photo gallery instead of creating a Local Post. Omitting it keeps the Local Post behaviour."
+      },
+      "gbpMediaCategory": {
+       "type": "string",
+       "enum": [
+        "COVER",
+        "PROFILE",
+        "LOGO",
+        "EXTERIOR",
+        "INTERIOR",
+        "PRODUCT",
+        "AT_WORK",
+        "FOOD_AND_DRINK",
+        "MENU",
+        "COMMON_AREA",
+        "ROOMS",
+        "TEAMS",
+        "ADDITIONAL"
+       ],
+       "description": "Google Business gallery category for the uploaded photo. Only used with gbpPostType. Defaults to ADDITIONAL."
+      },
+      "xReplySettings": {
+       "type": "string",
+       "enum": [
+        "everyone",
+        "following",
+        "mentionedUsers",
+        "subscribers",
+        "verified"
+       ],
+       "description": "Who can reply on X."
+      },
+      "xCommunityId": {
+       "type": "string",
+       "description": "X community ID to post into."
+      },
+      "xLongTextAsPost": {
+       "type": "boolean",
+       "description": "Post long X text as a single post instead of a thread."
+      },
+      "threadsLongTextAsPost": {
+       "type": "boolean",
+       "description": "Post long Threads text as a single post instead of a thread."
+      },
+      "threadsTopicTag": {
+       "type": "string",
+       "description": "Threads topic tag."
+      },
+      "brandContentToggle": {
+       "type": "boolean",
+       "description": "TikTok branded content disclosure."
+      },
+      "brandOrganicToggle": {
+       "type": "boolean",
+       "description": "TikTok brand organic disclosure."
+      },
+      "tiktokFirstComment": {
+       "type": "string",
+       "description": "First comment posted under the TikTok post, overriding the shared `firstComment` for TikTok only. Requires the 'comments' capability on the profile's TikTok account (see the `capabilities` array in list_users)."
+      },
+      "tiktokPrivacyLevel": {
+       "type": "string",
+       "description": "TikTok privacy value: PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY. TikTok decides per account which of these are available (a private account has no PUBLIC_TO_EVERYONE); asking for another one fails with error_code tiktok_privacy_unavailable listing the allowed ones. Omit it to keep the account's own default."
+      },
+      "tiktokDisableDuet": {
+       "type": "boolean",
+       "description": "Disable duets on TikTok."
+      },
+      "tiktokDisableComment": {
+       "type": "boolean",
+       "description": "Disable comments on TikTok."
+      },
+      "tiktokDisableStitch": {
+       "type": "boolean",
+       "description": "Disable stitch on TikTok."
+      },
+      "tiktokCoverTimestamp": {
+       "type": "number",
+       "description": "Cover frame timestamp in ms."
+      },
+      "tiktokIsAigc": {
+       "type": "boolean",
+       "description": "TikTok AI-generated content flag."
+      },
+      "tiktokPostMode": {
+       "type": "string",
+       "enum": [
+        "DIRECT_POST",
+        "MEDIA_UPLOAD"
+       ],
+       "description": "Send to TikTok drafts/inbox. Same flag for every TikTok account; do not pick a different field for Business. MEDIA_UPLOAD (or tiktokUploadToDraft=true) sends the video to drafts/inbox. DIRECT_POST publishes now."
+      },
+      "tiktokMusicId": {
+       "type": "string",
+       "description": "Commercial Music Library track to add to the video — pass a track `id` from tiktok_music_trending (the `id` field, not `commercial_music_id`). Available on connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users); otherwise the field is ignored, the post still publishes and the response includes a per-field warning — reconnect the TikTok account to enable it."
+      },
+      "tiktokMusicVolume": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 100,
+       "description": "Volume of the added music track, 0-100. Defaults to 50 when music is set."
+      },
+      "tiktokMusicStart": {
+       "type": "integer",
+       "minimum": 0,
+       "description": "Start offset of the music track, in milliseconds."
+      },
+      "tiktokMusicEnd": {
+       "type": "integer",
+       "minimum": 0,
+       "description": "End offset of the music track, in milliseconds."
+      },
+      "tiktokOriginalSoundVolume": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 100,
+       "description": "Volume of the video's own audio when music is added, 0-100. Defaults to 50 so the original audio is not muted."
+      },
+      "tiktokLocationId": {
+       "type": "string",
+       "description": "Location to tag — pass a `location_id` from tiktok_location_search. Must be sent together with tiktokLocationName. Needs the `location` capability (see tiktokMusicId)."
+      },
+      "tiktokLocationName": {
+       "type": "string",
+       "description": "Name of the tagged location, from tiktok_location_search. TikTok requires it whenever tiktokLocationId is set."
+      },
+      "tiktokCoverImageUrl": {
+       "type": "string",
+       "description": "Custom cover image URL. Takes priority over tiktokCoverTimestamp. Needs the `cover_image` capability (see tiktokMusicId)."
+      },
+      "tiktokIsAiGenerated": {
+       "type": "boolean",
+       "description": "Disclose the video as AI-generated content."
+      },
+      "tiktokUploadToDraft": {
+       "type": "boolean",
+       "description": "Send to TikTok drafts/inbox. Same flag for every TikTok account; do not pick a different field for Business. Set true, or tiktokPostMode=MEDIA_UPLOAD."
+      },
+      "instagramMediaType": {
+       "type": "string",
+       "enum": [
+        "REELS",
+        "STORIES"
+       ],
+       "description": "Instagram video placement. Use REELS for Reels, STORIES for Stories."
+      },
+      "instagramShareToFeed": {
+       "type": "boolean",
+       "description": "Also show the Reel in the feed."
+      },
+      "instagramCoverUrl": {
+       "type": "string",
+       "description": "Custom cover image URL for the Reel."
+      },
+      "instagramThumbOffset": {
+       "type": "string",
+       "description": "Frame offset for the auto-generated thumbnail."
+      },
+      "instagramCollaborators": {
+       "type": "string",
+       "description": "Comma-separated collaborator usernames."
+      },
+      "instagramUserTags": {
+       "type": "string",
+       "description": "Comma-separated user tags."
+      },
+      "instagramLocationId": {
+       "type": "string",
+       "description": "Instagram location ID."
+      },
+      "instagramAudioName": {
+       "type": "string",
+       "description": "Audio track name."
+      },
+      "instagramShareMode": {
+       "type": "string",
+       "enum": [
+        "TRIAL_REELS_SHARE_TO_FOLLOWERS_IF_LIKED",
+        "TRIAL_REELS_DONT_SHARE_TO_FOLLOWERS"
+       ],
+       "description": "Publish the Reel as a Trial Reel, shown to non-followers first. TRIAL_REELS_SHARE_TO_FOLLOWERS_IF_LIKED shares it with followers if it performs well; TRIAL_REELS_DONT_SHARE_TO_FOLLOWERS never does. Instagram only offers trial Reels to some accounts."
+      },
+      "instagramIsAiGenerated": {
+       "type": "boolean",
+       "description": "Label the Instagram post as AI-generated. Sent as the generic is_ai_generated, which other platforms in the same post read too (it is the same media)."
+      },
+      "youtubePrivacyStatus": {
+       "type": "string",
+       "enum": [
+        "public",
+        "private",
+        "unlisted"
+       ],
+       "description": "YouTube visibility for the uploaded video."
+      },
+      "youtubePlaylistId": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        }
+       ],
+       "description": "One YouTube playlist ID, or an array of playlist IDs, to add the uploaded video to."
+      },
+      "youtubeThumbnailUrl": {
+       "type": "string",
+       "description": "Custom thumbnail image URL for the YouTube video."
+      },
+      "youtubeTags": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        }
+       ],
+       "description": "YouTube video tags, as an array or comma-separated string."
+      },
+      "youtubeCategoryId": {
+       "type": "string",
+       "description": "YouTube category ID, e.g. '22' for People & Blogs."
+      },
+      "youtubeEmbeddable": {
+       "type": "boolean",
+       "description": "Allow embedding the video on other sites."
+      },
+      "youtubeLicense": {
+       "type": "string",
+       "enum": [
+        "youtube",
+        "creativeCommon"
+       ],
+       "description": "YouTube video license."
+      },
+      "youtubePublicStatsViewable": {
+       "type": "boolean",
+       "description": "Show public view stats on the video."
+      },
+      "youtubeSelfDeclaredMadeForKids": {
+       "type": "boolean",
+       "description": "YouTube made-for-kids flag (COPPA)."
+      },
+      "youtubeContainsSyntheticMedia": {
+       "type": "boolean",
+       "description": "YouTube AI/synthetic content disclosure."
+      },
+      "youtubeDefaultLanguage": {
+       "type": "string",
+       "description": "BCP-47 language of title/description."
+      },
+      "youtubeDefaultAudioLanguage": {
+       "type": "string",
+       "description": "BCP-47 language of the audio."
+      },
+      "youtubeAllowedCountries": {
+       "type": "string",
+       "description": "Comma-separated allowed country codes."
+      },
+      "youtubeBlockedCountries": {
+       "type": "string",
+       "description": "Comma-separated blocked country codes."
+      },
+      "youtubeHasPaidProductPlacement": {
+       "type": "boolean",
+       "description": "Paid product placement flag."
+      },
+      "youtubeRecordingDate": {
+       "type": "string",
+       "description": "Recording date, ISO 8601."
+      },
+      "youtubePublishAt": {
+       "type": "string",
+       "description": "Native YouTube scheduling: ISO 8601 UTC date-time at which YouTube makes the video public (shows as Scheduled in YouTube Studio). The video is uploaded now as private. Different from scheduledDate, which delays the whole upload."
+      },
+      "youtubeNotifySubscribers": {
+       "type": "boolean",
+       "description": "false stops YouTube from notifying subscribers about the new video. Defaults to true."
+      },
+      "youtubeSubtitles": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "language": {
+          "type": "string",
+          "description": "BCP-47 language code, e.g. 'en', 'es'."
+         },
+         "name": {
+          "type": "string",
+          "description": "Display name of the subtitle track."
+         },
+         "url": {
+          "type": "string",
+          "description": "URL of the subtitle file (SRT, VTT, SBV, SUB, ASS, SSA, TTML)."
+         }
+        },
+        "required": [
+         "language"
+        ],
+        "additionalProperties": false
+       },
+       "description": "Subtitle/caption tracks to attach to the YouTube video."
+      },
+      "facebookMediaType": {
+       "type": "string",
+       "enum": [
+        "REELS",
+        "STORIES",
+        "VIDEO"
+       ],
+       "description": "Facebook video placement."
+      },
+      "facebookVideoState": {
+       "type": "string",
+       "enum": [
+        "PUBLISHED",
+        "DRAFT"
+       ],
+       "description": "Facebook video state."
+      },
+      "thumbnailUrl": {
+       "type": "string",
+       "description": "Thumbnail URL for normal Facebook page videos (facebookMediaType VIDEO)."
+      },
+      "pinterestBoardId": {
+       "type": "string",
+       "description": "Pinterest board ID to publish to (see get_pinterest_boards)."
+      },
+      "pinterestLink": {
+       "type": "string",
+       "description": "Destination link for the pin."
+      },
+      "pinterestCoverImageUrl": {
+       "type": "string",
+       "description": "Cover image URL for the video pin."
+      },
+      "pinterestCoverImageKeyFrameTime": {
+       "type": "number",
+       "description": "Key frame time in ms for the cover."
+      },
+      "xTaggedUserIds": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        }
+       ],
+       "description": "X user IDs to tag in the media."
+      },
+      "xPlaceId": {
+       "type": "string",
+       "description": "X location place ID."
+      }
+     },
+     "additionalProperties": true,
+     "description": "Platform-specific overrides as a flat object (camelCase keys), e.g. { tiktokPrivacyLevel: 'PUBLIC_TO_EVERYONE', youtubePrivacyStatus: 'public', youtubePlaylistId: 'PLxxxxxxxxxxxx', facebookPageId: '123' }. `youtubePlaylistId` may also be an array or a comma-separated list of playlist IDs to add the uploaded video to. The `tiktokMusic*`, `tiktokLocation*`, and `tiktokCoverImageUrl` keys depend on the TikTok connection's `capabilities` (see list_users); discover valid values with tiktok_music_trending and tiktok_location_search. tiktokPostMode=MEDIA_UPLOAD and tiktokUploadToDraft=true are the same draft/inbox flag for every TikTok account."
+    }
+   },
+   "required": [
+    "user",
+    "platforms"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Upload video",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  },
+  "_meta": {
+   "ui": {
+    "visibility": [
+     "model",
+     "app"
+    ]
+   },
+   "openai/widgetAccessible": true,
+   "openai/toolInvocation/invoking": "Uploading video…",
+   "openai/toolInvocation/invoked": "Upload started"
+  }
+ },
+ {
+  "name": "upload_photos",
+  "title": "Upload photos / carousel",
+  "description": "Publish one or more photos (single image or carousel; items are published in array order). Each item in `photosPathsOrUrls` must be a public/signed HTTPS URL (a staged `media_url` works), or an absolute local path only when the MCP server runs on the same machine as the file. A hosted MCP server cannot read images the user attached in the chat (`/mnt/data`, sandbox, or other mounted paths); for attached images, ALWAYS call `open_upload_studio` with `mediaType: \"photos\"` first so the user selects the image(s) in the browser (several for a carousel) and the Studio stages them, then either publishes them or hands back the staged media URLs in order to pass here. One call can carry a different caption per platform: `title` is the default and `platformOptions.facebookTitle`, `platformOptions.instagramTitle`, `platformOptions.linkedinTitle`, `platformOptions.xTitle`, … override it for that platform. Bluesky shows at most 4 images per post: with more, the first 4 are published and the result carries a warning, unless `platformOptions.blueskyGallery` is true, which publishes up to 10 as a gallery (the first 10 when more are sent). Reddit posting is currently unavailable (error_code=reddit_unavailable) until the Reddit app is restored. Do not use reddit as a publish target.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "photosPathsOrUrls": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "minItems": 1,
+     "description": "Photo URLs (or same-machine local paths), in carousel order. Never `/mnt/data` or sandbox attachment paths."
+    },
+    "user": {
+     "type": "string"
+    },
+    "platforms": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "tiktok",
+       "instagram",
+       "linkedin",
+       "facebook",
+       "pinterest",
+       "threads",
+       "bluesky",
+       "x",
+       "google_business",
+       "discord",
+       "telegram",
+       "mastodon",
+       "lemmy",
+       "wordpress"
+      ],
+      "description": "Target social platform."
+     },
+     "minItems": 1,
+     "description": "Required array of platform identifiers."
+    },
+    "title": {
+     "type": "string"
+    },
+    "description": {
+     "type": "string",
+     "description": "Description for the platforms that take one, unless a per-platform override is set. TikTok ignores it: set `platformOptions.tiktokDescription` for the TikTok description; the TikTok title comes from `platformOptions.tiktokTitle`, or `title`."
+    },
+    "firstComment": {
+     "type": "string",
+     "description": "Comment auto-posted under the post right after publishing. Supported on every platform that has comments, TikTok included. Use `platformOptions.<platform>FirstComment` to override it for one platform. X: links can be removed from X posts and first comments, depending on the account, so a 'link in the first comment' may go out without the URL; check `warnings` in get_status after publishing."
+    },
+    "altText": {
+     "type": "string"
+    },
+    "scheduledDate": {
+     "type": "string",
+     "description": "ISO 8601 date for scheduled publishing, e.g. '2026-12-25T10:00:00Z'. Omit for immediate post."
+    },
+    "timezone": {
+     "type": "string",
+     "description": "IANA timezone for scheduled date, e.g. 'Europe/Madrid'."
+    },
+    "addToQueue": {
+     "type": "boolean",
+     "description": "Insert into the user's posting queue instead of publishing now."
+    },
+    "maxPostsPerSlot": {
+     "type": "integer",
+     "exclusiveMinimum": 0
+    },
+    "asyncUpload": {
+     "type": "boolean",
+     "description": "Return immediately with request_id (default true)."
+    },
+    "platformOptions": {
+     "type": "object",
+     "properties": {
+      "replyToId": {
+       "type": "string",
+       "description": "Publish as a reply to an existing post (X: tweet ID; Bluesky: post URL or AT-URI). On X's Pay-Per-Use tier a reply to an author the account has not engaged with is rejected with 403."
+      },
+      "xReplyToId": {
+       "type": "string",
+       "description": "Alias of replyToId, scoped to X: the tweet ID to reply to."
+      },
+      "facebookPageId": {
+       "type": "string",
+       "description": "Facebook Page ID to publish to (see get_facebook_pages)."
+      },
+      "linkedinPageId": {
+       "type": "string",
+       "description": "Alias of targetLinkedinPageId: LinkedIn organization/page ID to publish to."
+      },
+      "targetLinkedinPageId": {
+       "type": "string",
+       "description": "LinkedIn organization/page ID to publish to (see get_linkedin_pages)."
+      },
+      "linkedinVisibility": {
+       "type": "string",
+       "enum": [
+        "PUBLIC",
+        "CONNECTIONS",
+        "LOGGED_IN",
+        "CONTAINER"
+       ],
+       "description": "LinkedIn post visibility."
+      },
+      "googleBusinessLocationId": {
+       "type": "string",
+       "description": "Google Business location ID (see get_google_business_locations). Selected on the profile before publishing."
+      },
+      "gbpPostType": {
+       "type": "string",
+       "enum": [
+        "MEDIA",
+        "PHOTO",
+        "GALLERY"
+       ],
+       "description": "Publish into the Google Business location's photo gallery instead of creating a Local Post. Omitting it keeps the Local Post behaviour."
+      },
+      "gbpMediaCategory": {
+       "type": "string",
+       "enum": [
+        "COVER",
+        "PROFILE",
+        "LOGO",
+        "EXTERIOR",
+        "INTERIOR",
+        "PRODUCT",
+        "AT_WORK",
+        "FOOD_AND_DRINK",
+        "MENU",
+        "COMMON_AREA",
+        "ROOMS",
+        "TEAMS",
+        "ADDITIONAL"
+       ],
+       "description": "Google Business gallery category for the uploaded photo. Only used with gbpPostType. Defaults to ADDITIONAL."
+      },
+      "xReplySettings": {
+       "type": "string",
+       "enum": [
+        "everyone",
+        "following",
+        "mentionedUsers",
+        "subscribers",
+        "verified"
+       ],
+       "description": "Who can reply on X."
+      },
+      "xCommunityId": {
+       "type": "string",
+       "description": "X community ID to post into."
+      },
+      "xLongTextAsPost": {
+       "type": "boolean",
+       "description": "Post long X text as a single post instead of a thread."
+      },
+      "threadsLongTextAsPost": {
+       "type": "boolean",
+       "description": "Post long Threads text as a single post instead of a thread."
+      },
+      "threadsTopicTag": {
+       "type": "string",
+       "description": "Threads topic tag."
+      },
+      "brandContentToggle": {
+       "type": "boolean",
+       "description": "TikTok branded content disclosure."
+      },
+      "brandOrganicToggle": {
+       "type": "boolean",
+       "description": "TikTok brand organic disclosure."
+      },
+      "tiktokFirstComment": {
+       "type": "string",
+       "description": "First comment posted under the TikTok post, overriding the shared `firstComment` for TikTok only. Requires the 'comments' capability on the profile's TikTok account (see the `capabilities` array in list_users)."
+      },
+      "tiktokAutoAddMusic": {
+       "type": "boolean",
+       "description": "Auto add music to TikTok photo posts."
+      },
+      "tiktokDisableComment": {
+       "type": "boolean",
+       "description": "Disable comments on TikTok."
+      },
+      "tiktokPrivacyLevel": {
+       "type": "string",
+       "description": "TikTok privacy value: PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY. TikTok requires one on photo posts (defaults to PUBLIC_TO_EVERYONE) and decides per account which values are available."
+      },
+      "tiktokPhotoCoverIndex": {
+       "type": "integer",
+       "minimum": 0,
+       "description": "Index of the cover photo, 0-based. Sent as `photo_cover_index`; picks the cover of a TikTok photo post."
+      },
+      "tiktokPostMode": {
+       "type": "string",
+       "enum": [
+        "DIRECT_POST",
+        "MEDIA_UPLOAD"
+       ],
+       "description": "Send to TikTok drafts/inbox. Same flag for every TikTok account; do not pick a different field for Business. MEDIA_UPLOAD (or tiktokUploadToDraft=true) sends the post to drafts/inbox. DIRECT_POST publishes now."
+      },
+      "tiktokUploadToDraft": {
+       "type": "boolean",
+       "description": "Send to TikTok drafts/inbox. Same flag for every TikTok account; do not pick a different field for Business. Set true, or tiktokPostMode=MEDIA_UPLOAD."
+      },
+      "tiktokMusicId": {
+       "type": "string",
+       "description": "Commercial Music Library track to add to the photo post — pass a track `id` from tiktok_music_trending or tiktok_music_search (the `id` field, not `commercial_music_id`). TikTok's photo posts take the id alone: there is no volume or trim. Available on connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users); otherwise the field is ignored, the post still publishes and the response includes a per-field warning."
+      },
+      "tiktokLocationId": {
+       "type": "string",
+       "description": "Location to tag — pass a `location_id` from tiktok_location_search. Must be sent together with tiktokLocationName. Needs the `location` capability (see tiktokMusicId)."
+      },
+      "tiktokLocationName": {
+       "type": "string",
+       "description": "Name of the tagged location, from tiktok_location_search. TikTok requires it whenever tiktokLocationId is set."
+      },
+      "tiktokIsAiGenerated": {
+       "type": "boolean",
+       "description": "Disclose the photo post as AI-generated content."
+      },
+      "instagramMediaType": {
+       "type": "string",
+       "enum": [
+        "IMAGE",
+        "STORIES"
+       ],
+       "description": "Instagram photo placement. Use IMAGE for feed, STORIES for Stories."
+      },
+      "instagramCollaborators": {
+       "type": "string",
+       "description": "Comma-separated collaborator usernames."
+      },
+      "instagramUserTags": {
+       "type": "string",
+       "description": "Comma-separated user tags."
+      },
+      "instagramLocationId": {
+       "type": "string",
+       "description": "Instagram location ID."
+      },
+      "instagramIsAiGenerated": {
+       "type": "boolean",
+       "description": "Label the Instagram post as AI-generated. Sent as the generic is_ai_generated, which other platforms in the same post read too (it is the same media)."
+      },
+      "facebookMediaType": {
+       "type": "string",
+       "enum": [
+        "POSTS",
+        "STORIES"
+       ],
+       "description": "Facebook photo placement: POSTS (feed, default) or STORIES for a Page photo story."
+      },
+      "pinterestBoardId": {
+       "type": "string",
+       "description": "Pinterest board ID to publish to (see get_pinterest_boards)."
+      },
+      "pinterestLink": {
+       "type": "string",
+       "description": "Destination link for the pin."
+      },
+      "pinterestAltText": {
+       "type": "string",
+       "description": "Pinterest-specific alt text."
+      },
+      "blueskyGallery": {
+       "type": "boolean",
+       "description": "Bluesky: publish more than 4 images (up to 10) as one gallery post. Without it Bluesky keeps the first 4."
+      },
+      "xTaggedUserIds": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        }
+       ],
+       "description": "X user IDs to tag in the media."
+      },
+      "xPlaceId": {
+       "type": "string",
+       "description": "X location place ID."
+      },
+      "xThreadImageLayout": {
+       "type": "string",
+       "description": "Images per X thread post, e.g. '4,4' or '2,3,1'. Total must equal image count."
+      },
+      "threadsThreadMediaLayout": {
+       "type": "string",
+       "description": "Media items per Threads post, e.g. '5,5'. Total must equal file count."
+      },
+      "redditSubreddit": {
+       "type": "string",
+       "description": "Reddit only."
+      },
+      "redditFlairId": {
+       "type": "string",
+       "description": "Reddit only."
+      }
+     },
+     "additionalProperties": true,
+     "description": "Flat platform-specific override object with camelCase keys. Per-platform text overrides (instagramTitle, xFirstComment, …) are also accepted. Unsupported keys are not sent; the result then lists them in `ignored_platform_options`."
+    }
+   },
+   "required": [
+    "photosPathsOrUrls",
+    "user",
+    "platforms"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Upload photos / carousel",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  },
+  "_meta": {
+   "ui": {
+    "visibility": [
+     "model",
+     "app"
+    ]
+   },
+   "openai/widgetAccessible": true,
+   "openai/toolInvocation/invoking": "Uploading photos…",
+   "openai/toolInvocation/invoked": "Upload started"
+  }
+ },
+ {
+  "name": "upload_text",
+  "title": "Upload text post",
+  "description": "Publish a text-only post. `linkUrl` (or platform-specific *LinkUrl) attaches a link preview where supported. LinkedIn mentions: write @[Exact Page Name](urn:li:organization:ID), @[Name](urn:li:person:ID) or @company-vanity in the LinkedIn text. A company name must match the Page's name on LinkedIn exactly, capitals included, or it is published as plain text.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "title": {
+     "type": "string",
+     "description": "Post text / caption."
+    },
+    "user": {
+     "type": "string"
+    },
+    "platforms": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "x",
+       "linkedin",
+       "facebook",
+       "threads",
+       "bluesky",
+       "google_business",
+       "discord",
+       "telegram",
+       "slack",
+       "mastodon",
+       "nostr",
+       "lemmy",
+       "devto",
+       "hashnode",
+       "wordpress",
+       "whop",
+       "listmonk"
+      ],
+      "description": "Target social platform."
+     },
+     "minItems": 1,
+     "description": "Required array of platform identifiers."
+    },
+    "linkUrl": {
+     "type": "string",
+     "description": "Generic link preview URL (LinkedIn, Bluesky, Facebook)."
+    },
+    "scheduledDate": {
+     "type": "string",
+     "description": "ISO 8601 date for scheduled publishing, e.g. '2026-12-25T10:00:00Z'. Omit for immediate post."
+    },
+    "timezone": {
+     "type": "string",
+     "description": "IANA timezone for scheduled date, e.g. 'Europe/Madrid'."
+    },
+    "addToQueue": {
+     "type": "boolean",
+     "description": "Insert into the user's posting queue instead of publishing now."
+    },
+    "maxPostsPerSlot": {
+     "type": "integer",
+     "exclusiveMinimum": 0
+    },
+    "asyncUpload": {
+     "type": "boolean",
+     "description": "Return immediately with request_id (default true)."
+    },
+    "platformOptions": {
+     "type": "object",
+     "properties": {
+      "replyToId": {
+       "type": "string",
+       "description": "Publish as a reply to an existing post (X: tweet ID; Bluesky: post URL or AT-URI). On X's Pay-Per-Use tier a reply to an author the account has not engaged with is rejected with 403."
+      },
+      "xReplyToId": {
+       "type": "string",
+       "description": "Alias of replyToId, scoped to X: the tweet ID to reply to."
+      },
+      "facebookPageId": {
+       "type": "string",
+       "description": "Facebook Page ID to publish to (see get_facebook_pages)."
+      },
+      "linkedinPageId": {
+       "type": "string",
+       "description": "Alias of targetLinkedinPageId: LinkedIn organization/page ID to publish to."
+      },
+      "targetLinkedinPageId": {
+       "type": "string",
+       "description": "LinkedIn organization/page ID to publish to (see get_linkedin_pages)."
+      },
+      "linkedinVisibility": {
+       "type": "string",
+       "enum": [
+        "PUBLIC",
+        "CONNECTIONS",
+        "LOGGED_IN",
+        "CONTAINER"
+       ],
+       "description": "LinkedIn post visibility."
+      },
+      "googleBusinessLocationId": {
+       "type": "string",
+       "description": "Google Business location ID (see get_google_business_locations). Selected on the profile before publishing."
+      },
+      "gbpPostType": {
+       "type": "string",
+       "enum": [
+        "MEDIA",
+        "PHOTO",
+        "GALLERY"
+       ],
+       "description": "Publish into the Google Business location's photo gallery instead of creating a Local Post. Omitting it keeps the Local Post behaviour."
+      },
+      "gbpMediaCategory": {
+       "type": "string",
+       "enum": [
+        "COVER",
+        "PROFILE",
+        "LOGO",
+        "EXTERIOR",
+        "INTERIOR",
+        "PRODUCT",
+        "AT_WORK",
+        "FOOD_AND_DRINK",
+        "MENU",
+        "COMMON_AREA",
+        "ROOMS",
+        "TEAMS",
+        "ADDITIONAL"
+       ],
+       "description": "Google Business gallery category for the uploaded photo. Only used with gbpPostType. Defaults to ADDITIONAL."
+      },
+      "xReplySettings": {
+       "type": "string",
+       "enum": [
+        "everyone",
+        "following",
+        "mentionedUsers",
+        "subscribers",
+        "verified"
+       ],
+       "description": "Who can reply on X."
+      },
+      "xCommunityId": {
+       "type": "string",
+       "description": "X community ID to post into."
+      },
+      "xLongTextAsPost": {
+       "type": "boolean",
+       "description": "Post long X text as a single post instead of a thread."
+      },
+      "threadsLongTextAsPost": {
+       "type": "boolean",
+       "description": "Post long Threads text as a single post instead of a thread."
+      },
+      "threadsTopicTag": {
+       "type": "string",
+       "description": "Threads topic tag."
+      },
+      "brandContentToggle": {
+       "type": "boolean",
+       "description": "TikTok branded content disclosure."
+      },
+      "brandOrganicToggle": {
+       "type": "boolean",
+       "description": "TikTok brand organic disclosure."
+      },
+      "tiktokFirstComment": {
+       "type": "string",
+       "description": "First comment posted under the TikTok post, overriding the shared `firstComment` for TikTok only. Requires the 'comments' capability on the profile's TikTok account (see the `capabilities` array in list_users)."
+      },
+      "facebookLinkUrl": {
+       "type": "string",
+       "description": "Link preview URL on Facebook."
+      },
+      "linkedinLinkUrl": {
+       "type": "string",
+       "description": "Link preview URL on LinkedIn."
+      },
+      "blueskyLinkUrl": {
+       "type": "string",
+       "description": "External embed link preview URL on Bluesky."
+      },
+      "xPostUrl": {
+       "type": "string",
+       "description": "URL to attach to the X post."
+      },
+      "xQuoteTweetId": {
+       "type": "string",
+       "description": "Tweet ID to quote."
+      },
+      "xPollOptions": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        }
+       ],
+       "description": "X poll options (2-4)."
+      },
+      "xPollDuration": {
+       "type": "integer",
+       "description": "X poll duration in minutes (5-10080)."
+      },
+      "xPollReplySettings": {
+       "type": "string",
+       "enum": [
+        "everyone",
+        "following",
+        "mentionedUsers",
+        "subscribers",
+        "verified"
+       ],
+       "description": "Who can reply to the X poll."
+      },
+      "xCardUri": {
+       "type": "string",
+       "description": "Card URI for Twitter Cards."
+      },
+      "redditSubreddit": {
+       "type": "string",
+       "description": "Reddit only."
+      },
+      "redditFlairId": {
+       "type": "string",
+       "description": "Reddit only."
+      },
+      "redditLinkUrl": {
+       "type": "string",
+       "description": "Reddit only."
+      }
+     },
+     "additionalProperties": true,
+     "description": "Flat platform-specific override object with camelCase keys. Per-platform text overrides (xTitle, linkedinTitle, …) are also accepted. Unsupported keys are not sent; the result then lists them in `ignored_platform_options`."
+    }
+   },
+   "required": [
+    "title",
+    "user",
+    "platforms"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Upload text post",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "upload_document",
+  "title": "Upload document (LinkedIn)",
+  "description": "Publish a document (PDF / PPT / PPTX / DOC / DOCX) to LinkedIn. Title is required. `firstComment` posts a comment under the document right after it is published. LinkedIn mentions: write @[Exact Page Name](urn:li:organization:ID), @[Name](urn:li:person:ID) or @company-vanity in the LinkedIn text. A company name must match the Page's name on LinkedIn exactly, capitals included, or it is published as plain text.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "documentPathOrUrl": {
+     "type": "string"
+    },
+    "title": {
+     "type": "string"
+    },
+    "user": {
+     "type": "string"
+    },
+    "description": {
+     "type": "string"
+    },
+    "firstComment": {
+     "type": "string",
+     "description": "Comment posted under the document post right after publishing (e.g. the link you kept out of the post text). Cannot be changed once the post is scheduled."
+    },
+    "linkedinVisibility": {
+     "type": "string",
+     "enum": [
+      "PUBLIC",
+      "CONNECTIONS",
+      "LOGGED_IN",
+      "CONTAINER"
+     ]
+    },
+    "targetLinkedinPageId": {
+     "type": "string"
+    },
+    "scheduledDate": {
+     "type": "string",
+     "description": "ISO 8601 date for scheduled publishing, e.g. '2026-12-25T10:00:00Z'. Omit for immediate post."
+    },
+    "timezone": {
+     "type": "string",
+     "description": "IANA timezone for scheduled date, e.g. 'Europe/Madrid'."
+    },
+    "addToQueue": {
+     "type": "boolean",
+     "description": "Insert into the user's posting queue instead of publishing now."
+    },
+    "maxPostsPerSlot": {
+     "type": "integer",
+     "exclusiveMinimum": 0
+    },
+    "asyncUpload": {
+     "type": "boolean",
+     "description": "Return immediately with request_id (default true)."
+    }
+   },
+   "required": [
+    "documentPathOrUrl",
+    "title",
+    "user"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Upload document (LinkedIn)",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_status",
+  "title": "Get async upload status",
+  "description": "Check the status of an async upload by `request_id`. Poll this until `status` is 'success' or 'failed'.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "requestId": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "requestId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get async upload status",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_job_status",
+  "title": "Get scheduled job status",
+  "description": "Check the status of a scheduled or queued upload by `job_id`. Use this for posts created with `addToQueue` or `scheduledDate`.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "jobId": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "jobId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get scheduled job status",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_history",
+  "title": "Get upload history",
+  "description": "Paginated history of uploads across all profiles.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "page": {
+     "type": "integer",
+     "exclusiveMinimum": 0
+    },
+    "limit": {
+     "type": "integer",
+     "exclusiveMinimum": 0,
+     "maximum": 100,
+     "description": "Items per page. The API pages in 10, 20, 50 or 100, so other values are rounded up to the next of those. Defaults to 10."
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get upload history",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_media",
+  "title": "Get recent media from connected accounts",
+  "description": "Retrieve recent media (videos, photos, text posts) pulled directly from a profile's connected social accounts. Supports instagram, tiktok, youtube, linkedin, facebook, x, threads, pinterest, bluesky, reddit. Useful for browsing what already exists on a platform before posting more. Paginated: the response carries `pagination` = { limit, next_cursor, has_more }; pass `next_cursor` back as `cursor` for the next page (the last page returns next_cursor null and has_more false).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Profile username to scope the query to."
+    },
+    "platform": {
+     "type": "string",
+     "description": "Restrict to a single platform key."
+    },
+    "page_urn": {
+     "type": "string",
+     "description": "LinkedIn only. Numeric organization ID (e.g. '12345'), full URN ('urn:li:organization:12345'), or 'me' to force the personal profile. When omitted, accounts linked as an organization admin auto-resolve to the first administered organization; otherwise the personal profile is used."
+    },
+    "limit": {
+     "type": "integer",
+     "exclusiveMinimum": 0,
+     "maximum": 100,
+     "description": "Items per page. Defaults to 25 and is clamped to 1-100. Per-platform caps: TikTok 20, YouTube 50, everything else 100."
+    },
+    "cursor": {
+     "type": "string",
+     "description": "Opaque cursor from a previous response's `pagination.next_cursor`. LinkedIn, Discord and Telegram do not support cursors — passing one there fails with HTTP 400; use `limit` alone on those platforms."
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get recent media from connected accounts",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "list_scheduled",
+  "title": "List scheduled posts",
+  "description": "List all currently scheduled (not-yet-published) posts.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {},
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "List scheduled posts",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "cancel_scheduled",
+  "title": "Cancel scheduled post",
+  "description": "Cancel a scheduled post by its `job_id`.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "jobId": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "jobId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Cancel scheduled post",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "edit_scheduled",
+  "title": "Edit scheduled post",
+  "description": "Edit a pending scheduled post in place, keeping its job ID and media: reschedule it (scheduledDate/timezone) and/or fix its text. `title` and `caption` rewrite the text for EVERY platform of the post; to change only some platforms, send `platformContent` instead, e.g. {\"instagram\":{\"caption\":\"...\"},\"tiktok\":{\"caption\":\"...\"}} — platforms not listed keep their text. `youtubePublishAt` sets or clears the date YouTube itself makes the video public (native YouTube scheduling). First comments cannot be edited on a pending post.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "jobId": {
+     "type": "string"
+    },
+    "scheduledDate": {
+     "type": "string",
+     "description": "New date, ISO 8601."
+    },
+    "timezone": {
+     "type": "string",
+     "description": "IANA timezone for scheduledDate."
+    },
+    "title": {
+     "type": "string",
+     "description": "New title for every platform of the post."
+    },
+    "caption": {
+     "type": "string",
+     "description": "New caption/description for every platform of the post."
+    },
+    "platformContent": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "properties": {
+       "title": {
+        "type": "string"
+       },
+       "caption": {
+        "type": "string"
+       }
+      },
+      "additionalProperties": false
+     },
+     "description": "Per-platform text, keyed by platform (instagram, tiktok, youtube, facebook, linkedin, x, threads…). Only the platforms listed are changed."
+    },
+    "youtubePublishAt": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "description": "YouTube only: ISO 8601 UTC date-time at which YouTube makes the video public; YouTube applies it only to private videos. Sent as `fields.youtube_publish_at`; null removes it."
+    }
+   },
+   "required": [
+    "jobId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Edit scheduled post",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_analytics",
+  "title": "Get profile analytics",
+  "description": "Aggregated analytics for a profile across selected platforms (followers, views, engagement). Instagram also returns two audience breakdowns with the same shape (age / gender / country / city): `follower_demographics` for the account's followers and `engaged_audience_demographics` for the accounts that engaged with its content.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profileUsername": {
+     "type": "string"
+    },
+    "platforms": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "tiktok",
+       "instagram",
+       "youtube",
+       "linkedin",
+       "facebook",
+       "pinterest",
+       "threads",
+       "x",
+       "reddit"
+      ]
+     }
+    },
+    "pageId": {
+     "type": "string",
+     "description": "Facebook page ID, if filtering by page."
+    },
+    "pageUrn": {
+     "type": "string",
+     "description": "LinkedIn organization/company page URN or numeric ID. LinkedIn analytics are only available for pages you administer — personal profiles are not supported. Defaults to the first administered page."
+    }
+   },
+   "required": [
+    "profileUsername"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get profile analytics",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_total_impressions",
+  "title": "Get total impressions",
+  "description": "Sum of impressions for a profile from daily snapshots. Use `period` for presets, or `startDate`/`endDate` for custom ranges.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profileUsername": {
+     "type": "string"
+    },
+    "period": {
+     "type": "string",
+     "enum": [
+      "last_day",
+      "last_week",
+      "last_month",
+      "last_3months",
+      "last_year"
+     ]
+    },
+    "startDate": {
+     "type": "string"
+    },
+    "endDate": {
+     "type": "string"
+    },
+    "date": {
+     "type": "string"
+    },
+    "platforms": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "tiktok",
+       "instagram",
+       "youtube",
+       "linkedin",
+       "facebook",
+       "pinterest",
+       "threads",
+       "x",
+       "reddit"
+      ]
+     }
+    },
+    "breakdown": {
+     "type": "boolean"
+    },
+    "metrics": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   },
+   "required": [
+    "profileUsername"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get total impressions",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_post_analytics",
+  "title": "Get post analytics",
+  "description": "Per-platform metrics for one post. Identify it EITHER by `requestId` (a post published through Upload-Post, including TikTok drafts once they are published publicly from the TikTok app; add `platform` to read only that platform) OR by `platformPostId` + `platform` + `user` together (any post on the connected account, e.g. one returned by get_media, even if it was not published through Upload-Post). `post_metrics` carries whatever each platform reports, so its shape is not the same everywhere: on TikTok it adds `retention` (the curve, second by second), `impression_sources` (For You, following, search, profile…), `audience_types` (followers vs non-followers), `new_followers` won by the post, `reach` and the watch times (`average_time_watched`, `total_time_watched`, `full_video_watched_rate`) on top of the usual counters. TikTok drafts: until the draft is published from the TikTok app, `post_metrics_error` says it is still in the inbox; a draft published as private has no per-post analytics; once published publicly the entry carries the real `platform_post_id`, `post_url`, `draft_published_at` and `original_publish_id` (the TikTok publish id the upload started with). A TikTok upload more than 30 days old that never got a post id is no longer looked up: read it by `platformPostId`. It fetches the metrics live from the platform and changes nothing on the post or the account; Upload-Post keeps a copy of the result, which later reads of the same post can get from get_cached_post_analytics. Repeated calls for the same post within 5 minutes return the same result; live reads are limited to 100 per 5 minutes. When one platform cannot answer (for example, X's daily limit on live post reads), its entry carries `post_metrics_error` instead of `post_metrics` and the other platforms still answer.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "requestId": {
+     "type": "string",
+     "description": "`request_id` of an upload made through Upload-Post. Use this OR platformPostId + platform + user."
+    },
+    "platformPostId": {
+     "type": "string",
+     "description": "The post's own id on the platform (e.g. Instagram media id, TikTok video id). Needs `platform` and `user` too."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "instagram",
+      "tiktok",
+      "youtube",
+      "facebook",
+      "linkedin",
+      "x",
+      "threads",
+      "pinterest",
+      "reddit",
+      "bluesky"
+     ],
+     "description": "Platform of the post. Required with platformPostId; with requestId it limits the answer to that platform."
+    },
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name that owns the account. Required with platformPostId."
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get post analytics",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_cached_post_analytics",
+  "title": "Get cached post analytics",
+  "description": "Replays per-post metrics Upload-Post already fetched, instead of calling the platforms again. ONLY contains posts previously fetched through `get_post_analytics`; there is no background refresh, so `captured_at` is the last time that post was read live and a post never queried live will be absent. Unlike `get_post_analytics` it never hits the platforms, so it is not subject to the live analytics rate limit (100 requests / 5 minutes) — prefer it when scanning many posts or paging through a profile's history. Paginated: pass `next_cursor` from the response back as `cursor` until `has_more` is false.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Profile username whose posts to read."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "instagram",
+      "tiktok",
+      "youtube",
+      "facebook",
+      "linkedin",
+      "threads",
+      "pinterest",
+      "reddit"
+     ],
+     "description": "Restrict to one platform. Omit for all platforms."
+    },
+    "limit": {
+     "type": "integer",
+     "exclusiveMinimum": 0,
+     "maximum": 200,
+     "description": "Posts per page. Defaults to 50, max 200."
+    },
+    "cursor": {
+     "type": "string",
+     "description": "Opaque cursor from a previous response's `next_cursor`."
+    },
+    "since": {
+     "type": "string",
+     "description": "Start date, YYYY-MM-DD. Defaults to 30 days ago."
+    },
+    "until": {
+     "type": "string",
+     "description": "End date, YYYY-MM-DD. Defaults to today."
+    }
+   },
+   "required": [
+    "user"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get cached post analytics",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_platform_metrics",
+  "title": "List platform metrics",
+  "description": "Reference: which metrics are available per platform (impressions, likes, …) and their human labels.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {},
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "List platform metrics",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_audience",
+  "title": "Get audience insights",
+  "description": "Who follows the profile, when they are online and what they tap on it. One endpoint for every network, chosen with `platform`. Returns `audience.countries` / `.cities` / `.ages` / `.genders`, `activity_by_hour` (followers online per hour of the day — use it to pick posting times), `followers_daily` (total / new / lost), `profile_actions` and `bio_description`. It always returns `benchmark_categories` (the 25 values `benchmark_category` accepts), and when `benchmark_category` is set it adds a `benchmark` object with that niche's averages (engagement rate, likes, views, follower growth…) to compare the account against. The window is clamped by the server — at most 60 days, always ending before today — so a wider range is trimmed, not rejected; `range` in the response says which window was actually used. Requires the 'profile_analytics' capability on the profile's TikTok account (see the `capabilities` array in list_users).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "tiktok"
+     ],
+     "description": "Which connected network answers the question. Any other value comes back as a 400 `platform_not_supported` listing the ones that do."
+    },
+    "startDate": {
+     "type": "string",
+     "description": "First day of the window, ISO date, e.g. '2026-07-01'. Sent as `start_date`."
+    },
+    "endDate": {
+     "type": "string",
+     "description": "Last day of the window, ISO date. Sent as `end_date`. Clamped to before today: platforms have no data for the current day."
+    },
+    "benchmarkCategory": {
+     "type": "string",
+     "description": "Compare the account against this niche's averages. Must be one of the `benchmark_categories` the response lists; omit it on the first call to read them."
+    }
+   },
+   "required": [
+    "user",
+    "platform"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get audience insights",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_suggestions",
+  "title": "Get hashtag or keyword suggestions",
+  "description": "What to write about: the hashtags or the searches a network suggests around a word. One endpoint for both questions, told apart by `type`, and one endpoint for every network, chosen with `platform`. `type: 'hashtags'` returns `{ hashtags: [{ name, view_count }] }` — pick tags that actually have reach for a caption; `type: 'keywords'` returns `{ keywords: [...] }`, what people really search around `q`, useful for the next video topic. Requires the 'profile_analytics' capability on the profile's TikTok account (see the `capabilities` array in list_users). Keyword suggestions need 'trend_search' instead, granted the same way.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "tiktok"
+     ],
+     "description": "Which connected network answers the question. Any other value comes back as a 400 `platform_not_supported` listing the ones that do."
+    },
+    "type": {
+     "type": "string",
+     "enum": [
+      "hashtags",
+      "keywords"
+     ],
+     "description": "Which suggestions to ask for: 'hashtags' (with view counts) or 'keywords' (related searches)."
+    },
+    "q": {
+     "type": "string",
+     "description": "Seed word to get suggestions around, e.g. 'coffee recipe'. Without the '#'."
+    },
+    "countryCode": {
+     "type": "string",
+     "description": "ISO 3166-1 alpha-2 country to rank the suggestions for, e.g. 'ES' or 'US'. Sent as `country_code`."
+    },
+    "language": {
+     "type": "string",
+     "description": "Language code for the results, e.g. 'es' or 'en'."
+    }
+   },
+   "required": [
+    "user",
+    "platform",
+    "type"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get hashtag or keyword suggestions",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_account_info",
+  "title": "Get account info",
+  "description": "Return the connected Upload-Post account: email, plan and usage limits. Useful as a first call to confirm the connection works before doing real work.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {},
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get account info",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "list_users",
+  "title": "List profiles",
+  "description": "List all Upload-Post profiles in the account, with their connected social accounts. Call this FIRST, before publishing, to get the exact profile name (`user`) and check that the target platforms are connected; never invent a profile name. When the account has no profile, or the requested platform is not connected or needs reconnecting, the response carries `next_step` and `connect_url`: give the user that link, ask them to tell you when they have connected, and wait — do not try to publish meanwhile. The TikTok account object carries a `capabilities` array (music, location, cover_image, cover_timestamp, draft, photo_privacy, video_privacy, inbox_fallback, profile_analytics) telling which optional TikTok fields that connection accepts.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "platforms": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "Optional platforms the user wants to publish to (e.g. ['tiktok','instagram']). When given, the response says whether they are connected and, if not, how to connect them."
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "List profiles",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_connect_link",
+  "title": "Get link to connect social accounts",
+  "description": "Get the link the user opens to connect (or reconnect) social accounts such as TikTok, Instagram or YouTube. Use it when list_users shows no profile, or the platform the user wants is not connected or needs reconnecting. If the account has no profile yet, this creates one named \"default\" and returns a one-click link to connect accounts to it (valid 48 h); otherwise it returns the dashboard link. Give the user `connect_url`, ask them to tell you when they are done, then call list_users to confirm before publishing.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "platforms": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "Platforms the user wants to connect, e.g. ['tiktok','instagram']."
+    },
+    "profile": {
+     "type": "string",
+     "description": "Existing profile to connect the accounts to, if the user already has one."
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get link to connect social accounts",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "create_user",
+  "title": "Create profile",
+  "description": "Create a new Upload-Post profile (logical container for connected socials).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "username": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "username"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Create profile",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "delete_user",
+  "title": "Delete profile",
+  "description": "Permanently delete a profile and disconnect its socials.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "username": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "username"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Delete profile",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "generate_jwt",
+  "title": "Generate platform-integration JWT",
+  "description": "Generate a JWT + connection URL so an end-user can connect socials inside an embedded Upload-Post flow (white-label integration). The profile must already exist. Each call resets the profile's connection-page settings to the values passed. To simply help the account owner connect their own socials, prefer get_connect_link.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "username": {
+     "type": "string"
+    },
+    "redirectUrl": {
+     "type": "string"
+    },
+    "logoImage": {
+     "type": "string"
+    },
+    "redirectButtonText": {
+     "type": "string"
+    },
+    "platforms": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "showCalendar": {
+     "type": "boolean"
+    },
+    "readonlyCalendar": {
+     "type": "boolean"
+    },
+    "connectTitle": {
+     "type": "string"
+    },
+    "connectDescription": {
+     "type": "string"
+    },
+    "language": {
+     "type": "string",
+     "enum": [
+      "en",
+      "es",
+      "de",
+      "fr",
+      "pt",
+      "pl",
+      "tr"
+     ],
+     "description": "Force the connection page language for this profile. When omitted, the page auto-detects the visitor's browser language and falls back to English."
+    },
+    "uiLabels": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "string",
+      "maxLength": 300
+     },
+     "description": "Flat map of i18n dot-path keys to replacement strings for the connection page, e.g. { 'connect.title': 'Link your accounts' }. Max 100 entries; keys must match ^[a-zA-Z0-9_.]+$ and values are at most 300 characters. Echoed back in the `profile` object of validate_jwt."
+    }
+   },
+   "required": [
+    "username"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Generate platform-integration JWT",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "validate_jwt",
+  "title": "Validate platform-integration JWT",
+  "description": "Verify a JWT previously issued by `generate_jwt`. The returned `profile` object echoes the connection page settings, including `language` and any `ui_labels`.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "jwt": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "jwt"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Validate platform-integration JWT",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_facebook_pages",
+  "title": "List Facebook pages",
+  "description": "Facebook pages connected to a profile.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile": {
+     "type": "string"
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "List Facebook pages",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_linkedin_pages",
+  "title": "List LinkedIn pages",
+  "description": "LinkedIn company pages connected to a profile.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile": {
+     "type": "string"
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "List LinkedIn pages",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_pinterest_boards",
+  "title": "List Pinterest boards",
+  "description": "Pinterest boards available to a profile.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile": {
+     "type": "string"
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "List Pinterest boards",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "tiktok_music_trending",
+  "title": "List trending TikTok music",
+  "description": "Trending tracks from the TikTok Commercial Music Library, to soundtrack a TikTok video. Pass the returned track `id` as `tiktokMusicId` in upload_video's platformOptions (not `commercial_music_id`, which TikTok rejects on public posts). Available on TikTok connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile": {
+     "type": "string",
+     "description": "Upload-Post profile name with a TikTok account connected."
+    },
+    "genre": {
+     "type": "string",
+     "description": "Genre filter, e.g. 'ALL' or 'POP'. Defaults to ALL."
+    },
+    "countryCode": {
+     "type": "string",
+     "description": "ISO country code, e.g. 'US' or 'ES'. Defaults to US."
+    },
+    "dateRange": {
+     "type": "string",
+     "enum": [
+      "1DAY",
+      "7DAY",
+      "30DAY",
+      "90DAY"
+     ],
+     "description": "Chart window. Defaults to 7DAY."
+    }
+   },
+   "required": [
+    "profile"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "List trending TikTok music",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "tiktok_music_search",
+  "title": "Search TikTok music",
+  "description": "Find a TikTok Commercial Music Library track by song title or artist, to soundtrack a TikTok video. Pass the returned track `id` as `tiktokMusicId` in upload_video's platformOptions (not `commercial_music_id`, which TikTok rejects on public posts). IMPORTANT: TikTok has no music search endpoint, so this searches the trending charts Upload-Post caches per genre/country/period, NOT TikTok's whole catalogue — a song that is not trending in the chart you query will not be found; widening the search means trying another genre, country or period. Matching is case- and accent-insensitive and every word must match. Available on TikTok connections that declare the `music` capability (see `capabilities` on the TikTok account in list_users).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile": {
+     "type": "string",
+     "description": "Upload-Post profile name with a TikTok account connected."
+    },
+    "q": {
+     "type": "string",
+     "maxLength": 80,
+     "description": "Song title or artist to look for, e.g. 'bad bunny'. Omit to get the chart in trending order."
+    },
+    "genre": {
+     "type": "string",
+     "description": "Genre filter, e.g. 'ALL' or 'POP'. Defaults to ALL."
+    },
+    "countryCode": {
+     "type": "string",
+     "description": "ISO country code choosing WHICH country's chart is searched, e.g. 'US' or 'ES'. Defaults to US."
+    },
+    "dateRange": {
+     "type": "string",
+     "enum": [
+      "1DAY",
+      "7DAY",
+      "30DAY",
+      "90DAY"
+     ],
+     "description": "Chart window. Defaults to 7DAY."
+    },
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 100,
+     "description": "Maximum tracks to return. Defaults to 50."
+    }
+   },
+   "required": [
+    "profile"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Search TikTok music",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "tiktok_location_search",
+  "title": "Search TikTok locations",
+  "description": "Search TikTok places to tag on a post. TikTok needs both parts, so pass the returned `location_id` as `tiktokLocationId` and `location_name` as `tiktokLocationName` in upload_video's platformOptions. Available on TikTok connections that declare the `location` capability (see `capabilities` on the TikTok account in list_users).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile": {
+     "type": "string",
+     "description": "Upload-Post profile name with a TikTok account connected."
+    },
+    "query": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 100,
+     "description": "Place to search for, e.g. 'Madrid'. Max 100 characters."
+    }
+   },
+   "required": [
+    "profile",
+    "query"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Search TikTok locations",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "tiktok_publishing_settings",
+  "title": "Get TikTok publishing settings",
+  "description": "What the connected TikTok account is allowed to publish. Call this before setting `tiktokPrivacyLevel`: TikTok narrows the four privacy values per account (a private account has no PUBLIC_TO_EVERYONE), and sending one the account does not have fails the upload with error_code tiktok_privacy_unavailable. Returns `privacy_level_options` plus the account's max video duration and its comment/duet/stitch switches.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile": {
+     "type": "string",
+     "description": "Upload-Post profile name with a TikTok account connected."
+    }
+   },
+   "required": [
+    "profile"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get TikTok publishing settings",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_google_business_locations",
+  "title": "List Google Business locations",
+  "description": "Google Business Profile locations the profile can post to.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile": {
+     "type": "string"
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "List Google Business locations",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_google_business_reviews",
+  "title": "List Google Business reviews",
+  "description": "List reviews for a Google Business Profile location. Pass the profile that owns the connected Google Business account; location_id defaults to the account's selected location.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name that owns the connected Google Business account."
+    },
+    "location_id": {
+     "type": "string",
+     "description": "Location, e.g. 'locations/123' or a full 'accounts/.../locations/...'. Defaults to the account's location."
+    },
+    "pageSize": {
+     "type": "integer",
+     "exclusiveMinimum": 0,
+     "maximum": 50
+    },
+    "pageToken": {
+     "type": "string"
+    },
+    "orderBy": {
+     "type": "string",
+     "description": "e.g. 'updateTime desc' or 'rating desc'."
+    }
+   },
+   "required": [
+    "user"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "List Google Business reviews",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "reply_to_google_business_review",
+  "title": "Reply to a Google Business review",
+  "description": "Create or update the owner reply to a Google Business review. Provide review_name (the full resource path from get_google_business_reviews) or review_id + location_id.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name that owns the connected Google Business account."
+    },
+    "comment": {
+     "type": "string",
+     "minLength": 1,
+     "description": "The reply text posted publicly under the review."
+    },
+    "review_name": {
+     "type": "string",
+     "description": "Full review resource path 'accounts/.../locations/.../reviews/{id}' (from get_google_business_reviews)."
+    },
+    "review_id": {
+     "type": "string",
+     "description": "Review ID; requires location_id to build the resource path."
+    },
+    "location_id": {
+     "type": "string",
+     "description": "Location for the review when using review_id."
+    }
+   },
+   "required": [
+    "user",
+    "comment"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Reply to a Google Business review",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_reddit_detailed_posts",
+  "title": "Get detailed Reddit posts",
+  "description": "Recent Reddit posts published from a profile, with the platform-side metadata (subreddit, flair, score, …). Reddit posting is currently unavailable (error_code=reddit_unavailable) until the Reddit app is restored. Do not use reddit as a publish target.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile": {
+     "type": "string",
+     "description": "Upload-Post profile name. Required by the API."
+    },
+    "limit": {
+     "type": "integer",
+     "exclusiveMinimum": 0,
+     "maximum": 200
+    }
+   },
+   "required": [
+    "profile"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get detailed Reddit posts",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_post_comments",
+  "title": "Get post comments",
+  "description": "List comments on a post. One endpoint for every network, chosen with `platform`. Identify the post by either `postId` or `postUrl` (YouTube: postId=videoId; LinkedIn: postId=the post urn; TikTok: postId=the video id, `postUrl` is not accepted). Add `commentId` to get the REPLIES hanging off that one comment instead of the post's top-level comments — replies are the same question with one more parameter, not another tool. Replies can be listed on TikTok, Threads, YouTube, Instagram, Facebook and LinkedIn (company Page posts only: a personal-profile post returns 403 `linkedin_personal_not_supported`), so you can check whether a comment already has an answer before replying; on X and Bluesky `commentId` returns 400 `platform_not_supported`. `postId` or `postUrl` is still required with `commentId` (on Facebook it picks the Page). A comment with no replies returns an empty list; a malformed id returns 400 `invalid_comment_id`, an unknown one 404 `comment_not_found` (LinkedIn: 404 `linkedin_comment_not_found`, pass the full `comment_urn` instead). Reads are cached for up to 60 seconds (up to 2 minutes on X); a comment created or deleted through Upload-Post by the same account shows up on the next read. TikTok: Requires the 'comments' capability on the profile's TikTok account (see the `capabilities` array in list_users). It is granted at connection time, so an account connected earlier has to reconnect TikTok before this works.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "instagram",
+      "facebook",
+      "youtube",
+      "linkedin",
+      "tiktok",
+      "x",
+      "threads",
+      "bluesky"
+     ],
+     "default": "instagram",
+     "description": "Social platform. One of instagram, facebook, youtube, linkedin, tiktok, x, threads, bluesky."
+    },
+    "postId": {
+     "type": "string",
+     "description": "Platform media/post ID. YouTube: the videoId. LinkedIn: the post urn. TikTok: the video id (required — TikTok has no URL lookup)."
+    },
+    "postUrl": {
+     "type": "string",
+     "description": "Public URL of the post."
+    },
+    "commentId": {
+     "type": "string",
+     "description": "Return the replies under this comment instead of the post's top-level comments. TikTok, Threads, YouTube, Instagram, Facebook and LinkedIn (Page posts). LinkedIn: preferably the comment's full `comment_urn` (urn:li:comment:(...)); a bare numeric id is looked up among the post's first 250 comments. Sent as `comment_id`."
+    },
+    "after": {
+     "type": "string",
+     "description": "Pagination cursor returned by a previous call (`next_cursor`). For LinkedIn replies it is a numeric offset."
+    },
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 50,
+     "description": "Comments to return (1-50; that ceiling is both Meta's and TikTok's)."
+    }
+   },
+   "required": [
+    "user"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get post comments",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "reply_to_comment",
+  "title": "Private reply (DM) to commenter",
+  "description": "Send a private DM to the author of an Instagram comment (within Instagram's 7-day reply window).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string"
+    },
+    "commentId": {
+     "type": "string"
+    },
+    "message": {
+     "type": "string"
+    },
+    "platform": {
+     "type": "string",
+     "default": "instagram",
+     "description": "Social platform. Only 'instagram' is currently supported."
+    },
+    "buttons": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "title": {
+        "type": "string"
+       },
+       "url": {
+        "type": "string",
+        "format": "uri"
+       }
+      },
+      "required": [
+       "title",
+       "url"
+      ],
+      "additionalProperties": false
+     },
+     "maxItems": 3,
+     "description": "Up to 3 web_url buttons rendered in the DM. Each item is { title, url }."
+    }
+   },
+   "required": [
+    "user",
+    "commentId",
+    "message"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Private reply (DM) to commenter",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "public_reply_to_comment",
+  "title": "Public reply to comment",
+  "description": "Post a public reply visible under the original Instagram comment.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string"
+    },
+    "commentId": {
+     "type": "string"
+    },
+    "message": {
+     "type": "string"
+    },
+    "platform": {
+     "type": "string",
+     "default": "instagram",
+     "description": "Social platform. Only 'instagram' is currently supported."
+    }
+   },
+   "required": [
+    "user",
+    "commentId",
+    "message"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Public reply to comment",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "create_comment",
+  "title": "Create a comment or reply",
+  "description": "Post a top-level comment or a reply on a post. Provide exactly ONE of `commentId` (reply to a comment), `postId`, or `postUrl` (top-level). LinkedIn: postId=the post urn; the comment is made as whoever published the post (the member on a personal post, the Page on a Page post) unless `linkedinPageId` says otherwise. Instagram requires `commentId` (replies only). TikTok always needs `postId` (the video id); add `commentId` on top of it to reply inside that thread. X: links are removed from the message unless the account is allowed links on X (the response then lists it in `warnings`), and a message that was only links is refused with 400 `x_links_not_allowed`. Replies on X share a daily limit per X account with post edits and reposts made through Upload-Post (20 a day on the free plan, 200 on paid plans, reset at 00:00 UTC); past it the call returns 429 `x_daily_write_limit` with `retry_after` in seconds. TikTok: Requires the 'comments' capability on the profile's TikTok account (see the `capabilities` array in list_users). It is granted at connection time, so an account connected earlier has to reconnect TikTok before this works.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "message": {
+     "type": "string",
+     "minLength": 1,
+     "description": "Comment text to post."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "instagram",
+      "facebook",
+      "youtube",
+      "linkedin",
+      "tiktok",
+      "x",
+      "threads",
+      "bluesky"
+     ],
+     "default": "instagram",
+     "description": "Social platform. One of instagram, facebook, youtube, linkedin, tiktok, x, threads, bluesky."
+    },
+    "commentId": {
+     "type": "string",
+     "description": "Reply to this comment. Required by Instagram. TikTok: pass it together with postId to reply inside a thread."
+    },
+    "postId": {
+     "type": "string",
+     "description": "Top-level comment on this post ID. LinkedIn: the post urn. TikTok: the video id, always required."
+    },
+    "postUrl": {
+     "type": "string",
+     "description": "Top-level comment on this post URL."
+    },
+    "linkedinPageId": {
+     "type": "string",
+     "description": "LinkedIn only: who the comment is made as. `personal` = the member's own profile; a numeric organization id (from get_linkedin_pages) = that company Page. Leave it out to comment as the author of the post. A Page pinned to the profile wins over a page id sent here, but not over `personal`. Sent as `target_linkedin_page_id`."
+    }
+   },
+   "required": [
+    "user",
+    "message"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Create a comment or reply",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "delete_comment",
+  "title": "Delete a comment",
+  "description": "Delete a comment by `commentId`. LinkedIn also requires `postId` (the post urn); TikTok needs only the `commentId`. TikTok: Requires the 'comments' capability on the profile's TikTok account (see the `capabilities` array in list_users). It is granted at connection time, so an account connected earlier has to reconnect TikTok before this works.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "commentId": {
+     "type": "string",
+     "description": "ID of the comment to delete."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "instagram",
+      "facebook",
+      "youtube",
+      "linkedin",
+      "tiktok",
+      "x",
+      "bluesky"
+     ],
+     "default": "instagram",
+     "description": "Social platform. One of instagram, facebook, youtube, linkedin, tiktok, x, bluesky (Threads cannot delete comments)."
+    },
+    "postId": {
+     "type": "string",
+     "description": "LinkedIn only: the post urn the comment belongs to."
+    }
+   },
+   "required": [
+    "user",
+    "commentId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Delete a comment",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "hide_comment",
+  "title": "Hide or unhide a comment",
+  "description": "Hide a comment on one of the profile's own posts so the public no longer sees it, or show it again with `hidden: false`. Works on TikTok, Facebook, Instagram, YouTube and Threads. TikTok and YouTube need the `postId` the comment belongs to. To delete a comment use delete_comment. TikTok: Requires the 'comments' capability on the profile's TikTok account (see the `capabilities` array in list_users). It is granted at connection time, so an account connected earlier has to reconnect TikTok before this works.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "tiktok",
+      "facebook",
+      "instagram",
+      "youtube",
+      "threads"
+     ],
+     "description": "Social platform the comment lives on."
+    },
+    "commentId": {
+     "type": "string",
+     "description": "Comment to act on (from get_post_comments)."
+    },
+    "postId": {
+     "type": "string",
+     "description": "Post the comment belongs to (TikTok: the video id; YouTube: the videoId). Required on TikTok and YouTube."
+    },
+    "hidden": {
+     "type": "boolean",
+     "default": true,
+     "description": "true hides the comment (default); false makes a hidden comment visible again."
+    },
+    "banAuthor": {
+     "type": "boolean",
+     "description": "YouTube only, when hiding: also ban the comment's author from the channel."
+    }
+   },
+   "required": [
+    "user",
+    "platform",
+    "commentId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Hide or unhide a comment",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "like_comment",
+  "title": "Like or unlike a comment",
+  "description": "Like a comment as the profile's account, or remove that like with `liked: false`. Works on TikTok and Facebook. TikTok: Requires the 'comments' capability on the profile's TikTok account (see the `capabilities` array in list_users). It is granted at connection time, so an account connected earlier has to reconnect TikTok before this works.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "tiktok",
+      "facebook"
+     ],
+     "description": "Social platform the comment lives on."
+    },
+    "commentId": {
+     "type": "string",
+     "description": "Comment to act on (from get_post_comments)."
+    },
+    "liked": {
+     "type": "boolean",
+     "default": true,
+     "description": "true likes the comment (default); false removes the like."
+    }
+   },
+   "required": [
+    "user",
+    "platform",
+    "commentId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Like or unlike a comment",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "pin_comment",
+  "title": "Pin or unpin a TikTok comment",
+  "description": "Pin a comment to the top of one of the profile's own TikTok videos, or unpin it with `pinned: false`. TikTok only. TikTok: Requires the 'comments' capability on the profile's TikTok account (see the `capabilities` array in list_users). It is granted at connection time, so an account connected earlier has to reconnect TikTok before this works.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "commentId": {
+     "type": "string",
+     "description": "Comment to act on (from get_post_comments)."
+    },
+    "postId": {
+     "type": "string",
+     "description": "TikTok video id the comment belongs to."
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": true,
+     "description": "true pins the comment (default); false unpins it."
+    }
+   },
+   "required": [
+    "user",
+    "commentId",
+    "postId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Pin or unpin a TikTok comment",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "edit_comment",
+  "title": "Edit a Facebook comment",
+  "description": "Replace the text of a comment the Page itself wrote on Facebook. Facebook only. The previous text is not kept.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "commentId": {
+     "type": "string",
+     "description": "Comment to act on (from get_post_comments)."
+    },
+    "message": {
+     "type": "string",
+     "minLength": 1,
+     "description": "The new comment text."
+    }
+   },
+   "required": [
+    "user",
+    "commentId",
+    "message"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Edit a Facebook comment",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "hold_comment",
+  "title": "Hold a YouTube comment for review",
+  "description": "Move a comment on one of the channel's YouTube videos to \"Held for review\", taking it off the public video until it is approved. YouTube only. To publish it again use hide_comment with `hidden: false`.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "commentId": {
+     "type": "string",
+     "description": "Comment to act on (from get_post_comments)."
+    },
+    "postId": {
+     "type": "string",
+     "description": "YouTube videoId the comment belongs to."
+    }
+   },
+   "required": [
+    "user",
+    "commentId",
+    "postId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Hold a YouTube comment for review",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "approve_comment",
+  "title": "Approve a pending Threads reply",
+  "description": "Approve a reply waiting for approval on one of the profile's Threads posts, so it shows publicly. Threads only; to leave it unpublished use ignore_comment.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "commentId": {
+     "type": "string",
+     "description": "Pending reply to approve (from get_post_comments)."
+    }
+   },
+   "required": [
+    "user",
+    "commentId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Approve a pending Threads reply",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "ignore_comment",
+  "title": "Ignore a pending Threads reply",
+  "description": "Ignore a reply waiting for approval on one of the profile's Threads posts, so it stays unpublished. Threads only; to publish it use approve_comment.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "commentId": {
+     "type": "string",
+     "description": "Pending reply to ignore (from get_post_comments)."
+    }
+   },
+   "required": [
+    "user",
+    "commentId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Ignore a pending Threads reply",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "set_post_comments",
+  "title": "Turn comments on or off for an Instagram post",
+  "description": "Turn commenting off on one of the profile's own Instagram posts, or back on with `enabled: true`. Existing comments are kept either way. Instagram only.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "postId": {
+     "type": "string",
+     "description": "Instagram media id of the post."
+    },
+    "enabled": {
+     "type": "boolean",
+     "description": "false turns comments off; true turns them back on."
+    }
+   },
+   "required": [
+    "user",
+    "postId",
+    "enabled"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Turn comments on or off for an Instagram post",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "retry_post",
+  "title": "Retry a failed upload",
+  "description": "Retry a failed upload. Identify it by either `requestId` (async upload) or `jobId` (scheduled/queued upload). Only the platforms that failed are sent again; the ones that already published are left alone and come back in `skipped_platforms`. A job that published everywhere answers 409 `nothing_to_retry`, and one that has not run yet 409 `job_not_finished` (use edit_scheduled or cancel_scheduled for those). The retry is a new upload with its own `request_id` / `job_id`: poll that one.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "requestId": {
+     "type": "string",
+     "description": "Async upload request_id to retry."
+    },
+    "jobId": {
+     "type": "string",
+     "description": "Scheduled/queued job_id to retry."
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Retry a failed upload",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "unpublish_post",
+  "title": "Delete a published post",
+  "description": "Delete a post already published to a platform. Supported: facebook, youtube, x, linkedin, pinterest, bluesky, google_business. Instagram, TikTok, Threads and Reddit posts cannot be deleted through Upload-Post; they have to be removed in the platform's own app.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "facebook",
+      "youtube",
+      "x",
+      "linkedin",
+      "pinterest",
+      "bluesky",
+      "google_business"
+     ],
+     "description": "Social platform the post lives on."
+    },
+    "postId": {
+     "type": "string",
+     "description": "Platform post ID to delete (Bluesky: the post AT-URI; Google Business: the full accounts/.../locations/.../localPosts/... name returned on upload)."
+    }
+   },
+   "required": [
+    "user",
+    "platform",
+    "postId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Delete a published post",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "send_dm",
+  "title": "Send a direct message",
+  "description": "Send a DM as a connected Upload-Post profile, on Instagram or Bluesky. Instagram: `recipient_id` (from Instagram comments or the DM conversation tools) and `message`, optionally up to 3 link `buttons`. Bluesky: `recipient_id` is the person's handle (e.g. 'alice.bsky.social'), DID or profile link, or pass `conversation_id` (also for group chats) instead. The text may carry links, @mentions (up to 10) and #hashtags, which become clickable; at most 1000 characters. Optional `reply_to` (a message id) and one shared Bluesky post in `attachments`; Bluesky chat takes no images, files or buttons. With `sender_action` (Bluesky only) nothing is written: mark_seen/mark_read, react/unreact (`message_id` + one emoji in `reaction`), delete (`message_id`; removes it only for this account), accept (a message request), mute, unmute, leave. Sender actions do not count toward the daily DM allowance. Bluesky DMs need the account connected with an app password created with 'Allow access to your direct messages'; otherwise the call returns 403 `bluesky_dm_scope_missing` and the user has to create such an app password and reconnect Bluesky. Other Bluesky errors: 403 `bluesky_recipient_unavailable` (the person does not accept DMs from this account, with `reason`), 404 `bluesky_recipient_not_found`, 400 `bluesky_message_too_long`, 504 `bluesky_send_unconfirmed` (the DM may have gone out: list the conversation before retrying).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name that owns the connected account."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "instagram",
+      "bluesky"
+     ],
+     "description": "DM platform: 'instagram' or 'bluesky'."
+    },
+    "recipient_id": {
+     "type": "string",
+     "description": "Who receives the DM. Instagram (required): the recipient/commenter ID. Bluesky: handle, @handle, DID or bsky.app profile link; optional when `conversation_id` is given."
+    },
+    "message": {
+     "type": "string",
+     "minLength": 1,
+     "description": "DM text. Required on Instagram. On Bluesky optional when sharing a post in `attachments` or using `sender_action`."
+    },
+    "buttons": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "title": {
+        "type": "string"
+       },
+       "url": {
+        "type": "string",
+        "format": "uri"
+       }
+      },
+      "required": [
+       "title",
+       "url"
+      ],
+      "additionalProperties": false
+     },
+     "maxItems": 3,
+     "description": "Instagram only: up to 3 web_url buttons rendered in the DM. Each item is { title, url }."
+    },
+    "conversation_id": {
+     "type": "string",
+     "description": "Bluesky only: send to (or act on) this conversation, from list_dm_conversations. Works for group chats."
+    },
+    "attachments": {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "const": "post",
+       "description": "Always 'post'."
+      },
+      "url": {
+       "type": "string",
+       "description": "bsky.app post link or at:// URI of the post to share."
+      }
+     },
+     "required": [
+      "url"
+     ],
+     "additionalProperties": false,
+     "description": "Bluesky only: one Bluesky post to share in the DM, { type: 'post', url }."
+    },
+    "reply_to": {
+     "type": "string",
+     "description": "Bluesky only: id of the message this DM replies to."
+    },
+    "sender_action": {
+     "type": "string",
+     "enum": [
+      "mark_seen",
+      "mark_read",
+      "react",
+      "unreact",
+      "delete",
+      "accept",
+      "mute",
+      "unmute",
+      "leave"
+     ],
+     "description": "Bluesky only: act on the conversation instead of sending text. react/unreact and delete need `message_id`; mark_read is the same as mark_seen."
+    },
+    "message_id": {
+     "type": "string",
+     "description": "Bluesky only: message the sender_action applies to (react, unreact, delete, and optionally mark_seen)."
+    },
+    "reaction": {
+     "type": "string",
+     "description": "Bluesky only: a single emoji for sender_action react/unreact."
+    }
+   },
+   "required": [
+    "user",
+    "platform"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Send a direct message",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "list_dm_conversations",
+  "title": "List DM conversations",
+  "description": "DM conversations for a profile on a given platform, newest first, each with its latest messages. The response carries `pagination` { next_cursor, has_more }: to read older conversations, call again with `cursor` set to `next_cursor` (and the same `since` / `participant_id`) until `has_more` is false. Media a message carries comes back in `attachments` (`type`, `url`, plus size and preview fields when the platform gives them); content the platform flags `is_unsupported` cannot be retrieved. Bluesky (read live, up to 25 conversations per page) adds per conversation `status` (request / accepted), `unread_count`, `muted`, `kind` (direct / group) and per message `direction`, `reactions`, `reply_to` and shared posts in `attachments`; use `conversation_id` (+ `messages_cursor`) to page back through one conversation's history, and `status` / `read_state` to filter. Bluesky needs the account connected with an app password that allows direct messages, otherwise 403 `bluesky_dm_scope_missing`.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "user": {
+     "type": "string",
+     "description": "Upload-Post profile name that owns the connected account."
+    },
+    "platform": {
+     "type": "string",
+     "description": "'instagram', 'whatsapp', 'facebook' (Messenger) or 'bluesky'. Required by the Upload-Post API. Messenger is in a limited rollout: an account without access gets 403 `messenger_not_enabled`, and no plan, setting or reconnect changes that (the user can ask Upload-Post support for access)."
+    },
+    "limit": {
+     "type": "integer",
+     "exclusiveMinimum": 0,
+     "maximum": 200,
+     "description": "Conversations per page. Default 20; the API returns at most 50 per page (25 on Bluesky)."
+    },
+    "cursor": {
+     "type": "string",
+     "description": "`pagination.next_cursor` from the previous call, to get the next (older) page. Omit for the first page."
+    },
+    "since": {
+     "type": [
+      "string",
+      "number"
+     ],
+     "description": "Only conversations with activity after this moment: Unix timestamp (seconds) or ISO 8601 date, e.g. '2026-11-01T00:00:00Z'."
+    },
+    "participant_id": {
+     "type": "string",
+     "description": "Return only the conversation with this person: the other participant's `id` from a previous listing (on Instagram, the same id send_dm takes as recipient_id; on WhatsApp, their phone number; on Bluesky, their handle or DID). On Bluesky this never opens a new conversation."
+    },
+    "messages_limit": {
+     "type": "integer",
+     "exclusiveMinimum": 0,
+     "maximum": 25,
+     "description": "Latest messages returned per conversation, 1-25. Default 10. When raising it, lower `limit` (10-20 conversations): a large page with many messages is slow, and Instagram may then answer with text only, without attachments."
+    },
+    "conversation_id": {
+     "type": "string",
+     "description": "Bluesky only: return just this conversation (direct or group), with its messages."
+    },
+    "messages_cursor": {
+     "type": "string",
+     "description": "Bluesky only, with `conversation_id`: the conversation's `messages.paging.next_cursor` from the previous answer, to read its older messages."
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "request",
+      "accepted"
+     ],
+     "description": "Bluesky only: 'request' = message requests not accepted yet, 'accepted' = regular conversations."
+    },
+    "read_state": {
+     "type": "string",
+     "const": "unread",
+     "description": "Bluesky only: 'unread' returns only conversations with unread messages."
+    }
+   },
+   "required": [
+    "user"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "List DM conversations",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "start_autodm",
+  "title": "Start an AutoDM or comment auto-reply",
+  "description": "Watch one of the profile's posts and automatically answer everyone who comments on it (optionally only comments containing `trigger_keywords`, e.g. 'comment POST'). On Instagram (default) the answer is a private DM with `reply_message` and up to 3 link buttons. On tiktok, youtube, facebook, threads and bluesky it is a PUBLIC reply under each matching comment; links in TikTok replies are not clickable, so point people to the bio. Instagram and TikTok answer new comments within seconds; youtube, facebook, threads and bluesky check for them every `monitoring_interval` minutes (15 minimum). At most 25 replies per interval (10 on YouTube), and the monitor stops after 15 days. Returns the monitor ID used by the other AutoDM tools. For Instagram DMs on EVERY post of the account, story replies, story mentions or DM keywords, use create_autodm_rule instead: rules cover the whole account, never expire and work only through Instagram webhooks.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile_username": {
+     "type": "string",
+     "description": "Upload-Post profile name that owns the connected account."
+    },
+    "platform": {
+     "type": "string",
+     "enum": [
+      "instagram",
+      "tiktok",
+      "youtube",
+      "facebook",
+      "threads",
+      "bluesky"
+     ],
+     "description": "Network of the post. Default instagram, which answers with a private DM. tiktok, youtube, facebook, threads and bluesky have no private reply to a comment, so matching comments get a PUBLIC reply under the comment instead."
+    },
+    "post_url": {
+     "type": "string",
+     "description": "Post URL to watch. Required on Instagram; on the other networks post_id is preferred."
+    },
+    "post_id": {
+     "type": "string",
+     "description": "Post to watch on tiktok/youtube/facebook/threads/bluesky (instead of post_url): TikTok video id, YouTube video id, Facebook post id ('{pageId}_{postId}'), Threads post id, Bluesky at:// URI. A TikTok or YouTube URL is also accepted."
+    },
+    "reply_message": {
+     "type": "string",
+     "minLength": 1,
+     "description": "Text sent to matching commenters: a DM on Instagram, a public reply elsewhere."
+    },
+    "reply_messages": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "minLength": 1
+     },
+     "maxItems": 5,
+     "description": "Public replies only: up to 5 alternative texts, rotated across comments so TikTok and YouTube do not see the same reply over and over."
+    },
+    "buttons": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "title": {
+        "type": "string"
+       },
+       "url": {
+        "type": "string",
+        "format": "uri"
+       }
+      },
+      "required": [
+       "title",
+       "url"
+      ],
+      "additionalProperties": false
+     },
+     "maxItems": 3,
+     "description": "Instagram only: up to 3 web_url buttons ({ title, url }) added to each DM."
+    },
+    "monitoring_interval": {
+     "type": "integer",
+     "minimum": 15,
+     "description": "Minutes between comment checks. Minimum is 15. Instagram and TikTok answer within seconds, so there it only paces a backup check."
+    },
+    "trigger_keywords": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      }
+     ],
+     "description": "Keyword or keywords; when set, only comments containing them are answered (case and accents ignored)."
+    }
+   },
+   "required": [
+    "profile_username",
+    "reply_message"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Start an AutoDM or comment auto-reply",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "list_autodms",
+  "title": "List AutoDMs and comment auto-replies",
+  "description": "List the account's AutoDM and comment auto-reply monitors (one post each) with their `platform`, state and counters. Active ones only, unless `include_inactive` is true. Account-wide Instagram rules (every post, stories, DM keywords; no expiry) are listed by list_autodm_rules.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "include_inactive": {
+     "type": "boolean",
+     "description": "Also list stopped and expired monitors."
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "List AutoDMs and comment auto-replies",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_autodm_logs",
+  "title": "Get AutoDM logs",
+  "description": "Read the activity log of one AutoDM monitor: comments seen and DMs sent or failed.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "monitor_id": {
+     "type": "string",
+     "description": "AutoDM monitor ID (from list_autodms or start_autodm)."
+    }
+   },
+   "required": [
+    "monitor_id"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get AutoDM logs",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "pause_autodm",
+  "title": "Pause an AutoDM",
+  "description": "Pause an AutoDM monitor: no DMs are sent until resume_autodm.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "monitor_id": {
+     "type": "string",
+     "description": "AutoDM monitor ID (from list_autodms or start_autodm)."
+    }
+   },
+   "required": [
+    "monitor_id"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Pause an AutoDM",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "resume_autodm",
+  "title": "Resume an AutoDM",
+  "description": "Resume a paused AutoDM monitor, so it sends DMs to new matching comments again.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "monitor_id": {
+     "type": "string",
+     "description": "AutoDM monitor ID (from list_autodms or start_autodm)."
+    }
+   },
+   "required": [
+    "monitor_id"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Resume an AutoDM",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "stop_autodm",
+  "title": "Stop an AutoDM",
+  "description": "Stop an AutoDM monitor: it stops sending DMs and shows as stopped in list_autodms (with `include_inactive`). For a temporary break use pause_autodm; to remove it entirely use delete_autodm.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "monitor_id": {
+     "type": "string",
+     "description": "AutoDM monitor ID (from list_autodms or start_autodm)."
+    }
+   },
+   "required": [
+    "monitor_id"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Stop an AutoDM",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "delete_autodm",
+  "title": "Delete an AutoDM",
+  "description": "Permanently delete an AutoDM monitor with its stats and logs. Cannot be undone.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "monitor_id": {
+     "type": "string",
+     "description": "AutoDM monitor ID (from list_autodms or start_autodm)."
+    }
+   },
+   "required": [
+    "monitor_id"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Delete an AutoDM",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "submit_ffmpeg_job",
+  "title": "Submit FFmpeg processing job",
+  "description": "Process media with FFmpeg on Upload-Post's encoding servers (trim, transcode, resize, watermark, concatenate, extract a thumbnail…). Inputs are public HTTP(S) URLs: `input_url` for one file, or `files` for several. They are downloaded into a working directory of their own for this job. `full_command` is one ffmpeg invocation using the placeholders `{input}` (or `{input0}`, `{input1}`… with several files) and `{output}`, e.g. `ffmpeg -i {input} -ss 5 -t 10 -c copy {output}`. It runs without a shell and must start with `ffmpeg`. Every `-i` must be an `{input}`/`{inputN}` placeholder or a generated `-f lavfi` source, and `{output}` is the only output. Rejected with a 400 that names the problem: shell metacharacters (; | & $ `), protocols or URLs anywhere in the command (`file:`, `concat:`, `subfile,`…), the `movie=`, `amovie=` and `sendcmd` filters, absolute paths other than fonts under /usr/share/fonts, `..`, and `-safe 0`. A command that would never end (`-stream_loop -1`, `-loop 1`, or a lavfi source without a duration) needs `-t`, `-shortest` or `-frames`; `-stream_loop` accepts -1 to 100. Usage is charged at the longer of the input and output durations, so looped or generated outputs count at their full length. The output is not posted anywhere; fetch it with download_ffmpeg_result. Returns a `job_id` you can poll with `get_ffmpeg_job`.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "input_url": {
+     "type": "string",
+     "description": "Public URL of the input media. Use this for a single source file."
+    },
+    "files": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "minItems": 1,
+     "description": "Public URLs of multiple input media files, when the job needs more than one source."
+    },
+    "full_command": {
+     "type": "string",
+     "description": "Optional ffmpeg command with `{input}` / `{input0}`… and `{output}` placeholders. Must start with `ffmpeg`; each `-i` is a placeholder or `-f lavfi`. Protocols or URLs inside the command, `movie=`/`sendcmd`, absolute paths (except /usr/share/fonts), `..`, `-safe 0` and shell metacharacters are rejected. Endless inputs need `-t` or `-shortest`; `-stream_loop` is capped at 100."
+    },
+    "output_filename": {
+     "type": "string",
+     "description": "Optional preferred output filename, e.g. clip.mp4 or thumbnail.jpg."
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Submit FFmpeg processing job",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": true
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_ffmpeg_job",
+  "title": "Poll FFmpeg job status",
+  "description": "Poll the status of an FFmpeg job. When status is 'finished', call `download_ffmpeg_result` to obtain a publishable `media_url` (or the authenticated download URL).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "jobId": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "jobId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Poll FFmpeg job status",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "download_ffmpeg_result",
+  "title": "Get FFmpeg result download URL",
+  "description": "Returns how to get a finished FFmpeg job's output without streaming it through MCP. For video and image outputs it returns a temporary public `media_url` (signed, no API key, deleted 24 h after the job finished) that you can pass straight to upload_video / upload_photos as the video URL / photo URL. It also returns `download_url`, which needs the user's Upload-Post API key.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "jobId": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "jobId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get FFmpeg result download URL",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_ffmpeg_consumption",
+  "title": "Get FFmpeg quota usage",
+  "description": "Monthly FFmpeg processing minutes used vs. plan allowance.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {},
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get FFmpeg quota usage",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "get_queue_settings",
+  "title": "Get queue settings",
+  "description": "Posting queue configuration (slots per day, time windows, timezone).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile_username": {
+     "type": "string"
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get queue settings",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "update_queue_settings",
+  "title": "Update queue settings",
+  "description": "Update posting queue configuration for a profile. Fields are flat, not nested: timezone, slots, days_of_week, and max_posts_per_slot.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile_username": {
+     "type": "string",
+     "description": "Upload-Post profile name to update."
+    },
+    "timezone": {
+     "type": "string",
+     "description": "IANA timezone, e.g. Europe/Madrid or America/New_York."
+    },
+    "slots": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "hour": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 23,
+        "description": "Hour in 24-hour local time."
+       },
+       "minute": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 59,
+        "description": "Minute. Defaults to 0."
+       }
+      },
+      "required": [
+       "hour"
+      ],
+      "additionalProperties": false
+     },
+     "maxItems": 24,
+     "description": "Posting slots sorted by local time, e.g. [{hour: 10, minute: 0}, {hour: 16, minute: 0}]."
+    },
+    "days_of_week": {
+     "type": "array",
+     "items": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 6
+     },
+     "description": "Allowed posting days where 0=Monday and 6=Sunday."
+    },
+    "max_posts_per_slot": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 100,
+     "description": "Maximum posts allowed in the same queue slot."
+    }
+   },
+   "required": [
+    "profile_username"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Update queue settings",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "preview_queue",
+  "title": "Preview queue",
+  "description": "Preview the upcoming queue slots and what would land in them. Optionally `nextSlot=true` returns just the next available slot timestamp.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "profile_username": {
+     "type": "string"
+    },
+    "nextSlot": {
+     "type": "boolean"
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Preview queue",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  }
+ },
+ {
+  "name": "create_media_upload",
+  "title": "Create media upload",
+  "description": "Internal/app staging helper for clients that can directly PUT file bytes to the returned upload_url. Do NOT call this for files the user attached in a hosted chat client: the model and server environment cannot read those attachment bytes. For attached videos or images (including carousels), call open_upload_studio first; the Studio browser component calls this tool after the user selects the file(s). Use this directly only in MCP clients that truly hold the file bytes and can perform the HTTP PUT themselves. Staging media is deleted after 24 hours; scheduled posts are safe because upload_video copies the media into durable scheduler storage.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "filename": {
+     "type": "string",
+     "description": "Original filename, e.g. clip.mp4."
+    },
+    "contentType": {
+     "type": "string",
+     "description": "MIME type, e.g. video/mp4."
+    },
+    "contentLength": {
+     "type": "integer",
+     "exclusiveMinimum": 0,
+     "description": "File size in bytes."
+    },
+    "mediaType": {
+     "type": "string",
+     "enum": [
+      "video",
+      "image",
+      "document"
+     ],
+     "default": "video",
+     "description": "Kind of media being uploaded."
+    },
+    "source": {
+     "type": "string",
+     "description": "Optional source label identifying the calling client, e.g. mcp_studio."
+    }
+   },
+   "required": [
+    "filename",
+    "contentType",
+    "contentLength"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Create media upload",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  },
+  "_meta": {
+   "ui": {
+    "visibility": [
+     "app"
+    ]
+   },
+   "openai/widgetAccessible": true,
+   "openai/toolInvocation/invoking": "Creating upload URL…",
+   "openai/toolInvocation/invoked": "Upload URL created"
+  }
+ },
+ {
+  "name": "complete_media_upload",
+  "title": "Complete media upload",
+  "description": "Internal/app staging helper. Validate a media upload only after the browser/client has successfully PUT the actual file bytes to upload_url. Do NOT call this immediately after create_media_upload from the model; without the intervening PUT, completion will fail or produce no publishable media. Returns a temporary media_url that can be passed to upload_video/upload_photos immediately.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "uploadId": {
+     "type": "string",
+     "description": "upload_id returned by create_media_upload."
+    }
+   },
+   "required": [
+    "uploadId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Complete media upload",
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  },
+  "_meta": {
+   "ui": {
+    "visibility": [
+     "app"
+    ]
+   },
+   "openai/widgetAccessible": true,
+   "openai/toolInvocation/invoking": "Completing media upload…",
+   "openai/toolInvocation/invoked": "Media upload completed"
+  }
+ },
+ {
+  "name": "get_media_upload",
+  "title": "Get media upload",
+  "description": "Internal/app staging helper. Get status for a short-lived MCP media upload. Optionally returns a fresh temporary media_url for an already-uploaded staging object.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "uploadId": {
+     "type": "string"
+    },
+    "includeUrl": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "uploadId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Get media upload",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  },
+  "_meta": {
+   "ui": {
+    "visibility": [
+     "app"
+    ]
+   },
+   "openai/widgetAccessible": true
+  }
+ },
+ {
+  "name": "delete_media_upload",
+  "title": "Delete media upload",
+  "description": "Internal/app staging helper. Delete a short-lived MCP staging media upload from R2. This does not delete scheduler durable copies created later by upload_video.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "uploadId": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "uploadId"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "result": {}
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Delete media upload",
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  },
+  "_meta": {
+   "ui": {
+    "visibility": [
+     "app"
+    ]
+   },
+   "openai/widgetAccessible": true,
+   "openai/toolInvocation/invoking": "Deleting media upload…",
+   "openai/toolInvocation/invoked": "Media upload deleted"
+  }
+ },
+ {
+  "name": "open_upload_studio",
+  "title": "Open upload studio",
+  "description": "Open the upload studio in the user's browser for local or attached videos AND images (one photo or a carousel of up to 10 images). Use this FIRST when the user attaches a video or image(s) and does not provide a public HTTPS URL. Do not try upload_video or upload_photos with /mnt/data, sandbox, or other mounted local paths first: a hosted MCP server cannot read files on the client's machine. Pass `mediaType: \"photos\"` for images/carousels and `\"video\"` (default) for a video. The Studio lets the user select the file(s) in the browser, stages them in short-lived Upload-Post storage, and publishes them through Upload-Post; for photos it can also hand the staged media URLs back to you, in order, to pass to upload_photos (for example to set a different caption per platform). Reddit posting is currently unavailable (error_code=reddit_unavailable) until the Reddit app is restored. Do not use reddit as a publish target.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "mediaType": {
+     "type": "string",
+     "enum": [
+      "video",
+      "photos"
+     ],
+     "description": "What the user wants to publish: \"video\" (default) or \"photos\" (one image or a carousel)."
+    },
+    "user": {
+     "type": "string",
+     "description": "Optional Upload-Post profile name to prefill."
+    },
+    "platforms": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "tiktok",
+       "instagram",
+       "youtube",
+       "linkedin",
+       "facebook",
+       "pinterest",
+       "threads",
+       "bluesky",
+       "x",
+       "google_business",
+       "discord",
+       "telegram",
+       "mastodon",
+       "wordpress",
+       "lemmy"
+      ],
+      "description": "Target social platform. Reddit posting is currently unavailable (error_code=reddit_unavailable) until the Reddit app is restored. Do not use reddit as a publish target."
+     },
+     "description": "Optional platforms to preselect. Reddit posting is currently unavailable (error_code=reddit_unavailable) until the Reddit app is restored. Do not use reddit as a publish target."
+    },
+    "title": {
+     "type": "string",
+     "description": "Optional caption/title to prefill."
+    },
+    "description": {
+     "type": "string",
+     "description": "Optional description to prefill."
+    },
+    "firstComment": {
+     "type": "string",
+     "description": "Optional first comment to prefill."
+    },
+    "instagramMediaType": {
+     "type": "string",
+     "enum": [
+      "REELS",
+      "STORIES",
+      "IMAGE"
+     ],
+     "description": "Instagram format to preselect: REELS or STORIES for video, IMAGE (feed) or STORIES for photos."
+    }
+   },
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "outputSchema": {
+   "type": "object",
+   "properties": {
+    "mediaType": {
+     "type": "string",
+     "enum": [
+      "video",
+      "photos"
+     ]
+    },
+    "user": {
+     "type": "string"
+    },
+    "platforms": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "tiktok",
+       "instagram",
+       "youtube",
+       "linkedin",
+       "facebook",
+       "pinterest",
+       "threads",
+       "bluesky",
+       "x",
+       "google_business",
+       "discord",
+       "telegram",
+       "mastodon",
+       "wordpress",
+       "lemmy"
+      ],
+      "description": "Target social platform. Reddit posting is currently unavailable (error_code=reddit_unavailable) until the Reddit app is restored. Do not use reddit as a publish target."
+     }
+    },
+    "title": {
+     "type": "string"
+    },
+    "description": {
+     "type": "string"
+    },
+    "firstComment": {
+     "type": "string"
+    },
+    "instagramMediaType": {
+     "type": "string",
+     "enum": [
+      "REELS",
+      "STORIES",
+      "IMAGE"
+     ]
+    }
+   },
+   "required": [
+    "mediaType",
+    "user",
+    "platforms",
+    "title",
+    "description",
+    "firstComment",
+    "instagramMediaType"
+   ],
+   "additionalProperties": false,
+   "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "annotations": {
+   "title": "Open upload studio",
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "openWorldHint": false
+  },
+  "execution": {
+   "taskSupport": "forbidden"
+  },
+  "_meta": {
+   "ui": {
+    "resourceUri": "ui://upload-post/video-upload-studio.html",
+    "visibility": [
+     "model",
+     "app"
+    ]
+   },
+   "openai/outputTemplate": "ui://upload-post/video-upload-studio.html",
+   "openai/widgetAccessible": true,
+   "openai/toolInvocation/invoking": "Opening upload studio…",
+   "openai/toolInvocation/invoked": "Upload studio opened"
+  }
+ }
+]

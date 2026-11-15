@@ -62,12 +62,14 @@ export function registerPostTools(server: McpServer, client: UploadPostMcpClient
       },
     },
     safe(async (args) => {
-      const a = args as { user: string; platform: string; postId: string };
+      const a = args as { user: string; platform: string; postId: string; delete_all_messages?: boolean };
       return client.request("POST", "/uploadposts/posts/unpublish", {
         body: compact({
           platform: a.platform,
           user: a.user,
           post_id: a.postId,
+          // Only in the widened schema (src/extensions.ts); ChatGPT's strips it.
+          delete_all_messages: a.delete_all_messages,
         }),
       });
     })
