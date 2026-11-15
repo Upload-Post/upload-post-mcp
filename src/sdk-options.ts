@@ -40,6 +40,12 @@ export function sdkOptionKeys(): Set<string> {
   for (const m of source.matchAll(/\[\s*'[^']+'\s*,\s*'([A-Za-z_$][\w$]*)'\s*,\s*'(?:flag|text)'\s*\]/g)) {
     keys.add(m[1]);
   }
+  // Table rows such as ['telegram_pin', 'telegramPin'] read through
+  // this._pick(options, key, field): both spellings reach the form.
+  for (const m of source.matchAll(/\[\s*'([a-z][a-z0-9_]*)'\s*,\s*'([a-z][A-Za-z0-9]*)'\s*\]/g)) {
+    keys.add(m[1]);
+    keys.add(m[2]);
+  }
   cached = keys;
   return keys;
 }
