@@ -89,7 +89,7 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Schedule      | `list_scheduled`, `cancel_scheduled`, `edit_scheduled` |
 | Analytics     | `get_analytics`, `get_total_impressions`, `get_post_analytics`, `get_cached_post_analytics`, `get_platform_metrics` |
 | Audience      | `get_audience`, `get_suggestions` |
-| Users         | `get_account_info`, `list_users`, `get_connect_link`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
+| Users         | `get_account_info`, `list_users`, `get_connect_link`, `open_social_accounts`, `create_user`, `delete_user`, `generate_jwt`, `validate_jwt` |
 | Pages/boards  | `get_facebook_pages`, `get_linkedin_pages`, `resolve_linkedin_organization`, `get_pinterest_boards`, `get_google_business_locations`, `get_google_business_reviews`, `reply_to_google_business_review`, `get_reddit_detailed_posts` |
 | Posts         | `retry_post`, `unpublish_post`, `edit_post`, `repost_post`, `post_action` (not exposed in ChatGPT yet) |
 | Best times    | `get_best_times`: the hours each connected account gets the most engagement; `update_queue_settings` with `slots: "auto"` fills the queue with them (not exposed in ChatGPT yet) |
@@ -190,6 +190,15 @@ The R2 bucket CORS policy must allow browser uploads. A restrictive policy can i
 ]
 ```
 
+### Connect social accounts from the chat (MCP Apps)
+
+`open_social_accounts` shows one card per network (TikTok, Instagram, YouTube, LinkedIn, Facebook, X, Threads, Pinterest, Bluesky, Google Business, Telegram and the rest under "More networks"), each marked connected, needs reconnecting or not connected. It is an [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) view (`ui://upload-post/social-accounts.html`, `text/html;profile=mcp-app`), built on the open standard rather than the ChatGPT-only bridge.
+
+- **One button per network.** The click asks the server for a link at that moment (the view calls `create_social_connect_link`, visible to the view only) and opens it in a new tab through the host (`ui/open-link`): network sign-ins such as TikTok, Meta or Google do not run inside an iframe. For the `default` profile the MCP manages, the link is a signed one-click page that shows only that network; networks connected with a form (Bluesky, Telegram, Discord, Mastodon, WordPress, …) open the full connection page. Other profiles get the dashboard, so their white-label connection settings are never reset.
+- **No "done" needed.** After a click the view checks again every 5 s, for at most 3 minutes per click and 120 checks per view, and stops as soon as the network is connected. A new connection turns the card green and updates the model's context (`ui/update-model-context`); a "Continue in the chat" button sends a message only when the user clicks it.
+- **Who sees it.** Only hosts that declare MCP Apps support in `initialize` (`capabilities.extensions["io.modelcontextprotocol/ui"].mimeTypes` containing `text/html;profile=mcp-app`). Hosts that do not declare it keep the text flow (`list_users` → `get_connect_link`). ChatGPT does not get it yet: its tool surface stays the one OpenAI reviewed until the next app submission. `UPLOAD_POST_MCP_APPS=off` turns the view off for everyone.
+- Expired connections (`reauth_required`) get the same signed link as new ones, in the view and in upload errors.
+
 ---
 
 ## Local / development
@@ -233,6 +242,7 @@ npx @modelcontextprotocol/inspector node dist/index.js
 | `UPLOAD_POST_MCP_AUTH_FAIL_PROBE_S` | http | `30`                      | While held, one request per this many seconds goes through the normal auth path. |
 | `UPLOAD_POST_MCP_TRUST_PROXY` | http | `auto`                          | Whether the client IP is the last `X-Forwarded-For` hop: `auto` (only when the peer is a private address, i.e. a local reverse proxy), `true` or `false`. |
 | `UPLOAD_POST_MCP_ALLOW_LOCAL_FILES` | http | `false`                  | Let tools read media from file paths on the server's disk. Off for a shared host (only http(s) URLs are accepted); turn it on only when the HTTP server runs next to your own files. stdio always allows paths. |
+| `UPLOAD_POST_MCP_APPS`    | both    | on                                 | `off` stops advertising MCP Apps views (the social accounts cards) to every host. |
 | `OPENAI_APPS_CHALLENGE_TOKEN` | http | Current Upload-Post challenge token | Optional override for ChatGPT Apps domain verification at `/.well-known/openai-apps-challenge`. |
 
 CLI flags:

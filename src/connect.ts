@@ -37,12 +37,12 @@ export interface ConnectLink {
 
 const PLATFORM_ALIASES: Record<string, string> = { twitter: "x" };
 
-function normalizePlatform(p: string): string {
+export function normalizePlatform(p: string): string {
   const key = p.trim().toLowerCase();
   return PLATFORM_ALIASES[key] ?? key;
 }
 
-function profilesOf(listUsersResult: unknown): Array<Record<string, unknown>> {
+export function profilesOf(listUsersResult: unknown): Array<Record<string, unknown>> {
   const profiles = (listUsersResult as { profiles?: unknown } | null)?.profiles;
   return Array.isArray(profiles) ? (profiles as Array<Record<string, unknown>>) : [];
 }
@@ -97,6 +97,23 @@ export function connectInstruction(link: ConnectLink, platforms?: string[]): str
  */
 export function listUsersGuidance(
   listUsersResult: unknown,
+  requested?: string[],
+  opts: { connectView?: string } = {}
+): Record<string, unknown> | undefined {
+  const guidance = baseListUsersGuidance(listUsersResult, requested);
+  if (!guidance || !opts.connectView) return guidance;
+  // Hosts that render MCP Apps views get the one-click cards first; the link
+  // stays as the fallback for when the view cannot be shown.
+  return {
+    ...guidance,
+    next_step:
+      `This client can show interactive cards: call ${opts.connectView} (pass the platforms the user wants) so the user connects each network with one click without leaving the chat. ` +
+      guidance.next_step,
+  };
+}
+
+function baseListUsersGuidance(
+  listUsersResult: unknown,
   requested?: string[]
 ): Record<string, unknown> | undefined {
   const summary = summarizeProfiles(listUsersResult);
@@ -148,6 +165,19 @@ export function listUsersGuidance(
   return { next_step: parts.join(" "), connect_url: MANAGE_USERS_URL };
 }
 
+/**
+ * Profile a signed link may be minted for, or undefined when only the
+ * dashboard is safe (see resolveConnectLink). `profiles` are the account's
+ * profile names.
+ */
+export function signedLinkTarget(profiles: string[], requested?: string): string | undefined {
+  if (profiles.length === 0) return DEFAULT_PROFILE;
+  if (profiles.length === 1 && profiles[0] === DEFAULT_PROFILE && (!requested || requested === DEFAULT_PROFILE)) {
+    return DEFAULT_PROFILE;
+  }
+  return undefined;
+}
+
 function isConflict(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return /already in use|already exists|409/i.test(msg);
@@ -173,9 +203,9 @@ export async function resolveConnectLink(
   try {
     const profiles = profilesOf(await client.sdk.listUsers()).map((p) => String(p.username ?? ""));
     let created = false;
-    let target: string | undefined;
+    const target = signedLinkTarget(profiles, opts.profile);
 
-    if (profiles.length === 0) {
+    if (target && profiles.length === 0) {
       try {
         await client.sdk.createUser(DEFAULT_PROFILE);
         created = true;
@@ -184,13 +214,6 @@ export async function resolveConnectLink(
         // bad key) leaves the dashboard as the only safe answer.
         if (!isConflict(err)) return fallback;
       }
-      target = DEFAULT_PROFILE;
-    } else if (
-      profiles.length === 1 &&
-      profiles[0] === DEFAULT_PROFILE &&
-      (!opts.profile || opts.profile === DEFAULT_PROFILE)
-    ) {
-      target = DEFAULT_PROFILE;
     }
 
     if (!target) return { ...fallback, profile: opts.profile };
@@ -301,10 +324,11 @@ export async function uploadErrorGuidance(
   }
 
   const platforms = platformsFromMessage(message).filter((p) => !requested.length || requested.includes(p));
-  const link =
-    kind === "reconnect"
-      ? { connect_url: MANAGE_USERS_URL, signed: false }
-      : await resolveConnectLink(client, { profile: requestedProfile, platforms });
+  // Reconnecting goes through the same signed one-click link as connecting:
+  // the dashboard asks for a login, which is what a chat user does not have
+  // at hand. resolveConnectLink still falls back to it for profiles the MCP
+  // does not own.
+  const link = await resolveConnectLink(client, { profile: requestedProfile, platforms });
   const lead =
     kind === "reconnect"
       ? `The ${humanList(platforms.length ? platforms : ["social"])} connection has expired and must be reconnected; nothing was published to it.`

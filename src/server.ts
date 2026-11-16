@@ -21,12 +21,14 @@ import { registerTelegramTools } from "./tools/telegram.js";
 import { registerBlueskyTools } from "./tools/bluesky.js";
 import { registerGoogleBusinessTools } from "./tools/google_business.js";
 import { registerYoutubeTools } from "./tools/youtube.js";
+import { registerNetworksView } from "./tools/networks.js";
 import { applySecondWaveParameters } from "./extensions.js";
 import { UPGRADE_URL } from "./plan.js";
 import { applyConfirmationGates } from "./confirm.js";
 import {
   detectClientProfile,
   isChatGpt,
+  showsMcpAppsViews,
   type ClientInfoLike,
   type SessionContext,
 } from "./client_profile.js";
@@ -79,7 +81,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   registerScheduleTools(server, client);
   registerAnalyticsTools(server, client);
   registerAudienceTools(server, client);
-  registerUserTools(server, client);
+  registerUserTools(server, client, ctx);
   const pagesTools = registerPagesTools(server, client);
   const commentTools = registerCommentTools(server, client);
   registerPostTools(server, client);
@@ -94,6 +96,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   const blueskyTools = registerBlueskyTools(server, client);
   const googleBusinessTools = registerGoogleBusinessTools(server, client);
   const youtubeTools = registerYoutubeTools(server, client);
+  const networksView = registerNetworksView(server, client, ctx);
   // Added after the ChatGPT app review: they join ChatGPT's surface with the
   // next submission (chatgpt-app-submission.json), not before.
   const notYetReviewedForChatGpt = [
@@ -105,6 +108,8 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     ...blueskyTools,
     ...googleBusinessTools,
     ...youtubeTools,
+    networksView.tool,
+    networksView.linkTool,
   ];
   const studio = registerUploadStudio(server);
 
@@ -115,10 +120,16 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   let gated = false;
   const applyProfile = (info: ClientInfoLike | undefined): void => {
     const profile = detectClientProfile(info);
-    if (ctx.profile?.kind === profile.kind && ctx.profile.name === profile.name) return;
+    if (
+      ctx.profile?.kind === profile.kind &&
+      ctx.profile.name === profile.name &&
+      ctx.profile.mcpApps === profile.mcpApps
+    ) {
+      return;
+    }
     ctx.profile = profile;
     process.stderr.write(
-      `[upload-post-mcp] client ${profile.name}/${profile.version} → ${profile.kind}\n`
+      `[upload-post-mcp] client ${profile.name}/${profile.version} → ${profile.kind}${profile.mcpApps ? " +mcp-apps" : ""}\n`
     );
     if (isChatGpt(ctx)) {
       // OpenAI's review rejects tools that dispatch several operations through
@@ -128,7 +139,20 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
       // Not in the tool surface OpenAI reviewed; adding it needs a new review.
       feedbackTool.disable();
       for (const tool of notYetReviewedForChatGpt) tool.disable();
+      networksView.resource.disable();
       return;
+    }
+    // The social accounts view speaks the MCP Apps standard, so it goes only
+    // to hosts that declared they render it; to the rest it would be a tool
+    // that shows nothing and an app-only helper they would list to the model.
+    if (showsMcpAppsViews(ctx)) {
+      networksView.tool.enable();
+      networksView.linkTool.enable();
+      networksView.resource.enable();
+    } else {
+      networksView.tool.disable();
+      networksView.linkTool.disable();
+      networksView.resource.disable();
     }
     studio.tool.disable();
     studio.resource.disable();
@@ -147,7 +171,8 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   // `tools/list` can arrive; stdio (and anything that skips the seed) falls
   // back to the `initialized` notification.
   if (clientInfo) applyProfile(clientInfo);
-  server.server.oninitialized = () => applyProfile(server.server.getClientVersion());
+  server.server.oninitialized = () =>
+    applyProfile({ ...server.server.getClientVersion(), capabilities: server.server.getClientCapabilities() });
 
   return server;
 }
