@@ -113,7 +113,7 @@ Async uploads return a `request_id`. The agent should poll `get_status` until `s
 
 A team member's post can go to the approval queue instead (the API answers `202` with `pending_approval: true` and an `approval_id`): nothing is published until the owner or an Admin approves it. The upload tools and `get_status` return that as a success with a `next_step` explaining it, not as an error. To act as a team member on the owner's account from a local server, set `UPLOAD_POST_ACT_AS_USER` to the owner's email.
 
-Webhook subscriptions and the approval queue answer `503` (`webhook_subscriptions_disabled`, `post_approvals_disabled`) on accounts where those features are not switched on yet. Connecting a ChatGPT Ads account (it takes an OpenAI Ads API key), the per-network credential connections and rotating the webhook secret stay in the dashboard on purpose: an agent never handles those secrets.
+Some features are not generally available yet and answer `503` until they are switched on: webhook subscriptions (`webhook_subscriptions_disabled`), the approval queue (`post_approvals_disabled`), the new YouTube actions (every `youtube_read` / `manage_youtube_*` action except videos, quota and the thumbnail: `youtube_feature_disabled`), Telegram Business (`telegram_business_unavailable`), spending Telegram Stars on gifts (`telegram_stars_spend_disabled`) and turning Telegram updates on (`telegram_updates_unavailable`). Each tool's description says which of its actions are affected. Connecting a ChatGPT Ads account (it takes an OpenAI Ads API key), the per-network credential connections and rotating the webhook secret stay in the dashboard on purpose: an agent never handles those secrets.
 
 ### Per-platform: TikTok / YouTube / Instagram / LinkedIn / Facebook
 

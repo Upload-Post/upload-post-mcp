@@ -37,7 +37,7 @@ export const SUBSCRIPTION_EVENTS = [
 ] as const;
 
 const DISABLED_NOTE =
-  "While webhook subscriptions are not enabled for the account, every call answers 503 with reason webhook_subscriptions_disabled.";
+  "Not generally available yet: until webhook subscriptions are switched on for the account, every call answers 503 with reason webhook_subscriptions_disabled (the feature is off, not a temporary failure).";
 
 const subscriptionIdField = z
   .string()
@@ -161,7 +161,7 @@ export function registerWebhookSubscriptionTools(
     {
       title: "Test a webhook subscription",
       description:
-        "Send one signed sample event to a subscription now, with the keys of the real event and `test: true`. `ok` says whether the destination answered 2xx. Logged as a test delivery: never retried and never counted towards disabling the subscription. " +
+        "Send one signed sample event to a subscription now, with the keys of the real event and `test: true`. `ok` is true when the destination answered with a status below 400 (a redirect counts as delivered). Logged as a test delivery: never retried and never counted towards disabling the subscription. " +
         "409 subscription_disabled or blocked_url; 400 invalid_event when `event` is not one of the subscription's events. " +
         DISABLED_NOTE,
       inputSchema: {

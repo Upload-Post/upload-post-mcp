@@ -94,6 +94,25 @@ for (const tool of NEW_TOOLS) {
   assert.doesNotMatch(s.tools.get(tool).description, /https?:\/\//, `${tool}: no URLs in the description`);
 }
 
+// Features that are off by default say so, with the 503 code they answer.
+for (const [tool, code] of [
+  ["list_webhook_subscriptions", "webhook_subscriptions_disabled"],
+  ["create_webhook_subscription", "webhook_subscriptions_disabled"],
+  ["approve_post", "post_approvals_disabled"],
+  ["list_pending_approvals", "post_approvals_disabled"],
+  ["manage_telegram_business", "telegram_business_unavailable"],
+  ["manage_telegram_payments", "telegram_stars_spend_disabled"],
+  ["manage_telegram_bot", "telegram_updates_unavailable"],
+  ["youtube_read", "youtube_feature_disabled"],
+  ["manage_youtube_live", "youtube_feature_disabled"],
+  ["manage_youtube_videos", "youtube_feature_disabled"],
+]) {
+  assert.match(s.tools.get(tool).description, new RegExp(`Not generally available yet[^]*${code}`), `${tool} says it is not generally available (${code})`);
+}
+assert.match(s.tools.get("youtube_read").description, /except videos and quota/);
+assert.match(s.tools.get("manage_youtube_videos").description, /except set_thumbnail/);
+assert.doesNotMatch(s.tools.get("test_webhook_subscription").description, /2xx/, "a redirect counts as delivered: no 2xx promise");
+
 // --- ChatGPT Ads ----------------------------------------------------------------
 s.calls.length = 0;
 let r = await s.call("chatgpt_ads_read", {

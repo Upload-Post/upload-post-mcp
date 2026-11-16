@@ -18,7 +18,7 @@ import { genericResultOutputSchema, safe } from "../schemas.js";
 const AP = "/uploadposts/approvals";
 
 const DISABLED_NOTE =
-  "While post approvals are not enabled for the account, these calls answer 503 post_approvals_disabled.";
+  "Not generally available yet: until post approvals are switched on for the account, these calls answer 503 post_approvals_disabled (the feature is off, not a temporary failure).";
 
 const approvalIdField = z
   .string()
