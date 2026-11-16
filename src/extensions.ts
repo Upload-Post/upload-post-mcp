@@ -116,6 +116,17 @@ const BLUESKY_COMMON: Shape = {
   blueskyQuoteUri: z.string().optional().describe("Bluesky: quote this post (at:// URI or bsky.app link)."),
 };
 
+const YOUTUBE_VIDEO: Shape = {
+  youtubeLocalizations: z
+    .union([z.string(), z.record(z.record(z.string()))])
+    .optional()
+    .describe('YouTube title and description translations: {"es": {"title": "…", "description": "…"}}. Needs the video\'s default language (youtubeDefaultLanguage or set before).'),
+  youtubeBrandPartner: z
+    .string()
+    .optional()
+    .describe("YouTube paid partnership: the brand's channel id (UC…, 24 characters; handles are not accepted)."),
+};
+
 const BLUESKY_VIDEO: Shape = {
   blueskyCaptions: z
     .union([z.string(), z.array(z.record(z.unknown()))])
@@ -176,7 +187,7 @@ export function applySecondWaveParameters(server: McpServer): void {
   };
 
   widen("upload_video", (s) =>
-    widenObjectField(s, "platformOptions", { ...SPONSORED, ...TELEGRAM_COMMON, ...TELEGRAM_MEDIA, ...BLUESKY_COMMON, ...BLUESKY_VIDEO, ...GBP_COMMON })
+    widenObjectField(s, "platformOptions", { ...SPONSORED, ...YOUTUBE_VIDEO, ...TELEGRAM_COMMON, ...TELEGRAM_MEDIA, ...BLUESKY_COMMON, ...BLUESKY_VIDEO, ...GBP_COMMON })
   );
   widen("upload_photos", (s) =>
     widenObjectField(s, "platformOptions", {

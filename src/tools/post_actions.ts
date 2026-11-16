@@ -18,6 +18,7 @@ const EDIT_TEXT_FIELD: Record<string, string> = {
   x: "text",
   google_business: "summary",
   telegram: "text",
+  youtube: "description",
 };
 
 const BLUESKY_ACTIONS = [
@@ -38,13 +39,14 @@ export function registerPostActionTools(server: McpServer, client: UploadPostMcp
     {
       title: "Edit a published post",
       description:
-        "Change a post that is already live, in place. Facebook (Page posts), LinkedIn, X, Google Business and Telegram. `text` is the new text (sent as each network's own field). " +
+        "Change a post that is already live, in place. Facebook (Page posts), LinkedIn, X, Google Business, Telegram and YouTube. `text` is the new text (sent as each network's own field; YouTube: the description). " +
         "Telegram also takes `telegram_action`: pin, unpin, stop_poll, edit_live_location, stop_live_location, and in `params`: telegram_reply_markup (buttons), telegram_parse_mode, telegram_link_preview, telegram_show_caption_above_media, telegram_pin_notify, telegram_media + telegram_media_type (replace the photo/video by URL or file_id), telegram_location. " +
         "Google Business: the text plus call to action, event and offer fields in `params` (cta_type, cta_url, event_title, event_start_date, event_start_time, event_end_date, event_end_time, offer_coupon, offer_redeem_url, offer_terms); its media and schedule cannot be changed. Facebook: is_pinned, facebook_page_id. LinkedIn: linkedin_visibility, linkedin_disable_reshare. " +
+        "YouTube (post_id = video id), in `params`: title, tags, privacyStatus, categoryId, publishAt, defaultLanguage, localizations {lang: {title, description}}, localizations_remove, brand_partner (a UC… channel id), embeddable, publicStatsViewable, selfDeclaredMadeForKids, containsSyntheticMedia, license, recordingDate, paid_partnership; editing these spends about 51 units of the account's daily YouTube allowance. " +
         "Instagram, TikTok and Threads posts cannot be edited.",
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
-        platform: z.enum(["facebook", "linkedin", "x", "google_business", "telegram"]),
+        platform: z.enum(["facebook", "linkedin", "x", "google_business", "telegram", "youtube"]),
         post_id: z
           .string()
           .describe("The post id on the platform, as returned by the upload or get_media (Google Business: the full accounts/…/localPosts/… name)."),

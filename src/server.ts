@@ -20,6 +20,7 @@ import { registerPostActionTools } from "./tools/post_actions.js";
 import { registerTelegramTools } from "./tools/telegram.js";
 import { registerBlueskyTools } from "./tools/bluesky.js";
 import { registerGoogleBusinessTools } from "./tools/google_business.js";
+import { registerYoutubeTools } from "./tools/youtube.js";
 import { applySecondWaveParameters } from "./extensions.js";
 import { UPGRADE_URL } from "./plan.js";
 import { applyConfirmationGates } from "./confirm.js";
@@ -92,6 +93,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   const telegramTools = registerTelegramTools(server, client);
   const blueskyTools = registerBlueskyTools(server, client);
   const googleBusinessTools = registerGoogleBusinessTools(server, client);
+  const youtubeTools = registerYoutubeTools(server, client);
   // Added after the ChatGPT app review: they join ChatGPT's surface with the
   // next submission (chatgpt-app-submission.json), not before.
   const notYetReviewedForChatGpt = [
@@ -102,6 +104,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     ...telegramTools,
     ...blueskyTools,
     ...googleBusinessTools,
+    ...youtubeTools,
   ];
   const studio = registerUploadStudio(server);
 

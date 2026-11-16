@@ -106,7 +106,6 @@ for (const name of ["edit_post", "manage_telegram_chat", "manage_telegram_bot", 
 assert.ok(!s.tools.get("get_best_times").inputSchema.properties.platform.enum.includes("x"));
 assert.ok(!s.tools.get("post_action").inputSchema.properties.action.enum.includes("like"));
 assert.ok(!s.tools.get("repost_post").inputSchema.properties.platform.enum.includes("bluesky"));
-assert.ok(!s.tools.get("edit_post").inputSchema.properties.platform.enum.includes("youtube"));
 
 // --- Best times ------------------------------------------------------------------------
 await s.call("get_best_times", { profile_username: "demo", platform: "instagram", top: 3 });
