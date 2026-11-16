@@ -1,6 +1,7 @@
 import type { UploadPostMcpClient } from "./client.js";
 import { fail, ok, type ToolResult } from "./schemas.js";
 import { planErrorGuidance } from "./plan.js";
+import { withApprovalNote } from "./tools/approvals.js";
 
 /**
  * Onboarding guidance for accounts that cannot publish yet.
@@ -394,6 +395,8 @@ export function safeUpload<TArgs>(
         connectInstruction(link, skipped);
       return ok({ ...(result as Record<string, unknown>), next_step, ...link });
     }
-    return ok(result);
+    // A team member's post that went to the approval queue is a 2xx with
+    // nothing published yet: say so, so it does not read as a failure.
+    return ok(withApprovalNote(result));
   };
 }

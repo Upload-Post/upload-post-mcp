@@ -32,6 +32,7 @@ function parseArgs(argv: string[]): ParsedArgs {
           "Env:",
           "  UPLOAD_POST_API_KEY    Required in stdio mode. Ignored in --http mode.",
           "  UPLOAD_POST_BASE_URL   (optional) Override API base URL",
+          "  UPLOAD_POST_ACT_AS_USER (optional, stdio) Team members: the account owner's email to act on",
           "  UPLOAD_POST_MCP_PORT   (optional) HTTP port (default 8080)",
           "",
         ].join("\n")
@@ -67,7 +68,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const client = new UploadPostMcpClient({ apiKey, baseUrl });
+  const client = new UploadPostMcpClient({ apiKey, baseUrl, actAsUser: process.env.UPLOAD_POST_ACT_AS_USER });
   const server = buildServer(client);
   await runStdio(server);
 }

@@ -27,6 +27,13 @@ export interface UploadPostMcpClientOptions {
    * there would name a file of the server, not of the caller.
    */
   allowLocalFiles?: boolean;
+  /**
+   * Team members only: email of the account owner to act on, sent as
+   * `X-Act-As-User` on every request (raw HTTP and SDK). Set from
+   * UPLOAD_POST_ACT_AS_USER in stdio mode only; the multi-tenant HTTP host never
+   * sets it, since one value there would apply to every caller.
+   */
+  actAsUser?: string;
 }
 
 /**
@@ -53,7 +60,8 @@ export class UploadPostMcpClient {
     }
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
     this.allowLocalFiles = opts.allowLocalFiles ?? true;
-    this.sdk = new UploadPost(opts.apiKey);
+    const actAsUser = opts.actAsUser?.trim() || undefined;
+    this.sdk = new UploadPost(opts.apiKey, actAsUser ? { actAsUser } : {});
     // The SDK defaults to the public API; without this, a custom baseUrl
     // applied only to the raw-HTTP endpoints and silently not to uploads.
     // `baseUrl` exists at runtime but upload-post does not declare it.
@@ -63,6 +71,7 @@ export class UploadPostMcpClient {
       headers: {
         Authorization: `Apikey ${opts.apiKey}`,
         "X-Upload-Post-Source": `mcp/${PACKAGE_VERSION}`,
+        ...(actAsUser ? { "X-Act-As-User": actAsUser } : {}),
       },
       timeout: 120_000,
       validateStatus: () => true,

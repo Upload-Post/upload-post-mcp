@@ -22,6 +22,10 @@ import { registerBlueskyTools } from "./tools/bluesky.js";
 import { registerGoogleBusinessTools } from "./tools/google_business.js";
 import { registerYoutubeTools } from "./tools/youtube.js";
 import { registerNetworksView } from "./tools/networks.js";
+import { registerAdsTools } from "./tools/ads.js";
+import { registerWebhookSubscriptionTools } from "./tools/webhook_subscriptions.js";
+import { registerApprovalTools } from "./tools/approvals.js";
+import { registerAccountExtraTools } from "./tools/account_extras.js";
 import { applySecondWaveParameters } from "./extensions.js";
 import { UPGRADE_URL } from "./plan.js";
 import { applyConfirmationGates } from "./confirm.js";
@@ -97,6 +101,10 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   const googleBusinessTools = registerGoogleBusinessTools(server, client);
   const youtubeTools = registerYoutubeTools(server, client);
   const networksView = registerNetworksView(server, client, ctx);
+  const adsTools = registerAdsTools(server, client);
+  const webhookSubscriptionTools = registerWebhookSubscriptionTools(server, client);
+  const approvalTools = registerApprovalTools(server, client);
+  const accountExtraTools = registerAccountExtraTools(server, client);
   // Added after the ChatGPT app review: they join ChatGPT's surface with the
   // next submission (chatgpt-app-submission.json), not before.
   const notYetReviewedForChatGpt = [
@@ -110,6 +118,10 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     ...youtubeTools,
     networksView.tool,
     networksView.linkTool,
+    ...adsTools,
+    ...webhookSubscriptionTools,
+    ...approvalTools,
+    ...accountExtraTools,
   ];
   const studio = registerUploadStudio(server);
 

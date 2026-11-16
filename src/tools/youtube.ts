@@ -41,6 +41,9 @@ const READ_ROUTES: Record<string, Route> = {
   stream: { method: "GET", path: `${Y}/live/streams/{stream_id}` },
   live_chat: { method: "GET", path: `${Y}/live/chat` },
   super_chats: { method: "GET", path: `${Y}/live/super-chats` },
+  live_moderators: { method: "GET", path: `${Y}/live/moderators` },
+  caption_download: { method: "GET", path: `${Y}/captions/{caption_id}/download` },
+  abuse_reasons: { method: "GET", path: `${Y}/abuse-reasons` },
 };
 
 const PLAYLIST_ROUTES: Record<string, Route> = {
@@ -80,6 +83,7 @@ const VIDEO_ROUTES: Record<string, Route> = {
   upload_caption: { method: "POST", path: `${Y}/captions` },
   update_caption: { method: "PUT", path: `${Y}/captions/{caption_id}` },
   delete_caption: { method: "DELETE", path: `${Y}/captions/{caption_id}` },
+  report_abuse: { method: "POST", path: `${Y}/videos/{video_id}/report-abuse` },
 };
 
 const LIVE_ROUTES: Record<string, Route> = {
@@ -95,6 +99,10 @@ const LIVE_ROUTES: Record<string, Route> = {
   send_chat_message: { method: "POST", path: `${Y}/live/chat` },
   close_poll: { method: "POST", path: `${Y}/live/chat/polls/{message_id}/close` },
   delete_chat_message: { method: "DELETE", path: `${Y}/live/chat/messages/{message_id}` },
+  add_moderator: { method: "POST", path: `${Y}/live/moderators` },
+  remove_moderator: { method: "DELETE", path: `${Y}/live/moderators/{moderator_id}` },
+  ban_user: { method: "POST", path: `${Y}/live/bans` },
+  unban_user: { method: "DELETE", path: `${Y}/live/bans/{ban_id}` },
 };
 
 /** Fields that carry a file: only public URLs are accepted here. */
@@ -133,7 +141,8 @@ export function registerYoutubeTools(server: McpServer, client: UploadPostMcpCli
         "comments (video_id, or scope: channel for the whole channel; moderation_status published|heldForReview|likelySpam, order, search, include_replies), comment_replies (parent_id); " +
         "search (q, for_mine, channel_id, type video|channel|playlist, order, published_after…; few searches per day: free plan 1, paid 5), categories (region), languages, regions; " +
         "channel (settings, branding, translations, statistics), channel_lookup (for_handle, ids), channel_sections, subscriptions (filter mine|my_subscribers), activities; " +
-        "broadcasts (status active|upcoming|completed), broadcast (broadcast_id), streams, stream (stream_id; include_stream_key returns the secret key to the owner), live_chat (broadcast_id or live_chat_id, page_token; wait polling_interval_ms between reads), super_chats. " +
+        "broadcasts (status active|upcoming|completed), broadcast (broadcast_id), streams, stream (stream_id; include_stream_key returns the secret key to the owner), live_chat (broadcast_id or live_chat_id, page_token; wait polling_interval_ms between reads), super_chats, live_moderators (broadcast_id or live_chat_id; 50 units a page); " +
+          "caption_download (caption_id, tfmt srt|vtt|sbv|scc|ttml, tlang to machine-translate, video_id; own videos only, 200 units, the same download within 10 minutes is free); abuse_reasons (hl: the reason ids report_abuse takes). " +
         YOUTUBE_QUOTA,
       inputSchema: {
         action: actionEnum(READ_ROUTES),
@@ -220,12 +229,13 @@ export function registerYoutubeTools(server: McpServer, client: UploadPostMcpCli
       title: "Manage YouTube videos",
       description:
         "Per-video actions on the connected channel (edit title, description, tags, privacy and translations with edit_post). rate (video_id, rating like|dislike|none); set_thumbnail (video_id, thumbnail_url); " +
-        "captions: upload_caption (video_id, file_url, language, name, is_draft; 400+ units, more than a free plan's whole day), update_caption (caption_id, file_url and/or is_draft false to publish a draft; replacing the file needs `confirm`), delete_caption (caption_id, needs `confirm`). " +
+        "captions: upload_caption (video_id, file_url, language, name, is_draft; 400+ units, more than a free plan's whole day), update_caption (caption_id, file_url and/or is_draft false to publish a draft; replacing the file needs `confirm`), delete_caption (caption_id, needs `confirm`); " +
+          "report_abuse (video_id, reason_id and secondary_reason_id from youtube_read abuse_reasons, comments, language; reports someone's video to YouTube as the channel, cannot be withdrawn, needs `confirm`, 50 units and a daily limit per channel). " +
         YOUTUBE_QUOTA,
       inputSchema: {
         action: actionEnum(VIDEO_ROUTES),
         user: userField,
-        video_id: idField("rate / set_thumbnail / upload_caption: the video."),
+        video_id: idField("rate / set_thumbnail / upload_caption / report_abuse: the video."),
         caption_id: idField("update_caption / delete_caption: the track id from youtube_read captions."),
         params: paramsField("See the description for each action's fields."),
         confirm: apiConfirmField,
@@ -245,7 +255,8 @@ export function registerYoutubeTools(server: McpServer, client: UploadPostMcpCli
         "create_broadcast (title, scheduled_start_time, privacy_status, description, made_for_kids, enable_auto_start, enable_auto_stop, latency_preference…; create_stream true also creates and binds a stream), update_broadcast, delete_broadcast (needs `confirm`); " +
         "bind (stream_id, or unbind true); transition (status testing|live|complete; live and complete need `confirm`); insert_cuepoint (duration_secs: an ad break); " +
         "create_stream (title, ingestion_type, resolution, frame_rate), update_stream, delete_stream (needs `confirm`; encoders using its key stop); " +
-        "live chat of the channel's own broadcasts: send_chat_message (broadcast_id or live_chat_id, message up to 200 characters or poll {question, options}; daily limit per channel), close_poll (message_id), delete_chat_message (message_id, needs `confirm`). " +
+        "live chat of the channel's own broadcasts: send_chat_message (broadcast_id or live_chat_id, message up to 200 characters or poll {question, options}; daily limit per channel), close_poll (message_id), delete_chat_message (message_id, needs `confirm`); " +
+          "chat moderators and bans (broadcast_id or live_chat_id; 200 units each): add_moderator (channel_id), remove_moderator (moderator_id from youtube_read live_moderators, needs `confirm`), ban_user (channel_id, type permanent|temporary, duration_seconds for temporary; needs `confirm`), unban_user (ban_id). " +
         YOUTUBE_QUOTA,
       inputSchema: {
         action: actionEnum(LIVE_ROUTES),
@@ -253,6 +264,8 @@ export function registerYoutubeTools(server: McpServer, client: UploadPostMcpCli
         broadcast_id: idField("The broadcast (update, delete, bind, transition, insert_cuepoint; or the chat to write to)."),
         stream_id: idField("update_stream / delete_stream, or the stream to bind."),
         message_id: idField("close_poll / delete_chat_message: the chat message."),
+        moderator_id: idField("remove_moderator: the moderator id from youtube_read live_moderators."),
+        ban_id: idField("unban_user: the ban id returned by ban_user."),
         params: paramsField("See the description for each action's fields."),
         confirm: apiConfirmField,
       },

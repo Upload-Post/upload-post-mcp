@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ignoredPlatformOptions } from "./sdk-options.js";
 import { ok } from "./schemas.js";
+import { describeAdsAction } from "./tools/ads.js";
 
 /**
  * Confirmation step for actions that reach other people or publish as the user.
@@ -190,6 +191,11 @@ export const GATES: Record<string, Gate> = {
       if (a.action === "delete_broadcast") return `Deletes YouTube broadcast ${str(a.broadcast_id)}. It cannot be restored.`;
       if (a.action === "delete_stream") return `Deletes YouTube stream ${str(a.stream_id)}; encoders using its key stop.`;
       if (a.action === "delete_chat_message") return `Deletes live chat message ${str(a.message_id)}.`;
+      if (a.action === "ban_user") {
+        const kind = p.type === "temporary" ? `for ${str(p.duration_seconds ?? "?")} seconds` : "PERMANENTLY";
+        return `Bans YouTube channel ${str(p.channel_id)} ${kind} from the live chat of broadcast ${str(a.broadcast_id ?? p.live_chat_id)} (profile "${str(a.user)}").`;
+      }
+      if (a.action === "remove_moderator") return `Removes moderator ${str(a.moderator_id)} from the live chat of profile "${str(a.user)}".`;
       return undefined;
     },
   },
@@ -209,7 +215,14 @@ export const GATES: Record<string, Gate> = {
     },
   },
   manage_youtube_videos: {
-    describe: (a) => (a.action === "delete_caption" ? `Deletes YouTube caption track ${str(a.caption_id)}. It cannot be restored.` : undefined),
+    describe: (a) => {
+      if (a.action === "delete_caption") return `Deletes YouTube caption track ${str(a.caption_id)}. It cannot be restored.`;
+      if (a.action === "report_abuse") {
+        const p = (a.params ?? {}) as Args;
+        return `Reports YouTube video ${str(a.video_id)} to YouTube for abuse (reason ${str(p.reason_id)}) as the channel of profile "${str(a.user)}". A report cannot be withdrawn.`;
+      }
+      return undefined;
+    },
   },
   post_action: {
     describe: (a) => {
@@ -218,6 +231,69 @@ export const GATES: Record<string, Gate> = {
       if (a.action === "react") return `Reacts ${str(a.emoji ?? "")} to message ${str(a.post_id)} on Telegram as profile "${str(a.user)}"; the chat sees it.`;
       return `Runs ${str(a.action)} on Bluesky post ${str(a.post_id ?? "(pinned)")} as profile "${str(a.user)}"; it changes what others see on the post or profile.`;
     },
+  },
+  manage_chatgpt_ads: { describe: describeAdsAction },
+  create_webhook_subscription: {
+    describe: (a) =>
+      `From now on sends the account's ${list(a.events)} events${a.profile_username ? ` of profile "${str(a.profile_username)}"` : " of every profile"} to ${str(a.url)}, signed with the account webhook secret.`,
+  },
+  delete_webhook_subscription: {
+    describe: (a) => `Deletes webhook subscription ${str(a.subscription_id)}: Upload-Post stops sending events to its URL right away.`,
+  },
+  manage_webhook_settings: {
+    describe: (a) => {
+      if (a.action === "set_account" && a.webhook_url !== undefined) return `Sends the account's events (uploads, DMs, comments…) to ${str(a.webhook_url)} from now on, instead of the current account webhook.`;
+      if (a.action === "set_account") return `Changes the account webhook settings: ${JSON.stringify({ webhook_events: a.webhook_events, ...((a.params ?? {}) as Args) })}.`;
+      if (a.action === "remove_account") return "Removes the account webhook: its URL, event list and signing secret are cleared and the webhook channel is turned off.";
+      if (a.action === "set_profile") return `Sends the events of profile "${str(a.profile_username)}" to ${str(a.webhook_url)} from now on, instead of the account webhook.`;
+      if (a.action === "remove_profile") return `Removes the own webhook of profile "${str(a.profile_username)}"; its events go back to the account webhook.`;
+      return undefined;
+    },
+  },
+  manage_profile: {
+    describe: (a) =>
+      a.action === "disconnect_social"
+        ? `Disconnects ${str(a.social_platform)} from profile "${str(a.username)}": nothing more is published there until the user reconnects it by logging in to the network again.`
+        : undefined,
+  },
+  save_post: {
+    describe: (a) =>
+      a.platform === "pinterest"
+        ? `Saves Pin ${str(a.post_id)} to Pinterest board ${str(a.pinterest_board_id)} of profile "${str(a.user)}"; it shows on that board.`
+        : undefined,
+  },
+  manage_google_business: {
+    describe: (a) => {
+      const p = (a.params ?? {}) as Args;
+      if (a.action === "delete_review_reply") return `Deletes the PUBLIC owner reply to Google review ${str(p.review_name ?? p.review_id)} of profile "${str(a.user)}".`;
+      return undefined;
+    },
+  },
+  manage_telegram_payments: {
+    describe: (a) => {
+      const p = (a.params ?? {}) as Args;
+      if (a.action === "send_invoice") return `Posts an invoice "${str(p.title ?? "")}" for ${JSON.stringify(p.prices ?? [])} ${str(p.currency ?? "XTR")} in the Telegram chat of profile "${str(a.user)}"; its members see it and can pay.`;
+      return undefined;
+    },
+  },
+  manage_telegram_business: {
+    describe: (a) => {
+      const p = (a.params ?? {}) as Args;
+      if (a.action === "post_story" || a.action === "repost_story") return `Posts a Telegram story as the user's Telegram Business account (profile "${str(a.user)}")${p.caption ? `: ${str(p.caption)}` : ""}; their contacts see it.`;
+      if (a.action === "delete_story") return `Deletes Telegram story ${str(p.story_id)} of the user's Telegram Business account.`;
+      if (a.action === "update_profile") return `Changes the user's own Telegram account profile: ${JSON.stringify(p)}.`;
+      return undefined;
+    },
+  },
+  approve_post: {
+    describe: (a) =>
+      `Approves post ${str(a.approval_id)} (version ${str(a.version)}): Upload-Post publishes it on its platforms ${a.publish_now ? "NOW" : a.scheduled_date ? `at ${str(a.scheduled_date)}${a.timezone ? ` (${str(a.timezone)})` : ""}` : "at its own date, or now if it had none, or in the next queue slot if it was queued"}.`,
+  },
+  reject_post: {
+    describe: (a) => `Rejects post ${str(a.approval_id)}: it will not be published, it cannot be reopened, and the author sees the comment: ${str(a.comment)}`,
+  },
+  withdraw_pending_post: {
+    describe: (a) => `Withdraws post ${str(a.approval_id)}: it will not be published and its media is deleted. It cannot be undone.`,
   },
   unpublish_post: {
     describe: (a) =>
