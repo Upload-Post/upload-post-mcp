@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AnalyticsPlatform } from "./schemas.js";
+import { POST_ANALYTICS_LIVE_SENTENCE } from "./tools/analytics.js";
 
 /**
  * Parameters added to EXISTING tools after the ChatGPT app review.
@@ -175,14 +176,22 @@ const AnalyticsPlatformWithTelegram = z.enum([...AnalyticsPlatform.options, "tel
 
 export function applySecondWaveParameters(server: McpServer): void {
   const tools = registered(server);
-  const widen = (name: string, edit: (shape: Shape) => void, descriptionSuffix?: string): void => {
+  const widen = (
+    name: string,
+    edit: (shape: Shape) => void,
+    descriptionSuffix?: string,
+    rewrite?: (description: string) => string
+  ): void => {
     const tool = tools[name];
     if (!tool) return;
     const shape = shapeOf(tool);
     edit(shape);
+    let description = tool.description ?? "";
+    if (rewrite) description = rewrite(description);
+    if (descriptionSuffix) description = `${description} ${descriptionSuffix}`;
     tool.update({
       paramsSchema: shape,
-      ...(descriptionSuffix ? { description: `${tool.description ?? ""} ${descriptionSuffix}` } : {}),
+      ...(rewrite || descriptionSuffix ? { description } : {}),
     });
   };
 
@@ -242,6 +251,7 @@ export function applySecondWaveParameters(server: McpServer): void {
   );
 
   widen("get_analytics", (s) => retype(s, "platforms", z.array(AnalyticsPlatformWithTelegram).optional()), "Telegram returns `followers` (subscribers or members), `boosts_active` and the chat's title and link; Telegram reports no views.");
+  applyAnalyticsFreshness(widen);
 
   widen("list_dm_conversations", (s) => {
     s.kind = z.literal("direct").optional().describe("Bluesky only: only direct (1:1) conversations.");
@@ -254,4 +264,84 @@ export function applySecondWaveParameters(server: McpServer): void {
       .optional()
       .describe("Bluesky only: add `unread_counts` {accepted, request} to the answer.");
   });
+}
+
+// ---- Analytics: freshness, periods, daily history, cached listing ---------------
+
+type Widen = (
+  name: string,
+  edit: (shape: Shape) => void,
+  descriptionSuffix?: string,
+  rewrite?: (description: string) => string
+) => void;
+
+const DATE = (what: string) => z.string().optional().describe(`${what}, YYYY-MM-DD.`);
+
+/** Replaces POST_ANALYTICS_LIVE_SENTENCE: a read is not always live any more. */
+export const POST_ANALYTICS_FRESHNESS =
+  "Freshness: each platform entry carries `as_of` (when the network was asked for these numbers) and `next_refresh_at` (the earliest moment a new call can return newer numbers; null = only `refresh: true` refreshes it). Depending on the post's age Upload-Post may answer from its last stored reading instead of asking the network again (`served_from`: `snapshot` or `live`), and repeated calls within 5 minutes return the same result, so do not poll: ask again after `next_refresh_at`. Pass `refresh: true` only when the user needs numbers newer than `as_of`; it is limited per hour (past the limit the stored reading comes back with `refresh_limited: true`). X and YouTube posts are only updated when someone reads them, never in the background. A metric the network did not report is listed in `missing` with a reason (`not_supported`, `reauth_required`, `quota`, `platform_delay`, `not_fetched`), never sent as 0. Watch time also comes normalized: `avg_watch_seconds` and `watch_time_seconds` in seconds, `completion_rate` in percent (0-100); the network's own keys keep their unit (Instagram `ig_reels_avg_watch_time` is in milliseconds). Reading changes nothing on the post or the account, and is limited to 100 per 5 minutes. With `daily: true` it returns the post's day-by-day history instead, from stored readings only (no call to the network, not rate limited): one row per day that has a reading, with `delta` gained over `gap_days` (never an invented per-day value); with requestId it needs `platform`.";
+
+export const CACHED_POST_ANALYTICS_DESCRIPTION =
+  "Bulk re-read of per-post metrics Upload-Post already stored, without calling the networks, so it is not subject to the 100 requests / 5 minutes per-post limit: prefer it to scan many posts, rank them or page through a profile's history. Each row's `as_of` is when that post was last read from its network; rows never refresh by themselves (`next_refresh_at` is null), so to refresh one post call get_post_analytics for it. By default it holds the posts read through get_post_analytics; `origin: \"external\"` returns posts NOT published with Upload-Post that account reads (get_analytics) already listed, `origin: \"all\"` both. Rows of posts published with Upload-Post carry `request_id`, `post_title` and `caption_preview`. Rank with `sort` (views, likes, comments, shares, engagement, published_at or as_of; prefix `-` for descending, e.g. `-views`) and filter by publish day instead of reading day with `date_field: \"published_at\"`. When `published_posts_in_range` is much larger than `cached_posts_in_range`, many posts were never read: say so instead of presenting partial totals as complete. Paginated: pass `next_cursor` back as `cursor` until `has_more` is false.";
+
+function applyAnalyticsFreshness(widen: Widen): void {
+  widen(
+    "get_analytics",
+    (s) => {
+      s.since = DATE("Start of a period (adds a `period` block per platform, from stored daily snapshots; no extra call to the networks)");
+      s.until = DATE("End of the period (default today, UTC; at most 366 days)");
+      s.compare = z.enum(["previous"]).optional().describe("`previous` adds the previous period of the same length and `vs_previous`.");
+    },
+    "Each platform block carries `as_of` / `next_refresh_at` (account numbers are cached: do not poll), `missing` (metric -> reason, never a fake 0) and `views_field` (the field holding views comparable with the native app; null where the network reports impressions or a score instead). TikTok and X add `coverage`: how many posts the totals are built from (X reads only the latest posts, e.g. 10 of at least 31). Account totals are mostly last-30-day windows set by each network; never add them up day by day. For a date range pass `since` / `until` (and `compare: \"previous\"`): the `period` block gives `start` / `end` / `change` for followers-like counters and the `latest` value of window totals."
+  );
+  widen(
+    "get_total_impressions",
+    () => {},
+    "`total_impressions` is a legacy mix of reach and impressions kept for compatibility; to compare with what the native apps show, use `views_total` and `views_by_platform` (views only), and `views_not_counted` for networks that report impressions or a score instead."
+  );
+  widen(
+    "get_post_analytics",
+    (s) => {
+      s.refresh = z
+        .boolean()
+        .optional()
+        .describe("Ask the network again even if a recent stored reading exists. Only when the user needs fresher numbers than `as_of`; limited per hour.");
+      s.daily = z
+        .boolean()
+        .optional()
+        .describe("Return the post's day-by-day history (stored readings, no network call) instead of its current metrics. With requestId, `platform` is required.");
+      s.since = DATE("With daily: first day");
+      s.until = DATE("With daily: last day");
+    },
+    undefined,
+    (d) => {
+      if (!d.includes(POST_ANALYTICS_LIVE_SENTENCE)) throw new Error("get_post_analytics description changed: update POST_ANALYTICS_LIVE_SENTENCE");
+      return d.replace(POST_ANALYTICS_LIVE_SENTENCE, POST_ANALYTICS_FRESHNESS);
+    }
+  );
+  widen(
+    "get_cached_post_analytics",
+    (s) => {
+      retype(
+        s,
+        "platform",
+        z.enum(["instagram", "tiktok", "youtube", "facebook", "linkedin", "x", "threads", "pinterest", "reddit", "bluesky"]).optional()
+      );
+      s.sort = z
+        .string()
+        .optional()
+        .describe("views, likes, comments, shares, engagement, published_at or as_of; prefix `-` for descending (e.g. `-views`). Omit for the usual order.");
+      s.order = z.enum(["asc", "desc"]).optional().describe("Overrides the `-` prefix of `sort`.");
+      s.date_field = z
+        .enum(["captured_at", "published_at"])
+        .optional()
+        .describe("What `since` / `until` filter on: the day of the reading (default) or the day the post was published (posts published with Upload-Post).");
+      s.origin = z
+        .enum(["external", "all"])
+        .optional()
+        .describe("`external`: posts not published with Upload-Post, listed by account reads. `all`: both. Omit for posts read through get_post_analytics.");
+    },
+    undefined,
+    () => CACHED_POST_ANALYTICS_DESCRIPTION
+  );
 }

@@ -77,7 +77,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   const uploadTools = registerUploadTools(server, client, ctx);
   registerStatusTools(server, client);
   registerScheduleTools(server, client);
-  registerAnalyticsTools(server, client);
+  const analyticsTools = registerAnalyticsTools(server, client);
   registerAudienceTools(server, client);
   registerUserTools(server, client);
   const pagesTools = registerPagesTools(server, client);
@@ -105,6 +105,8 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     ...blueskyTools,
     ...googleBusinessTools,
     ...youtubeTools,
+    analyticsTools.insights,
+    analyticsTools.analyticsStatus,
   ];
   const studio = registerUploadStudio(server);
 
