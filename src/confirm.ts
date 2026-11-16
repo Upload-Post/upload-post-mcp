@@ -167,6 +167,50 @@ export const GATES: Record<string, Gate> = {
     describe: (a) =>
       `Reposts ${a.post_ids ? `messages ${list(a.post_ids)}` : `post ${str(a.post_id)}`} on ${str(a.platform)} as profile "${str(a.user)}"${a.target_chat_id ? ` into chat ${str(a.target_chat_id)}` : ""}${a.target_user ? ` into the Telegram chat of profile "${str(a.target_user)}"` : ""}; its followers see it.`,
   },
+  manage_youtube_comments: {
+    describe: (a) => {
+      const p = (a.params ?? {}) as Args;
+      if (a.action === "create") {
+        return `Posts a PUBLIC YouTube ${p.parent_id ? `reply to comment ${str(p.parent_id)}` : `comment on video ${str(p.video_id)}`} as the channel of profile "${str(a.user)}": ${str(p.text ?? "")}`;
+      }
+      if (a.action === "edit") return `Rewrites YouTube comment ${str(a.comment_id ?? p.comment_id)} to: ${str(p.text ?? "")}`;
+      if (a.action === "delete") return `Deletes YouTube comment ${str(a.comment_id ?? p.comment_id)} of profile "${str(a.user)}". It cannot be restored.`;
+      return `Sets ${list(p.comment_ids ?? "")} to ${str(p.status)} on the YouTube channel of profile "${str(a.user)}"${p.ban_author ? " and BANS their authors" : ""}.`;
+    },
+  },
+  manage_youtube_live: {
+    describe: (a) => {
+      const p = (a.params ?? {}) as Args;
+      if (a.action === "send_chat_message") {
+        return `Posts ${p.poll ? "a poll" : `the message "${str(p.message ?? "")}"`} in the PUBLIC live chat of broadcast ${str(a.broadcast_id ?? p.live_chat_id)} as profile "${str(a.user)}".`;
+      }
+      if (a.action === "transition" && (p.status === "live" || p.status === "complete")) {
+        return `Takes YouTube broadcast ${str(a.broadcast_id)} ${p.status === "live" ? "LIVE for its audience" : "off the air (it cannot be restarted)"}.`;
+      }
+      if (a.action === "delete_broadcast") return `Deletes YouTube broadcast ${str(a.broadcast_id)}. It cannot be restored.`;
+      if (a.action === "delete_stream") return `Deletes YouTube stream ${str(a.stream_id)}; encoders using its key stop.`;
+      if (a.action === "delete_chat_message") return `Deletes live chat message ${str(a.message_id)}.`;
+      return undefined;
+    },
+  },
+  manage_youtube_playlists: {
+    describe: (a) => {
+      if (a.action === "delete") return `Deletes YouTube playlist ${str(a.playlist_id)} (the videos stay). It cannot be restored.`;
+      if (a.action === "remove_video") return `Removes item ${str(a.item_id)} from YouTube playlist ${str(a.playlist_id)}.`;
+      if (a.action === "delete_image") return `Deletes the image of YouTube playlist ${str(a.playlist_id)}.`;
+      return undefined;
+    },
+  },
+  manage_youtube_channel: {
+    describe: (a) => {
+      if (a.action === "delete_section") return `Deletes section ${str(a.section_id)} from the YouTube channel page of profile "${str(a.user)}".`;
+      if (a.action === "remove_watermark") return `Removes the watermark from every video of the YouTube channel of profile "${str(a.user)}".`;
+      return undefined;
+    },
+  },
+  manage_youtube_videos: {
+    describe: (a) => (a.action === "delete_caption" ? `Deletes YouTube caption track ${str(a.caption_id)}. It cannot be restored.` : undefined),
+  },
   post_action: {
     describe: (a) => {
       // Bookmarks are private; delete_reaction carries the API's own `confirm`.
