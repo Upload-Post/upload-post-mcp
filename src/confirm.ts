@@ -237,6 +237,10 @@ export const GATES: Record<string, Gate> = {
     describe: (a) =>
       `From now on sends the account's ${list(a.events)} events${a.profile_username ? ` of profile "${str(a.profile_username)}"` : " of every profile"} to ${str(a.url)}, signed with the account webhook secret.`,
   },
+  test_webhook_subscription: {
+    describe: (a) =>
+      `Sends a signed sample ${a.event ? `${str(a.event)} event` : "of the subscription's first event"} (test: true) now to the URL of webhook subscription ${str(a.subscription_id)} (list_webhook_subscriptions shows it); the receiver gets it like a real event.`,
+  },
   delete_webhook_subscription: {
     describe: (a) => `Deletes webhook subscription ${str(a.subscription_id)}: Upload-Post stops sending events to its URL right away.`,
   },
@@ -246,6 +250,10 @@ export const GATES: Record<string, Gate> = {
       if (a.action === "set_account") return `Changes the account webhook settings: ${JSON.stringify({ webhook_events: a.webhook_events, ...((a.params ?? {}) as Args) })}.`;
       if (a.action === "remove_account") return "Removes the account webhook: its URL, event list and signing secret are cleared and the webhook channel is turned off.";
       if (a.action === "set_profile") return `Sends the events of profile "${str(a.profile_username)}" to ${str(a.webhook_url)} from now on, instead of the account webhook.`;
+      if (a.action === "test_account") {
+        const p = (a.params ?? {}) as Args;
+        return `Sends a sample upload_completed notification (marked as a test${p.platform ? `, platform ${str(p.platform)}` : ""}) now through every channel the account has configured: its webhook URL and Telegram chat, as get_account shows them.`;
+      }
       if (a.action === "remove_profile") return `Removes the own webhook of profile "${str(a.profile_username)}"; its events go back to the account webhook.`;
       return undefined;
     },

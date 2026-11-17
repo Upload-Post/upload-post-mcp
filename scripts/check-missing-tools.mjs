@@ -206,8 +206,13 @@ r = await s.call("delete_webhook_subscription", { subscription_id: "whsub_1", co
 assert.equal(last(s).method, "DELETE");
 assert.equal(last(s).url, "/uploadposts/webhooks/subscriptions/whsub_1");
 
+s.calls.length = 0;
 r = await s.call("test_webhook_subscription", { subscription_id: "whsub_1", event: "comment_received" });
-assert.ok(!isPreview(r), "a test event goes to the user's own URL: no confirmation");
+assert.ok(isPreview(r), "a test event reaches an outside server: confirmation first, like redeliver_webhook");
+assert.match(r.structuredContent.result.action, /comment_received.*whsub_1/);
+assert.equal(s.calls.length, 0, "nothing sent before confirmation");
+assert.ok(s.tools.get("test_webhook_subscription").inputSchema.properties.confirmed);
+r = await s.call("test_webhook_subscription", { subscription_id: "whsub_1", event: "comment_received", confirmed: true });
 assert.equal(last(s).url, "/uploadposts/webhooks/subscriptions/whsub_1/test");
 assert.deepEqual(last(s).data, { event: "comment_received" });
 
@@ -239,9 +244,14 @@ assert.equal(last(s).method, "DELETE");
 assert.deepEqual(last(s).data, { profile_username: "brand" });
 r = await s.call("manage_webhook_settings", { action: "get_profile" });
 assert.ok(r.isError, "profile actions need profile_username");
+s.calls.length = 0;
 r = await s.call("manage_webhook_settings", { action: "test_account", params: { platform: "tiktok" } });
-assert.ok(!isPreview(r));
+assert.ok(isPreview(r), "a test notification reaches the configured channels: confirmation first");
+assert.equal(s.calls.length, 0);
+r = await s.call("manage_webhook_settings", { action: "test_account", params: { platform: "tiktok" }, confirmed: true });
 assert.equal(last(s).url, "/uploadposts/users/notifications/test");
+r = await s.call("manage_webhook_settings", { action: "get_account" });
+assert.ok(!isPreview(r), "reading the settings needs no confirmation");
 
 // --- Approval queue and team ---------------------------------------------------
 r = await s.call("list_pending_approvals", { status: ["pending_approval", "draft"], profile_username: "brand", limit: 10 });
