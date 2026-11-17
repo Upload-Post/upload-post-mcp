@@ -79,10 +79,6 @@ export function registerDmTools(
     },
     safe(async (args) => {
       const a = compact(args as Record<string, unknown>);
-      const telegramOnly = a.platform === "telegram" ? [] : TELEGRAM_ONLY_DM_FIELDS.filter((k) => a[k] !== undefined);
-      if (telegramOnly.length) {
-        throw new Error(`${telegramOnly.join(", ")}: Telegram only in this tool.`);
-      }
       if (a.platform === "bluesky") {
         if (!a.recipient_id && !a.conversation_id) {
           throw new Error("Bluesky DMs need `recipient_id` (handle, DID or profile link) or `conversation_id`.");
@@ -92,17 +88,6 @@ export function registerDmTools(
         }
         if (a.buttons) {
           throw new Error("Bluesky DMs do not support `buttons`: put the link in `message`, where it becomes clickable.");
-        }
-      } else if (a.platform === "telegram") {
-        // Only offered outside ChatGPT (extensions.ts widens the platform list).
-        if (a.recipient_id === undefined) {
-          throw new Error("Telegram DMs need `recipient_id`: the person's numeric chat id (sender.id of a dm_received event, or the participant id in list_dm_conversations).");
-        }
-        if (a.conversation_id !== undefined) {
-          throw new Error("`conversation_id` is Bluesky only: on Telegram the chat is `recipient_id`.");
-        }
-        if (!a.message && !a.attachments && !a.location && !a.contact && !a.checklist && !a.sender_action) {
-          throw new Error("Telegram DMs need `message`, `attachments`, `location`, `contact`, `checklist` or a `sender_action`.");
         }
       } else {
         const blueskyOnly = BLUESKY_ONLY_DM_FIELDS.filter((k) => a[k] !== undefined);
@@ -275,7 +260,6 @@ export function registerDmTools(
 }
 
 const BLUESKY_ONLY_DM_FIELDS = ["conversation_id", "attachments", "reply_to", "sender_action", "message_id", "reaction"];
-const TELEGRAM_ONLY_DM_FIELDS = ["business_connection_id", "parse_mode", "location", "contact", "checklist", "message_ids"];
 
 /** /uploadposts/autodms/<action>: status and logs are GETs, the rest POSTs. */
 async function runAutodm(

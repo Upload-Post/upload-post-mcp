@@ -851,11 +851,10 @@ function clientInfoFromInitialize(body: unknown): ClientInfoLike | undefined {
   const messages = Array.isArray(body) ? body : [body];
   for (const message of messages) {
     if (!message || typeof message !== "object") continue;
-    const rpc = message as { method?: unknown; params?: { clientInfo?: unknown; capabilities?: unknown } };
+    const rpc = message as { method?: unknown; params?: { clientInfo?: unknown } };
     if (rpc.method !== "initialize") continue;
     const info = rpc.params?.clientInfo;
-    // Capabilities too: they say whether the client renders MCP Apps views.
-    if (info && typeof info === "object") return { ...(info as ClientInfoLike), capabilities: rpc.params?.capabilities };
+    if (info && typeof info === "object") return info as ClientInfoLike;
   }
   return undefined;
 }

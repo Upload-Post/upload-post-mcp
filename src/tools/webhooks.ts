@@ -24,7 +24,7 @@ export function registerWebhookTools(
     {
       title: "List webhook deliveries",
       description:
-        "History of the webhook events Upload-Post sent to the user's own webhook URLs over the last 7 days, newest first: account and profile webhooks and webhook subscriptions (filter one with `subscription_id`), every event (upload_completed, social_account_connected / _disconnected / _reauth_required, dm_received, comment_received). " +
+        "History of the webhook events Upload-Post sent to the user's own webhook URLs over the last 7 days, newest first: account and profile webhooks, every event (upload_completed, social_account_connected / _disconnected / _reauth_required, dm_received, comment_received). " +
         "Use it to find out whether an event reached the user's server: each delivery has `status` (pending = waiting for a retry, delivered, failed, cancelled), `attempt_count` / `max_attempts`, `last_status_code` or `last_error` (timeout, connection_error, HTTP nnn), every attempt in `attempts`, and `next_attempt_at`. " +
         "Failed deliveries (timeout, connection error, 5xx, 408, 429) are retried automatically up to 6 attempts in about 8.5 hours; other 4xx answers are final. Test sends are marked `test: true` and never retried. " +
         "The event body is left out unless `include_payload` is true; get_webhook_delivery returns one delivery with its body. Paginated with `page` (up to 50) and `limit`; the response carries `total` and `has_more`.",
@@ -49,10 +49,6 @@ export function registerWebhookTools(
           .string()
           .optional()
           .describe("Only deliveries about this Upload-Post profile."),
-        subscription_id: z
-          .string()
-          .optional()
-          .describe("Only the deliveries sent to this webhook subscription (`whsub_...`, from list_webhook_subscriptions)."),
         include_payload: z
           .boolean()
           .optional()
@@ -114,7 +110,7 @@ export function registerWebhookTools(
       title: "Redeliver a webhook",
       description:
         "Send a past webhook delivery again, now, with the same body, to the webhook URL configured TODAY for that account or profile. It goes out as a new delivery with its own `delivery_id` (its `redelivery_of` and the X-Upload-Post-Redelivery-Of header name the original), and is retried like any other if it fails. The receiver gets the event a second time, so only redeliver events it missed. " +
-        "409 when there is nowhere to send it (`reason`: webhook_removed, event_unsubscribed, blocked_url, or for a webhook subscription's delivery subscription_removed / subscription_disabled); 404 when the delivery is unknown or older than 7 days.",
+        "409 when there is nowhere to send it (`reason`: webhook_removed, event_unsubscribed, blocked_url); 404 when the delivery is unknown or older than 7 days.",
       inputSchema: { delivery_id: deliveryIdField },
       outputSchema: genericResultOutputSchema,
       annotations: {

@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AnalyticsPlatform } from "./schemas.js";
-import { sdkOptionKeys } from "./sdk-options.js";
 
 /**
  * Parameters added to EXISTING tools after the ChatGPT app review.
@@ -174,26 +173,6 @@ const GBP_PHOTO: Shape = {
 
 const AnalyticsPlatformWithTelegram = z.enum([...AnalyticsPlatform.options, "telegram"]);
 
-/**
- * Options the API takes but only a newer upload-post SDK sends (2.22.0: uploads
- * and generate-jwt are built from a fixed field list, AGENTS rule 6). Offered
- * only when the installed SDK reads the key, so no client is shown an option
- * that would be dropped.
- */
-const TELEGRAM_PAID_BROADCAST: Shape = {
-  telegramAllowPaidBroadcast: z
-    .boolean()
-    .optional()
-    .describe(
-      "Telegram: send faster than the free 30 messages per second by paying 0.1 Stars per message above it, from the bot's balance. Telegram only allows it to bots with at least 100,000 Stars and 100,000 monthly active users; otherwise the Telegram result fails (send it again without this option)."
-    ),
-};
-
-function whenSdkSends(shape: Shape): Shape {
-  const known = sdkOptionKeys();
-  return Object.fromEntries(Object.entries(shape).filter(([key]) => known.has(key)));
-}
-
 export function applySecondWaveParameters(server: McpServer): void {
   const tools = registered(server);
   const widen = (name: string, edit: (shape: Shape) => void, descriptionSuffix?: string): void => {
@@ -224,38 +203,6 @@ export function applySecondWaveParameters(server: McpServer): void {
   widen("upload_text", (s) =>
     widenObjectField(s, "platformOptions", { ...SPONSORED, ...TELEGRAM_COMMON, ...TELEGRAM_TEXT, ...BLUESKY_COMMON, ...BLUESKY_TEXT, ...GBP_COMMON })
   );
-  const paidBroadcast = whenSdkSends(TELEGRAM_PAID_BROADCAST);
-  if (Object.keys(paidBroadcast).length) {
-    for (const name of ["upload_video", "upload_photos", "upload_text"]) {
-      widen(name, (s) => widenObjectField(s, "platformOptions", paidBroadcast));
-    }
-  }
-
-  // Fields the API added to answers of existing tools, and the errors it gives.
-  widen(
-    "create_user",
-    () => undefined,
-    'A name already used in the account (capitals ignored) answers 409 "Username already in use": pick another or use the existing profile (list_users). 403 PROFILE_LIMIT_REACHED when the plan has no profile left (current_profiles, profile_limit).'
-  );
-  widen(
-    "get_account_info",
-    () => undefined,
-    "`analyze_shorts` {limit, used, remaining, resets_at} is the AI Shorts analysis allowance of the current 30-day window (reading it uses none)."
-  );
-  widen(
-    "get_queue_settings",
-    () => undefined,
-    "`configured: false` means the profile never saved queue settings and the answer shows the defaults."
-  );
-  const clientApproval = whenSdkSends({
-    clientApproval: z
-      .boolean()
-      .optional()
-      .describe(
-        "Not generally available yet (post approvals). true lets the end client approve or reject this profile's pending posts from the connect page; generate again with false to turn it off."
-      ),
-  });
-  if (Object.keys(clientApproval).length) widen("generate_jwt", (s) => Object.assign(s, clientApproval));
 
   widen(
     "update_queue_settings",
@@ -296,52 +243,6 @@ export function applySecondWaveParameters(server: McpServer): void {
 
   widen("get_analytics", (s) => retype(s, "platforms", z.array(AnalyticsPlatformWithTelegram).optional()), "Telegram returns `followers` (subscribers or members), `boosts_active` and the chat's title and link; Telegram reports no views.");
 
-  // Telegram DMs: the profile's own bot talking to people in private chats.
-  widen(
-    "send_dm",
-    (s) => {
-      retype(s, "platform", z.enum(["instagram", "bluesky", "telegram"]).describe("DM platform: 'instagram', 'bluesky' or 'telegram'."));
-      retype(
-        s,
-        "buttons",
-        z
-          .union([(s.buttons as z.ZodOptional<z.ZodTypeAny>).unwrap(), z.array(z.union([z.record(z.unknown()), z.array(z.record(z.unknown()))])).max(100)])
-          .optional()
-          .describe(
-            "Instagram: up to 3 web_url buttons { title, url }. Telegram: inline buttons, a flat list or rows of { text, url } or { text, callback_data } (up to 100)."
-          )
-      );
-      retype(
-        s,
-        "attachments",
-        z
-          .union([(s.attachments as z.ZodOptional<z.ZodTypeAny>).unwrap(), z.array(z.record(z.unknown())).max(10)])
-          .optional()
-          .describe(
-            "Bluesky: one post to share, { type: 'post', url }. Telegram: up to 10 files [{ type: photo|video|document|audio|voice|animation|sticker|video_note, url or media_id (a Telegram file_id), caption }]; several go as one album (photos and videos together, or only documents, or only audios)."
-          )
-      );
-      retype(s, "reply_to", z.union([z.string(), z.number().int()]).optional().describe("Bluesky: id of the message this DM replies to. Telegram: message_id in that chat."));
-      retype(
-        s,
-        "sender_action",
-        z
-          .string()
-          .optional()
-          .describe(
-            "Act on the conversation instead of sending text. Bluesky: mark_seen/mark_read, react, unreact, delete, accept, mute, unmute, leave. Telegram: typing (and the other chat actions: upload_photo, record_video, upload_video, record_voice, upload_voice, upload_document, choose_sticker, find_location, record_video_note, upload_video_note), react / unreact (`message_id`, `reaction`), delete (`message_id` or `message_ids`; gone for both sides), and in Business chats mark_read and edit_checklist (with `business_connection_id`)."
-          )
-      );
-      s.business_connection_id = z.string().optional().describe("Telegram: send as the connected Telegram Business account (manage_telegram_business connections).");
-      s.parse_mode = z.enum(["MarkdownV2", "HTML", "Markdown"]).optional().describe("Telegram: text formatting.");
-      s.location = z.record(z.unknown()).optional().describe("Telegram: { latitude, longitude } or a venue with title and address.");
-      s.contact = z.record(z.unknown()).optional().describe("Telegram: { phone_number, first_name, last_name?, vcard? }.");
-      s.checklist = z.record(z.unknown()).optional().describe("Telegram Business: an InputChecklist { title, tasks: [{ id, text }] } (1-30 tasks); needs business_connection_id.");
-      s.message_ids = z.array(z.union([z.number().int(), z.string()])).min(1).max(100).optional().describe("Telegram: sender_action delete for up to 100 messages.");
-    },
-    "Telegram (the profile's own bot): `recipient_id` is the person's numeric chat id (sender.id of a dm_received event); only private chats (groups and channels: 403 telegram_private_chats_only, publish there with the upload tools); text up to 4096 characters. 403 telegram_recipient_not_started (the person never started the bot) or telegram_recipient_blocked; 504 telegram_send_unconfirmed means it may have been sent: list the conversation before retrying."
-  );
-
   widen("list_dm_conversations", (s) => {
     s.kind = z.literal("direct").optional().describe("Bluesky only: only direct (1:1) conversations.");
     s.view = z
@@ -352,15 +253,5 @@ export function applySecondWaveParameters(server: McpServer): void {
       .literal("unread_counts")
       .optional()
       .describe("Bluesky only: add `unread_counts` {accepted, request} to the answer.");
-    const platformHelp = s.platform?.description ?? "";
-    s.platform = z
-      .string()
-      .optional()
-      .describe(platformHelp.replace("or 'bluesky'.", "'bluesky' or 'telegram'."));
-    s.business_connection_id = z
-      .string()
-      .optional()
-      .describe("Telegram only: the chats of this connected Telegram Business account instead of the bot's.");
-    s.include_profile_photos = z.boolean().optional().describe("Telegram only: add each participant's profile photo.");
-  }, "Telegram (`platform: \"telegram\"`): the private chats of the profile's own bot, with `participant_id` = the person's numeric chat id (what send_dm takes as recipient_id). It needs the bot's updates on (manage_telegram_bot set_updates); otherwise 409 telegram_updates_not_enabled. Files people send come with a `media_id` (a Telegram file_id), which send_dm attachments can send again.");
+  });
 }

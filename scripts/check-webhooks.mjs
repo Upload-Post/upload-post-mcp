@@ -86,12 +86,6 @@ assert.deepEqual(s.calls[0].params, {
   page: 2,
 });
 
-// one webhook subscription's deliveries
-s.calls.length = 0;
-r = await s.call("list_webhook_deliveries", { subscription_id: "whsub_1" });
-assert.ok(!r.isError, JSON.stringify(r.content));
-assert.deepEqual(s.calls[0].params, { subscription_id: "whsub_1" });
-
 // page above the API's cap never reaches it
 s.calls.length = 0;
 r = await s.call("list_webhook_deliveries", { page: 51 });
