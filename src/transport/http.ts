@@ -573,7 +573,9 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
           allowLocalFiles: ALLOW_LOCAL_FILES,
         });
         const server = opts.buildServer(client, {
-          ...(seed ? seed.clientInfo : clientInfoFromInitialize(body)),
+          ...(seed
+            ? { ...seed.clientInfo, capabilities: seed.capabilities }
+            : clientInfoFromInitialize(body)),
           // The surface a session had depends on the User-Agent it was opened
           // with, not on the one of the request that happens to rebuild it.
           userAgent: seed ? seed.userAgent : req.headers["user-agent"],

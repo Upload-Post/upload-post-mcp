@@ -111,7 +111,7 @@ const health = async (port) =>
     }).end();
   });
 
-async function open(port, key, name, userAgent) {
+async function open(port, key, name, userAgent, capabilities = { roots: { listChanged: true } }) {
   const res = await call(port, {
     headers: { ...auth(key), ...(userAgent ? { "user-agent": userAgent } : {}) },
     body: {
@@ -120,7 +120,7 @@ async function open(port, key, name, userAgent) {
       method: "initialize",
       params: {
         protocolVersion: "2025-06-18",
-        capabilities: { roots: { listChanged: true } },
+        capabilities,
         clientInfo: { name, version: "1.0.0" },
       },
     },
@@ -194,6 +194,16 @@ assert.deepEqual(noAgent.names, chatgptOnA.names, "and a missing one does not ta
 const odd = await open(A, "key-a", "some-client", "openai-mcp/1.0.0");
 const oddOnA = await tools(A, "key-a", odd, { "user-agent": "openai-mcp/1.0.0" });
 assert.deepEqual((await tools(B, "key-a", odd, {})).names, oddOnA.names, "rebuilt exactly as it was opened");
+
+// A host that renders MCP Apps views keeps them after a rebuild, and one that
+// does not is not handed them.
+const withViews = await open(A, "key-a", "claude-ai", "Claude-User", {
+  extensions: { "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] } },
+});
+const withViewsOnA = await tools(A, "key-a", withViews);
+assert.ok(withViewsOnA.names.includes("open_social_accounts"), "an MCP Apps host gets the social accounts view");
+assert.ok(!claudeOnA.names.includes("open_social_accounts"), "a host without MCP Apps does not");
+assert.deepEqual((await tools(B, "key-a", withViews)).names, withViewsOnA.names, "the view survives a rebuild");
 
 // A tool call works on the rebuilt session.
 const listUsers = await call(B, {
