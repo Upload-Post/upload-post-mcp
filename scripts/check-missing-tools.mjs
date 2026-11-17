@@ -20,6 +20,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { buildServer } from "../dist/server.js";
 import { UploadPostMcpClient } from "../dist/client.js";
+import { sdkOptionKeys } from "../dist/sdk-options.js";
 
 const NEW_TOOLS = [
   "chatgpt_ads_read",
@@ -100,14 +101,17 @@ for (const [tool, code] of [
   ["create_webhook_subscription", "webhook_subscriptions_disabled"],
   ["approve_post", "post_approvals_disabled"],
   ["list_pending_approvals", "post_approvals_disabled"],
-  ["manage_telegram_business", "telegram_business_unavailable"],
-  ["manage_telegram_payments", "telegram_stars_spend_disabled"],
-  ["manage_telegram_bot", "telegram_updates_unavailable"],
   ["youtube_read", "youtube_feature_disabled"],
   ["manage_youtube_live", "youtube_feature_disabled"],
   ["manage_youtube_videos", "youtube_feature_disabled"],
 ]) {
   assert.match(s.tools.get(tool).description, new RegExp(`Not generally available yet[^]*${code}`), `${tool} says it is not generally available (${code})`);
+}
+// Telegram Business, Stars spending and the bot's updates are on in the API
+// (the spec keeps its mark only because the code default is off): no
+// tool may tell an agent they are unavailable.
+for (const tool of ["manage_telegram_business", "manage_telegram_payments", "manage_telegram_bot", "manage_telegram_chat"]) {
+  assert.doesNotMatch(s.tools.get(tool).description, /Not generally available|telegram_business_unavailable|telegram_stars_spend_disabled|telegram_updates_unavailable/, `${tool} does not call Telegram features unavailable`);
 }
 assert.match(s.tools.get("youtube_read").description, /except videos and quota/);
 assert.match(s.tools.get("manage_youtube_videos").description, /except set_thumbnail/);
@@ -257,6 +261,11 @@ assert.ok(!isPreview(r), "reading the settings needs no confirmation");
 r = await s.call("list_pending_approvals", { status: ["pending_approval", "draft"], profile_username: "brand", limit: 10 });
 assert.equal(last(s).url, "/uploadposts/approvals");
 assert.deepEqual(last(s).params, { profile_username: "brand", limit: 10, status: "pending_approval,draft" });
+r = await s.call("list_pending_approvals", { status: ["pending_approval"], count_only: true, limit: 5 });
+assert.equal(last(s).url, "/uploadposts/approvals");
+assert.deepEqual(last(s).params, { limit: 5, status: "pending_approval", count_only: "true" });
+r = await s.call("list_pending_approvals", { count_only: false });
+assert.deepEqual(last(s).params, {}, "count_only false is not sent");
 r = await s.call("list_pending_approvals", { approval_id: "ap 1" });
 assert.equal(last(s).url, "/uploadposts/approvals/ap%201");
 
@@ -393,6 +402,24 @@ await s.close();
   const owner = new UploadPostMcpClient({ apiKey: "k", baseUrl: "https://example.invalid/api" });
   assert.equal(owner.http.defaults.headers["X-Act-As-User"], undefined);
   assert.equal(owner.sdk.actAsUser, null);
+}
+
+// --- Answers and errors of existing tools; options that need a newer SDK -------
+{
+  const s = await connect("claude-ai");
+  assert.match(s.tools.get("create_user").description, /409 "Username already in use"/);
+  assert.match(s.tools.get("create_user").description, /PROFILE_LIMIT_REACHED/);
+  assert.match(s.tools.get("get_account_info").description, /analyze_shorts/);
+  assert.match(s.tools.get("get_queue_settings").description, /configured: false/);
+  // Offered exactly when the installed upload-post SDK sends them (2.22.0+):
+  // an option the SDK drops must not be in any schema.
+  const sdkKeys = sdkOptionKeys();
+  for (const name of ["upload_video", "upload_photos", "upload_text"]) {
+    const opts = s.tools.get(name).inputSchema.properties.platformOptions.properties;
+    assert.equal("telegramAllowPaidBroadcast" in opts, sdkKeys.has("telegramAllowPaidBroadcast"), `${name} telegramAllowPaidBroadcast follows the SDK`);
+  }
+  assert.equal("clientApproval" in s.tools.get("generate_jwt").inputSchema.properties, sdkKeys.has("clientApproval"), "generate_jwt clientApproval follows the SDK");
+  await s.close();
 }
 
 console.log(`check-missing-tools: ok (${NEW_TOOLS.length} new tools)`);

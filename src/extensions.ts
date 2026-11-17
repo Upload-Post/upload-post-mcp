@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AnalyticsPlatform } from "./schemas.js";
+import { sdkOptionKeys } from "./sdk-options.js";
 
 /**
  * Parameters added to EXISTING tools after the ChatGPT app review.
@@ -173,6 +174,26 @@ const GBP_PHOTO: Shape = {
 
 const AnalyticsPlatformWithTelegram = z.enum([...AnalyticsPlatform.options, "telegram"]);
 
+/**
+ * Options the API takes but only a newer upload-post SDK sends (2.22.0: uploads
+ * and generate-jwt are built from a fixed field list, AGENTS rule 6). Offered
+ * only when the installed SDK reads the key, so no client is shown an option
+ * that would be dropped.
+ */
+const TELEGRAM_PAID_BROADCAST: Shape = {
+  telegramAllowPaidBroadcast: z
+    .boolean()
+    .optional()
+    .describe(
+      "Telegram: send faster than the free 30 messages per second by paying 0.1 Stars per message above it, from the bot's balance. Telegram only allows it to bots with at least 100,000 Stars and 100,000 monthly active users; otherwise the Telegram result fails (send it again without this option)."
+    ),
+};
+
+function whenSdkSends(shape: Shape): Shape {
+  const known = sdkOptionKeys();
+  return Object.fromEntries(Object.entries(shape).filter(([key]) => known.has(key)));
+}
+
 export function applySecondWaveParameters(server: McpServer): void {
   const tools = registered(server);
   const widen = (name: string, edit: (shape: Shape) => void, descriptionSuffix?: string): void => {
@@ -203,6 +224,38 @@ export function applySecondWaveParameters(server: McpServer): void {
   widen("upload_text", (s) =>
     widenObjectField(s, "platformOptions", { ...SPONSORED, ...TELEGRAM_COMMON, ...TELEGRAM_TEXT, ...BLUESKY_COMMON, ...BLUESKY_TEXT, ...GBP_COMMON })
   );
+  const paidBroadcast = whenSdkSends(TELEGRAM_PAID_BROADCAST);
+  if (Object.keys(paidBroadcast).length) {
+    for (const name of ["upload_video", "upload_photos", "upload_text"]) {
+      widen(name, (s) => widenObjectField(s, "platformOptions", paidBroadcast));
+    }
+  }
+
+  // Fields the API added to answers of existing tools, and the errors it gives.
+  widen(
+    "create_user",
+    () => undefined,
+    'A name already used in the account (capitals ignored) answers 409 "Username already in use": pick another or use the existing profile (list_users). 403 PROFILE_LIMIT_REACHED when the plan has no profile left (current_profiles, profile_limit).'
+  );
+  widen(
+    "get_account_info",
+    () => undefined,
+    "`analyze_shorts` {limit, used, remaining, resets_at} is the AI Shorts analysis allowance of the current 30-day window (reading it uses none)."
+  );
+  widen(
+    "get_queue_settings",
+    () => undefined,
+    "`configured: false` means the profile never saved queue settings and the answer shows the defaults."
+  );
+  const clientApproval = whenSdkSends({
+    clientApproval: z
+      .boolean()
+      .optional()
+      .describe(
+        "Not generally available yet (post approvals). true lets the end client approve or reject this profile's pending posts from the connect page; generate again with false to turn it off."
+      ),
+  });
+  if (Object.keys(clientApproval).length) widen("generate_jwt", (s) => Object.assign(s, clientApproval));
 
   widen(
     "update_queue_settings",
