@@ -236,6 +236,7 @@ const OWN = [{ username: "brand", social_accounts: {} }, { username: "client2", 
   const link = (await s.call(NETWORK_LINK_TOOL, { platform: "tiktok", profile: "client2" })).structuredContent.result;
   assert.match(link.connect_url, /connect\?token=.*kept=/);
   assert.equal(link.signed, true);
+  assert.equal(new URL(link.connect_url).searchParams.get("connect"), "tiktok", "the page starts that network by itself");
   assert.equal(link.profile, "client2");
   assert.deepEqual(s.account.calls.at(-1), [
     "request",
@@ -254,7 +255,7 @@ const OWN = [{ username: "brand", social_accounts: {} }, { username: "client2", 
 for (const preserve of ["unknown-flag", "throws"]) {
   const s = await session("claude-ai", APPS, fakeAccount({ profiles: OWN, preserve }));
   const link = (await s.call(NETWORK_LINK_TOOL, { platform: "tiktok", profile: "client2" })).structuredContent.result;
-  assert.equal(link.connect_url, MANAGE, preserve);
+  assert.equal(link.connect_url, MANAGE, `${preserve}: the dashboard link is left as it is`);
   assert.equal(link.signed, false, preserve);
   assert.ok(!s.account.calls.some(([m]) => m === "generateJwt"), preserve);
   await s.close();
