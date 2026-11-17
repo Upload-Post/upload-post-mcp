@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
 import { genericResultOutputSchema, safe } from "../schemas.js";
+import { withApprovalNote } from "./approvals.js";
 
 // /api/uploadposts/history answers 400 to any page size outside this set.
 const HISTORY_PAGE_SIZES = [10, 20, 50, 100] as const;
@@ -29,7 +30,7 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
         destructiveHint: false,
       },
     },
-    safe(async ({ requestId }) => client.sdk.getStatus(requestId as string))
+    safe(async ({ requestId }) => withApprovalNote(await client.sdk.getStatus(requestId as string)))
   );
 
   server.registerTool(

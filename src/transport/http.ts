@@ -573,7 +573,9 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
           allowLocalFiles: ALLOW_LOCAL_FILES,
         });
         const server = opts.buildServer(client, {
-          ...(seed ? seed.clientInfo : clientInfoFromInitialize(body)),
+          ...(seed
+            ? { ...seed.clientInfo, capabilities: seed.capabilities }
+            : clientInfoFromInitialize(body)),
           // The surface a session had depends on the User-Agent it was opened
           // with, not on the one of the request that happens to rebuild it.
           userAgent: seed ? seed.userAgent : req.headers["user-agent"],
@@ -990,10 +992,11 @@ function clientInfoFromInitialize(body: unknown): ClientInfoLike | undefined {
   const messages = Array.isArray(body) ? body : [body];
   for (const message of messages) {
     if (!message || typeof message !== "object") continue;
-    const rpc = message as { method?: unknown; params?: { clientInfo?: unknown } };
+    const rpc = message as { method?: unknown; params?: { clientInfo?: unknown; capabilities?: unknown } };
     if (rpc.method !== "initialize") continue;
     const info = rpc.params?.clientInfo;
-    if (info && typeof info === "object") return info as ClientInfoLike;
+    // Capabilities too: they say whether the client renders MCP Apps views.
+    if (info && typeof info === "object") return { ...(info as ClientInfoLike), capabilities: rpc.params?.capabilities };
   }
   return undefined;
 }
