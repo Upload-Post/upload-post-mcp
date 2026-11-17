@@ -39,6 +39,37 @@ const READ_ROUTES: Record<string, Route> = {
   food_menus: { method: "GET", path: `${G}/food-menus` },
   services: { method: "GET", path: `${G}/services` },
   lodging: { method: "GET", path: `${G}/lodging` },
+  lodging_google_updated: { method: "GET", path: `${G}/lodging/google-updated` },
+  attributes_google_updated: { method: "GET", path: `${G}/attributes/google-updated` },
+  attributes_extended: { method: "GET", path: `${G}/attributes/extended` },
+  location_info_extended: { method: "GET", path: `${G}/location-info/extended` },
+  get_place_action: { method: "GET", path: `${G}/place-actions/get` },
+  get_account: { method: "GET", path: `${G}/accounts/get` },
+  admins: { method: "GET", path: `${G}/admins` },
+  invitations: { method: "GET", path: `${G}/invitations` },
+  verification_state: { method: "GET", path: `${G}/verification/state` },
+  verifications: { method: "GET", path: `${G}/verifications` },
+  // POSTs that change nothing: a Maps search and the verification methods on offer.
+  verification_options: { method: "POST", path: `${G}/verification/options` },
+  search_google_locations: { method: "POST", path: `${G}/google-locations/search` },
+  recommended_locations: { method: "GET", path: `${G}/google-locations/recommended` },
+};
+
+const MANAGE_ROUTES: Record<string, Route> = {
+  update_attributes: { method: "PATCH", path: `${G}/attributes` },
+  answer_google_updates: { method: "POST", path: `${G}/location-info/google-updates` },
+  update_lodging: { method: "PATCH", path: `${G}/lodging` },
+  replace_food_menus: { method: "PUT", path: `${G}/food-menus` },
+  replace_services: { method: "PUT", path: `${G}/services` },
+  upload_media: { method: "POST", path: `${G}/media` },
+  update_media_category: { method: "PATCH", path: `${G}/media` },
+  delete_media: { method: "DELETE", path: `${G}/media` },
+  create_place_action: { method: "POST", path: `${G}/place-actions` },
+  update_place_action: { method: "PATCH", path: `${G}/place-actions` },
+  delete_place_action: { method: "DELETE", path: `${G}/place-actions` },
+  delete_review_reply: { method: "DELETE", path: `${G}/reviews/reply` },
+  report_google_location: { method: "POST", path: `${G}/google-locations/report` },
+  create_account_group: { method: "POST", path: `${G}/accounts` },
 };
 
 const locationField = z
@@ -57,7 +88,11 @@ export function registerGoogleBusinessTools(server: McpServer, client: UploadPos
         "performance (metrics, comma-separated, e.g. BUSINESS_IMPRESSIONS_DESKTOP_MAPS, CALL_CLICKS, WEBSITE_CLICKS, BUSINESS_DIRECTION_REQUESTS; start_date / end_date YYYY-MM-DD, up to 18 months back): daily series; search_keywords (start_month / end_month YYYY-MM): the searches that showed the location; " +
         "location_info (read_mask): name, address, hours, phones, categories, open status; google_updates: changes Google suggests; list_locations (account, filter, order_by, read_mask); list_accounts; " +
         "gallery: list_media, get_media (media_name, or media_key + location_id), list_customer_media, get_customer_media; " +
-        "catalogs: categories (region_code, language_code, query), batch_categories (names, language_code), chains (name), get_chain (chain); available_attributes, attributes; place_action_types, place_actions (booking and ordering links); food_menus, services, lodging (hotels).",
+        "catalogs: categories (region_code, language_code, query), batch_categories (names, language_code), chains (name), get_chain (chain); available_attributes, attributes; place_action_types, place_actions (booking and ordering links), get_place_action (link); food_menus, services, lodging (hotels); " +
+          "as customers see them after Google's own changes: attributes_google_updated, lodging_google_updated (read_mask; diff_mask lists what Google changed); edit status per field (experimental Google API): attributes_extended, location_info_extended (pending_fields, rejected_fields); " +
+          "accounts and access: get_account (account), admins (scope, account or location_id), invitations (account, target_type: invitations the connected Google account received); " +
+          "verification: verification_state (summary.status ok, unverified, verification_pending, suspended, disabled, duplicate, under_review), verifications (past and pending), verification_options (language_code, context: the methods Google offers); " +
+          "search_google_locations (query or location, page_size: whether a business is already on Google; items with requestAdminRightsUri are managed by someone else; Google allows it only for businesses the user works with), recommended_locations (account).",
       inputSchema: {
         action: z.enum(Object.keys(READ_ROUTES) as [string, ...string[]]),
         user: z.string().optional().describe("Upload-Post profile name with Google Business connected (not needed for categories, chains)."),
@@ -114,5 +149,38 @@ export function registerGoogleBusinessTools(server: McpServer, client: UploadPos
     })
   );
 
-  return [read, update];
+  const manage = server.registerTool(
+    "manage_google_business",
+    {
+      title: "Manage Google Business",
+      description:
+        "Change the Google Business location connected to `user` beyond its basic info (edit that with update_google_business_location). Fields go in `params` with the API's names; changes go live on Google Search and Maps, and Google allows about 10 edits per minute per location (429 location_edit_rate_limited). `dry_run` validates without applying where supported. " +
+        "update_attributes (attributes, whatsapp_url, text_messaging_url, remove: only the attributes named change; see google_business_read available_attributes); answer_google_updates (decision accept|reject, fields: keep or undo Google's own changes; title and storefront fields need `confirm`); " +
+        "update_lodging (lodging, update_mask; `null` clears a field, lists are replaced whole; needs `confirm`); replace_food_menus (menus: the WHOLE list, anything left out is removed, null removes all; needs `confirm`) and replace_services (service_items, the whole list; needs `confirm`): read them first with google_business_read; " +
+        "gallery: upload_media (source_url public link, category COVER|PROFILE|EXTERIOR|INTERIOR|PRODUCT|AT_WORK|FOOD_AND_DRINK|MENU|COMMON_AREA|ROOMS|TEAMS|ADDITIONAL, description; photos at least 250 px and 10 KB), update_media_category (media_name or media_key, category: the only editable field), delete_media (media_name or media_key; cannot be restored; needs `confirm`); " +
+        "booking and ordering links: create_place_action (type, uri, is_preferred), update_place_action (link, uri, is_preferred, is_disabled), delete_place_action (link, needs `confirm`); " +
+        "delete_review_reply (review_name, or review_id + location_id: removes the owner's public reply); report_google_location (google_location from search_google_locations, reason_bad_location or reason_bad_recommendation, elaboration; needs `confirm`, cannot be withdrawn); " +
+        "create_account_group (type LOCATION_GROUP|USER_GROUP, account_name, primary_owner; needs `confirm`).",
+      inputSchema: {
+        action: z.enum(Object.keys(MANAGE_ROUTES) as [string, ...string[]]),
+        user: z.string().describe("Upload-Post profile name with Google Business connected."),
+        location_id: locationField,
+        params: paramsField("See the description for each action's fields."),
+        confirm: apiConfirmField,
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Manage Google Business",
+        readOnlyHint: false,
+        openWorldHint: true,
+        destructiveHint: true,
+      },
+    },
+    safe(async (args) => {
+      const a = args as { action: string };
+      return callRoute(client, MANAGE_ROUTES[a.action], mergeArgs(args as Record<string, unknown>));
+    })
+  );
+
+  return [read, update, manage];
 }

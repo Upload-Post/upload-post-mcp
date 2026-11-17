@@ -44,7 +44,9 @@ const BLUESKY_LIST_FIELDS = ["conversation_id", "messages_cursor", "status", "re
 for (const name of ["openai-mcp", "claude-ai"]) {
   const s = await connect(name);
   const send = s.tools.get("send_dm");
-  assert.deepEqual(send.inputSchema.properties.platform.enum, ["instagram", "bluesky"], `${name}: send_dm platforms`);
+  // Telegram joins outside ChatGPT only (check-telegram-dms.mjs).
+  const platforms = name === "openai-mcp" ? ["instagram", "bluesky"] : ["instagram", "bluesky", "telegram"];
+  assert.deepEqual(send.inputSchema.properties.platform.enum, platforms, `${name}: send_dm platforms`);
   for (const field of ["conversation_id", "attachments", "reply_to", "sender_action", "message_id", "reaction"]) {
     assert.ok(send.inputSchema.properties[field], `${name}: send_dm accepts ${field}`);
   }

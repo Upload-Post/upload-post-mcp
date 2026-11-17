@@ -21,7 +21,7 @@
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build",
-    "check": "node scripts/check-client-profile.mjs && node scripts/check-connect-guidance.mjs && node scripts/check-plan-guidance.mjs && node scripts/check-confirmation.mjs && node scripts/check-http-limits.mjs && node scripts/check-session-scope.mjs && node scripts/check-auth-failures.mjs && node scripts/check-feedback.mjs && node scripts/check-platform-options.mjs && node scripts/check-dm-conversations.mjs && node scripts/check-webhooks.mjs && node scripts/check-autodm-rules.mjs && node scripts/check-bluesky-dms.mjs && node scripts/check-replies-linkedin-analytics.mjs && node scripts/check-second-wave.mjs && node scripts/check-youtube.mjs && node scripts/check-chatgpt-surface.mjs"
+    "check": "node scripts/check-client-profile.mjs && node scripts/check-connect-guidance.mjs && node scripts/check-plan-guidance.mjs && node scripts/check-confirmation.mjs && node scripts/check-http-limits.mjs && node scripts/check-session-scope.mjs && node scripts/check-auth-failures.mjs && node scripts/check-feedback.mjs && node scripts/check-platform-options.mjs && node scripts/check-dm-conversations.mjs && node scripts/check-webhooks.mjs && node scripts/check-autodm-rules.mjs && node scripts/check-bluesky-dms.mjs && node scripts/check-telegram-dms.mjs && node scripts/check-replies-linkedin-analytics.mjs && node scripts/check-second-wave.mjs && node scripts/check-youtube.mjs && node scripts/check-networks-widget.mjs && node scripts/check-missing-tools.mjs && node scripts/check-chatgpt-surface.mjs"
   },
   "engines": {
     "node": ">=18"

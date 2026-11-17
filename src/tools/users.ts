@@ -3,6 +3,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
 import { genericResultOutputSchema, safe } from "../schemas.js";
+import { showsMcpAppsViews, type SessionContext } from "../client_profile.js";
+import { NETWORKS_TOOL } from "./networks.js";
 import {
   DEFAULT_PROFILE,
   connectInstruction,
@@ -10,7 +12,7 @@ import {
   resolveConnectLink,
 } from "../connect.js";
 
-export function registerUserTools(server: McpServer, client: UploadPostMcpClient): void {
+export function registerUserTools(server: McpServer, client: UploadPostMcpClient, ctx: SessionContext = {}): void {
   server.registerTool(
     "get_account_info",
     {
@@ -53,7 +55,9 @@ export function registerUserTools(server: McpServer, client: UploadPostMcpClient
     },
     safe(async (args) => {
       const result = await client.sdk.listUsers();
-      const guidance = listUsersGuidance(result, (args as { platforms?: string[] }).platforms);
+      const guidance = listUsersGuidance(result, (args as { platforms?: string[] }).platforms, {
+        connectView: showsMcpAppsViews(ctx) ? NETWORKS_TOOL : undefined,
+      });
       if (!guidance || !result || typeof result !== "object") return result;
       return { ...(result as Record<string, unknown>), ...guidance };
     })
