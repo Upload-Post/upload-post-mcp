@@ -85,7 +85,7 @@ A hosted session does not live only in the memory of the process that opened it.
 - there is no limit on how many sessions exist. `UPLOAD_POST_MCP_MAX_SESSIONS` and the idle TTL only bound how many are kept in memory at once;
 - nothing is stored anywhere: no database, no file.
 
-The id is not a credential. It holds no key, every request still has to present its own `Authorization`, and an id only opens again for the key it was issued to. Ids issued by older versions (plain UUIDs) keep working: they are rebuilt from the request that presents them, and such a session never serves a request without `Authorization`. A session the client ends with `DELETE` answers 404 afterwards. Without `UPLOAD_POST_MCP_SESSION_SECRET` the server signs with a key made up at start: after a restart those ids are unknown, the client gets a 404 and re-initializes (as before this change). `GET /health` shows `durableSessions`.
+The id is not a credential. It holds no key, every request still has to present its own `Authorization`, and an id only opens again for the key it was issued to. Ids issued by versions before this (plain UUIDs) are not rebuilt: they say nothing about the client, so they get the 404 they always got, the client re-initializes once and holds a signed id from then on. A session the client ends with `DELETE` answers 404 afterwards. Without `UPLOAD_POST_MCP_SESSION_SECRET` the server signs with a key made up at start: after a restart those ids are unknown, the client gets a 404 and re-initializes (as before this change). `GET /health` shows `durableSessions`.
 
 ## What can the agent do?
 

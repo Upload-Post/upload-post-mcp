@@ -21,7 +21,7 @@ export interface SessionSeed {
   /**
    * Keyed digest of the fingerprint of the API key the session was opened
    * with (not the fingerprint itself: ids show up in logs, and a plain one
-   * would tell which sessions belong to the same account). Empty on a legacy id.
+   * would tell which sessions belong to the same account).
    */
   key: string;
   protocolVersion?: string;
@@ -29,8 +29,6 @@ export interface SessionSeed {
   capabilities?: Record<string, unknown>;
   /** User-Agent of the request that opened the session: part of how the tool surface is chosen. */
   userAgent?: string;
-  /** True for an id issued before ids were signed: it is bound to no key. */
-  legacy?: boolean;
 }
 
 const PREFIX = "s1";
@@ -84,31 +82,6 @@ export function seedFromInitialize(body: unknown, userAgent?: unknown): SessionS
     break;
   }
   return seed;
-}
-
-/**
- * Ids issued before sessions were self-contained: plain UUIDs. They carry
- * nothing, so such a session is rebuilt from the request that presents it.
- */
-export function isLegacySessionId(id: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-}
-
-/**
- * Seed for a legacy id. Such an id says nothing about the client, so the
- * replayed `initialize` names it after its whole User-Agent: the tool surface
- * is chosen by matching the client's name or User-Agent against one pattern,
- * and with the same text in both the choice does not depend on which is read.
- */
-export function legacySeed(userAgent: unknown): SessionSeed {
-  const agent = clip(userAgent, MAX_USER_AGENT_LENGTH);
-  const version = /^[^\/\s]+\/(\S+)/.exec(agent ?? "")?.[1];
-  return {
-    key: "",
-    legacy: true,
-    userAgent: agent,
-    clientInfo: { name: clip(agent, 80), version: clip(version, 40) },
-  };
 }
 
 export class SessionTokens {
