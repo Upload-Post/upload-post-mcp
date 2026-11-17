@@ -7,6 +7,8 @@ export interface ClientInfoLike {
   name?: unknown;
   version?: unknown;
   userAgent?: unknown;
+  /** `initialize` → `params.capabilities`, to read the MCP Apps extension. */
+  capabilities?: unknown;
 }
 
 /**
@@ -26,6 +28,12 @@ export interface ClientProfile {
   kind: ClientKind;
   name: string;
   version: string;
+  /**
+   * The client declared the MCP Apps extension (`io.modelcontextprotocol/ui`)
+   * with the `text/html;profile=mcp-app` type in `initialize`, so it renders
+   * `ui://` views. Only then are MCP Apps views advertised to it.
+   */
+  mcpApps: boolean;
 }
 
 export interface SessionContext {
@@ -44,17 +52,50 @@ function studioClientPattern(): RegExp {
   }
 }
 
+/** MCP Apps extension id and resource type (SEP-1865, spec 2026-01-26). */
+export const MCP_APPS_EXTENSION = "io.modelcontextprotocol/ui";
+export const MCP_APP_MIME_TYPE = "text/html;profile=mcp-app";
+
+/**
+ * Whether `initialize` capabilities declare MCP Apps support. The spec makes
+ * `mimeTypes` required, so a declaration that lists types but not ours does
+ * not count. `UPLOAD_POST_MCP_APPS=off` turns every MCP Apps view off.
+ */
+export function supportsMcpApps(capabilities: unknown): boolean {
+  if (/^(0|false|no|off)$/i.test(process.env.UPLOAD_POST_MCP_APPS?.trim() ?? "")) return false;
+  const extensions = (capabilities as { extensions?: unknown } | null | undefined)?.extensions;
+  if (!extensions || typeof extensions !== "object") return false;
+  const ui = (extensions as Record<string, unknown>)[MCP_APPS_EXTENSION];
+  if (!ui || typeof ui !== "object") return false;
+  const mimeTypes = (ui as { mimeTypes?: unknown }).mimeTypes;
+  return Array.isArray(mimeTypes) && mimeTypes.includes(MCP_APP_MIME_TYPE);
+}
+
 export function detectClientProfile(info: ClientInfoLike | undefined): ClientProfile {
   const name = (info?.name ?? "").toString();
   const version = (info?.version ?? "").toString();
   const userAgent = (info?.userAgent ?? "").toString();
   const pattern = studioClientPattern();
   const kind: ClientKind = pattern.test(name) || pattern.test(userAgent) ? "chatgpt" : "other";
-  return { kind, name: name || "unknown", version: version || "unknown" };
+  return {
+    kind,
+    name: name || "unknown",
+    version: version || "unknown",
+    mcpApps: supportsMcpApps(info?.capabilities),
+  };
 }
 
 export function isChatGpt(ctx: SessionContext): boolean {
   return ctx.profile?.kind === "chatgpt";
+}
+
+/**
+ * MCP Apps views built on the open standard (not the ChatGPT-only Studio).
+ * ChatGPT is left out on purpose: its tool surface is the reviewed one, and
+ * these views join it with the next app submission.
+ */
+export function showsMcpAppsViews(ctx: SessionContext): boolean {
+  return ctx.profile?.kind === "other" && ctx.profile.mcpApps === true;
 }
 
 /**
