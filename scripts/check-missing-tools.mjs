@@ -274,8 +274,13 @@ assert.ok(r.isError, "version is required");
 r = await s.call("reject_post", { approval_id: "ap1", comment: "Off brand", confirmed: true });
 assert.equal(last(s).url, "/uploadposts/approvals/ap1/reject");
 assert.deepEqual(last(s).data, { comment: "Off brand" });
-r = await s.call("reject_post", { approval_id: "ap1", comment: "", confirmed: true });
-assert.ok(r.isError, "a rejection needs a comment");
+s.calls.length = 0;
+for (const args of [{ approval_id: "ap1", comment: "", confirmed: true }, { approval_id: "ap1", comment: "   " }, { approval_id: "ap1" }]) {
+  r = await s.call("reject_post", args);
+  assert.ok(r.isError, "a rejection needs a comment");
+  assert.match(r.content[0].text, /comment_required: a rejection needs a comment/, "and says so plainly");
+}
+assert.equal(s.calls.length, 0, "nothing sent without a comment");
 r = await s.call("withdraw_pending_post", { approval_id: "ap1", confirmed: true });
 assert.equal(last(s).method, "DELETE");
 assert.equal(last(s).url, "/uploadposts/approvals/ap1");

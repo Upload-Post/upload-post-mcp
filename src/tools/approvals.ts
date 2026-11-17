@@ -20,6 +20,10 @@ const AP = "/uploadposts/approvals";
 const DISABLED_NOTE =
   "Not generally available yet: until post approvals are switched on for the account, these calls answer 503 post_approvals_disabled (the feature is off, not a temporary failure).";
 
+/** The API refuses a rejection without a reason (400 comment_required); say it the same way before calling. */
+const REJECT_COMMENT_REQUIRED =
+  "comment_required: a rejection needs a comment (up to 2000 characters) saying why; the author sees it. Nothing was rejected.";
+
 const approvalIdField = z
   .string()
   .min(1)
@@ -138,7 +142,12 @@ export function registerApprovalTools(server: McpServer, client: UploadPostMcpCl
         DISABLED_NOTE,
       inputSchema: {
         approval_id: approvalIdField,
-        comment: z.string().min(1).max(2000).describe("Why it is rejected; shown to the author."),
+        comment: z
+          .string({ required_error: REJECT_COMMENT_REQUIRED })
+          .trim()
+          .min(1, REJECT_COMMENT_REQUIRED)
+          .max(2000)
+          .describe("Why it is rejected; shown to the author."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
