@@ -33,9 +33,17 @@ const APPS = { extensions: { "io.modelcontextprotocol/ui": { mimeTypes: [MCP_APP
 const SIGNED = "https://app.upload-post.com/connect?token=FAKE.JWT.TOKEN";
 const MANAGE = "https://app.upload-post.com/manage-users";
 
-function fakeAccount({ profiles = [], uploadError } = {}) {
+function fakeAccount({ profiles = [], uploadError, preserve = "ok" } = {}) {
   const calls = [];
   const state = { profiles: structuredClone(profiles) };
+  // generate-jwt with preserve_settings goes through `request`, not the SDK.
+  const request = async (method, path, options = {}) => {
+    calls.push(["request", method, path, options.body]);
+    if (preserve === "throws") throw new Error("Upload-Post API error: boom");
+    // An API that does not know the flag answers without `settings_preserved`.
+    if (preserve === "unknown-flag") return { success: true, access_url: `${SIGNED}&old=1`, duration: "48h" };
+    return { success: true, access_url: `${SIGNED}&kept=${calls.length}`, duration: "48h", settings_preserved: true };
+  };
   const sdk = {
     async listUsers() {
       calls.push(["listUsers"]);
@@ -58,12 +66,13 @@ function fakeAccount({ profiles = [], uploadError } = {}) {
       return { success: true, request_id: "req_1" };
     };
   }
-  return { sdk, calls, state };
+  return { sdk, calls, state, request };
 }
 
 async function session(clientName, capabilities, account = fakeAccount()) {
   const upClient = new UploadPostMcpClient({ apiKey: "test", baseUrl: "https://example.invalid" });
   Object.assign(upClient.sdk, account.sdk);
+  upClient.request = account.request;
   const server = buildServer(upClient);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
@@ -216,20 +225,46 @@ async function session(clientName, capabilities, account = fakeAccount()) {
   await s.close();
 }
 
-// Profiles the MCP does not own keep their white-label settings: dashboard link.
+// Profiles the MCP does not own keep their white-label settings: their link is
+// minted with preserve_settings, never with the plain call that clears them.
+const OWN = [{ username: "brand", social_accounts: {} }, { username: "client2", social_accounts: {} }];
 {
-  const s = await session(
-    "claude-ai",
-    APPS,
-    fakeAccount({ profiles: [{ username: "brand", social_accounts: {} }, { username: "client2", social_accounts: {} }] })
-  );
+  const s = await session("claude-ai", APPS, fakeAccount({ profiles: OWN }));
   const view = await s.call(NETWORKS_TOOL, { profile: "client2" });
   assert.equal(view.structuredContent.selected, "client2");
-  assert.equal(view.structuredContent.one_click, false);
+  assert.equal(view.structuredContent.one_click, true, "any existing profile opens a signed link");
   const link = (await s.call(NETWORK_LINK_TOOL, { platform: "tiktok", profile: "client2" })).structuredContent.result;
-  assert.equal(link.connect_url, MANAGE);
-  assert.equal(link.signed, false);
-  assert.ok(!s.account.calls.some(([m]) => m === "generateJwt"), "no JWT for a profile the MCP does not own");
+  assert.match(link.connect_url, /connect\?token=.*kept=/);
+  assert.equal(link.signed, true);
+  assert.equal(link.profile, "client2");
+  assert.deepEqual(s.account.calls.at(-1), [
+    "request",
+    "POST",
+    "/uploadposts/users/generate-jwt",
+    { username: "client2", preserve_settings: true, platforms: ["tiktok"] },
+  ]);
+  // Credential networks open the profile's full page: no platforms in the link.
+  await s.call(NETWORK_LINK_TOOL, { platform: "bluesky", profile: "client2" });
+  assert.deepEqual(s.account.calls.at(-1)[3], { username: "client2", preserve_settings: true });
+  assert.ok(!s.account.calls.some(([m]) => m === "generateJwt"), "never the call that clears the settings");
+  await s.close();
+}
+// An API that ignores the flag would have cleared the profile: its link is not
+// trusted, and neither is a failed call. Both fall back to the dashboard.
+for (const preserve of ["unknown-flag", "throws"]) {
+  const s = await session("claude-ai", APPS, fakeAccount({ profiles: OWN, preserve }));
+  const link = (await s.call(NETWORK_LINK_TOOL, { platform: "tiktok", profile: "client2" })).structuredContent.result;
+  assert.equal(link.connect_url, MANAGE, preserve);
+  assert.equal(link.signed, false, preserve);
+  assert.ok(!s.account.calls.some(([m]) => m === "generateJwt"), preserve);
+  await s.close();
+}
+// A profile that does not exist, or none named among several: the dashboard, and nothing is minted.
+{
+  const s = await session("claude-ai", APPS, fakeAccount({ profiles: OWN }));
+  const ghost = (await s.call(NETWORK_LINK_TOOL, { platform: "tiktok", profile: "ghost" })).structuredContent.result;
+  assert.equal(ghost.connect_url, MANAGE);
+  assert.ok(!s.account.calls.some(([m]) => m === "request" || m === "generateJwt"));
   await s.close();
 }
 

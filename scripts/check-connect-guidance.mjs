@@ -59,6 +59,11 @@ function fakeAccount({ profiles = [], createError, uploadError, uploadResult } =
 async function connect(account, clientName = "claude-ai") {
   const upClient = new UploadPostMcpClient({ apiKey: "test", baseUrl: "https://example.invalid" });
   Object.assign(upClient.sdk, account.sdk);
+  // Nothing here goes to the network: the preserve_settings call fails, and the
+  // answer falls back to the dashboard link these checks expect.
+  upClient.request = async () => {
+    throw new Error("Upload-Post API error: no network in checks");
+  };
   const server = buildServer(upClient);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);

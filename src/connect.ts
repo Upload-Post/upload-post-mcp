@@ -185,14 +185,55 @@ function isConflict(err: unknown): boolean {
 }
 
 /**
+ * Profile of the account's own (not created by the MCP) that a link can be
+ * minted for without touching its settings: the one asked for, or the only one.
+ */
+export function ownProfileTarget(profiles: string[], requested?: string): string | undefined {
+  if (requested) return profiles.includes(requested) ? requested : undefined;
+  return profiles.length === 1 ? profiles[0] : undefined;
+}
+
+/** Profile whose cards open a signed link (no Upload-Post login), if any. */
+export function oneClickTarget(profiles: string[], requested?: string): string | undefined {
+  return signedLinkTarget(profiles, requested) ?? ownProfileTarget(profiles, requested);
+}
+
+/**
+ * Signed link for a profile whose connect-page settings must stay as they
+ * are. generate-jwt with `preserve_settings` writes nothing to the profile and
+ * keeps `platforms` in the link. Sent through `request`, not the SDK, so the
+ * flag cannot be dropped on the way: without it the API clears the settings.
+ * Only a link the API says it minted that way is used.
+ */
+async function preservedLink(
+  client: UploadPostMcpClient,
+  profile: string,
+  platforms: string[]
+): Promise<ConnectLink | undefined> {
+  const jwt = await client.request<{ access_url?: unknown; duration?: unknown; settings_preserved?: unknown }>(
+    "POST",
+    "/uploadposts/users/generate-jwt",
+    { body: { username: profile, preserve_settings: true, ...(platforms.length ? { platforms } : {}) } }
+  );
+  if (jwt?.settings_preserved !== true || typeof jwt.access_url !== "string" || !jwt.access_url) return undefined;
+  return {
+    connect_url: jwt.access_url,
+    signed: true,
+    profile,
+    expires_in: typeof jwt.duration === "string" ? jwt.duration : "48h",
+  };
+}
+
+/**
  * Best connection link for this account.
  *
- * Signed one-click links come from generate_jwt, which also RESETS the
+ * Signed one-click links come from generate_jwt, which by default RESETS the
  * profile's white-label settings (redirect URL, logo, titles, platform list,
- * language). So a signed link is only minted for a profile the MCP owns:
- * the account has no profile at all (we create "default"), or its only profile
- * is the "default" one we created earlier. Anyone else gets the dashboard,
- * where a logged-in owner connects accounts without touching that config.
+ * language). That plain call is only made for a profile the MCP owns: the
+ * account has no profile at all (we create "default"), or its only profile is
+ * the "default" one we created earlier. Any other profile gets a link minted
+ * with `preserve_settings`, which changes nothing on it. The dashboard is left
+ * for when no profile can be told (several, none named) or the API fails.
  *
  * Never throws: on any API error it falls back to the dashboard link.
  */
@@ -217,9 +258,13 @@ export async function resolveConnectLink(
       }
     }
 
-    if (!target) return { ...fallback, profile: opts.profile };
-
     const platforms = (opts.platforms ?? []).map(normalizePlatform).filter(Boolean);
+    if (!target) {
+      const own = ownProfileTarget(profiles, opts.profile);
+      const link = own ? await preservedLink(client, own, platforms).catch(() => undefined) : undefined;
+      return link ?? { ...fallback, profile: own ?? opts.profile };
+    }
+
     const jwt = (await client.sdk.generateJwt(
       target,
       platforms.length ? ({ platforms } as never) : ({} as never)
