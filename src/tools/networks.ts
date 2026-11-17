@@ -7,7 +7,7 @@ import {
   normalizePlatform,
   profilesOf,
   resolveConnectLink,
-  signedLinkTarget,
+  oneClickTarget,
 } from "../connect.js";
 import { fail, ok, REDDIT_ENABLED, REDDIT_UNAVAILABLE } from "../schemas.js";
 
@@ -154,7 +154,7 @@ export function buildViewData(
     profiles_total: all.length,
     selected,
     highlight,
-    one_click: signedLinkTarget(names, selected ?? undefined) !== undefined,
+    one_click: oneClickTarget(names, selected ?? undefined) !== undefined,
     reddit_available: REDDIT_ENABLED,
   };
 }
