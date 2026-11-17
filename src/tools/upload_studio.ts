@@ -825,17 +825,59 @@ ${REDDIT_ENABLED ? `          ["reddit", "Reddit", true, true],\n` : ""}        
           }
         }
 
+        // Shown to the end user, so no CORS/CSP talk: those are fine (the bucket
+        // allows any origin); what fails is the browser reading the file.
         function explainBrowserUploadFailure(error, uploadUrl) {
           var detail = error && error.message ? error.message : String(error || "Failed to fetch");
-          var browserOrigin = window.location && window.location.origin ? window.location.origin : "unknown browser origin";
-          var uploadOrigin = originFromUrl(uploadUrl);
+          try {
+            console.warn("[upload-studio] PUT to " + originFromUrl(uploadUrl) + " failed: " + detail);
+          } catch (ignored) {}
           return new Error(
-            "Browser could not upload the file to Upload-Post/R2 staging (" + detail + "). " +
-            "This is usually R2 CORS or widget CSP. Allow the R2 bucket origin " + uploadOrigin +
-            " to receive PUT requests from " + browserOrigin +
-            " (or use AllowedOrigins '*'), with methods PUT, GET, HEAD and headers Content-Type or '*'."
+            "Could not send the file to Upload-Post (" + detail + "). " +
+            "Check your connection and try again. If it keeps failing, select the file again" +
+            " (on Android, choosing it from Files instead of the photo gallery also helps)."
           );
         }
+
+        // <staging-body>
+        // Android's photo picker hands the WebView proxy files whose metadata
+        // changes between reads. Chromium then aborts the upload
+        // (ERR_UPLOAD_FILE_CHANGED, seen by fetch as "Failed to fetch"), at
+        // times on the first upload and almost always on a second upload of the
+        // same selection. Copying the bytes into memory right after the pick,
+        // while the file still matches, and uploading that copy avoids it.
+        var SNAPSHOT_MAX_BYTES = 200 * 1024 * 1024;
+        var SNAPSHOT_ON_PICK = /Android/i.test((window.navigator && window.navigator.userAgent) || "");
+
+        // Promise of an in-memory Blob, or of null when the file can't be read
+        // or is too big to hold in memory.
+        function snapshotFile(file) {
+          if (!file || typeof file.arrayBuffer !== "function" || !(file.size <= SNAPSHOT_MAX_BYTES)) {
+            return Promise.resolve(null);
+          }
+          return file.arrayBuffer().then(function (buffer) {
+            return new Blob([buffer], { type: file.type || "" });
+          }, function () {
+            return null;
+          });
+        }
+
+        // PUTs the selected file: the in-memory copy if there is one. If the
+        // browser fails to send the file itself, copy it now and try once more
+        // (the presigned PUT overwrites the same key, so a retry is safe).
+        async function putSelectedFile(item, url, init) {
+          var copy = item.snapshot ? await item.snapshot : null;
+          try {
+            return await fetch(url, Object.assign({}, init, { body: copy || item.file }));
+          } catch (error) {
+            if (copy) throw error;
+            copy = await snapshotFile(item.file);
+            if (!copy) throw error;
+            item.snapshot = Promise.resolve(copy);
+            return await fetch(url, Object.assign({}, init, { body: copy }));
+          }
+        }
+        // </staging-body>
 
         // label: "" for a video, " 2 of 5" style suffix for carousel images.
         async function stageLocalFile(item, mediaType, label) {
@@ -861,11 +903,10 @@ ${REDDIT_ENABLED ? `          ["reddit", "Reddit", true, true],\n` : ""}        
           if (!putHeaders["Content-Type"]) putHeaders["Content-Type"] = contentType;
           var put;
           try {
-            put = await fetch(created.upload_url, {
+            put = await putSelectedFile(item, created.upload_url, {
               method: created.method || "PUT",
               mode: "cors",
-              headers: putHeaders,
-              body: file
+              headers: putHeaders
             });
           } catch (error) {
             throw explainBrowserUploadFailure(error, created.upload_url);
@@ -1045,6 +1086,7 @@ ${REDDIT_ENABLED ? `          ["reddit", "Reddit", true, true],\n` : ""}        
             var photo = verdict.kind === "photos";
             return {
               file: file,
+              snapshot: SNAPSHOT_ON_PICK ? snapshotFile(file) : null,
               fileId: "",
               fileName: file.name || (photo ? "chatgpt-image-" + (index + 1) + ".jpg" : "chatgpt-video-upload.mp4"),
               mimeType: photo ? guessImageMime(file.name, file.type) : (file.type || "video/mp4"),
