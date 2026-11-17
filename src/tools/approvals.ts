@@ -68,6 +68,7 @@ export function registerApprovalTools(server: McpServer, client: UploadPostMcpCl
         "Each item has approval_id, status, version (needed to approve), profile_username, platforms, post_type, title, caption, platform_content, scheduled_date, expires_at, author_email, author_role, and after a decision decided_by, decision_comment and job_id; closed ones are approved, rejected, withdrawn or expired. " +
         "With `approval_id` it returns that one item with its upload fields, preview_url and thumbnail_url (temporary links) and destinations_effective. Editors and Contributors see only their own posts. " +
         "Page with `before` = the previous `next_before`. " +
+        "With `count_only: true` it lists nothing and answers only `counts` {status: n} and `total` for the same filters (status, profile_username, author), e.g. how many posts wait for review. " +
         DISABLED_NOTE,
       inputSchema: {
         approval_id: approvalIdField.optional(),
@@ -79,6 +80,10 @@ export function registerApprovalTools(server: McpServer, client: UploadPostMcpCl
         author: z.string().optional().describe("Only posts by this team member email."),
         limit: z.number().int().min(1).max(200).optional().describe("Items per page, 1-200. Default 50."),
         before: z.string().optional().describe("`next_before` of the previous page."),
+        count_only: z
+          .boolean()
+          .optional()
+          .describe("Only the number of posts per status (`counts`, `total`), no items; limit and before are ignored."),
       },
       outputSchema: genericResultOutputSchema,
       annotations: {
@@ -89,13 +94,19 @@ export function registerApprovalTools(server: McpServer, client: UploadPostMcpCl
       },
     },
     safe(async (args) => {
-      const { approval_id, status, ...rest } = args as {
+      const { approval_id, status, count_only, ...rest } = args as {
         approval_id?: string;
         status?: string[];
+        count_only?: boolean;
       } & Record<string, unknown>;
       if (approval_id) return client.request("GET", `${AP}/${encodeURIComponent(approval_id)}`);
       return client.request("GET", AP, {
-        query: compact({ ...rest, status: status?.length ? status.join(",") : undefined }),
+        query: compact({
+          ...rest,
+          status: status?.length ? status.join(",") : undefined,
+          // The API reads "true"/"1"/"yes"; false is the same as leaving it out.
+          count_only: count_only ? "true" : undefined,
+        }),
       });
     })
   );
