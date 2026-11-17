@@ -23,8 +23,6 @@ import { AuthFailureLimiter, clientAddress } from "./auth_failure_limiter.js";
 import {
   SessionTokens,
   hasInitialize,
-  isLegacySessionId,
-  legacySeed,
   replayInitialize,
   seedFromInitialize,
   type SessionSeed,
@@ -56,12 +54,6 @@ interface Session {
    * is unreachable.
    */
   authHash: string;
-  /**
-   * Rebuilt from an id that is bound to no key (issued before ids were
-   * signed): whoever presents such an id first gets the session, so it never
-   * serves a request that does not carry its own credential.
-   */
-  strictAuth: boolean;
 }
 
 function credentialHash(header: string): string {
@@ -357,16 +349,17 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
 
     // A session id that is not in memory was swept (idle TTL, full cache) or
     // belongs to a previous process (restart, deploy). It is rebuilt from what
-    // the id carries: ids signed here hold the client's `initialize`; ids from
-    // before that (plain UUIDs) are rebuilt from the request alone. Anything
+    // the id carries: ids signed here hold the client's `initialize`. Anything
     // else gets the 404 that makes a client re-initialize (building a fresh
     // transport instead made the SDK answer 400 "Server not initialized",
-    // which clients surface as a fatal "session expired").
+    // which clients surface as a fatal "session expired"). That includes the
+    // ids issued before ids were signed (plain UUIDs): they say nothing about
+    // the client, and a session rebuilt without its capabilities is a lesser
+    // one (no MCP Apps views) that the client would never replace. One
+    // re-initialize gives it a signed id for good.
     let seed: SessionSeed | undefined;
     if (!session && sessionId) {
-      seed =
-        sessionTokens.verify(sessionId) ??
-        (isLegacySessionId(sessionId) ? legacySeed(req.headers["user-agent"]) : undefined);
+      seed = sessionTokens.verify(sessionId);
       if (!seed) return sendSessionNotFound(res);
       // Nothing to end: the session holds no state outside this process.
       if (method === "DELETE") {
@@ -458,7 +451,6 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       if (REQUIRE_SESSION_AUTH) {
         return refuse();
       }
-      if (session.strictAuth) return sendSessionNotFound(res);
       const agent = String(req.headers["user-agent"] ?? "-").slice(0, 120);
       process.stderr.write(
         `[upload-post-mcp] session-without-credential ${req.method ?? "?"} ua="${agent}"\n`
@@ -549,7 +541,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       if (seed && hasInitialize(body)) seed = undefined;
 
       // A signed id only opens again for the key it was issued to.
-      if (seed && !seed.legacy && !sessionTokens.sameKey(seed, keyId)) {
+      if (seed && !sessionTokens.sameKey(seed, keyId)) {
         return sendSessionNotFound(res);
       }
 
@@ -601,7 +593,6 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
           lastSeenAt: Date.now(),
           keyId,
           authHash,
-          strictAuth: Boolean(seed?.legacy),
         };
         transport.onclose = () => {
           const id = transport.sessionId;

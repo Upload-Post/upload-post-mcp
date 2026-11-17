@@ -8,15 +8,16 @@
  *     theirs);
  *   - the id only opens again for the key it was issued to, and never without
  *     a credential; a tampered or unknown id still gets the 404;
- *   - ids from before (plain UUIDs) are served too, shaped by the User-Agent;
+ *   - ids from before ids were signed (plain UUIDs) get the 404 they always
+ *     got: rebuilt without the client's capabilities they would be lesser
+ *     sessions (no MCP Apps views) that the client never replaces;
  *   - a session that left the in-memory cache (cap, idle sweep) keeps working;
  *   - concurrent requests of one session rebuild it once;
  *   - DELETE of a session this process does not hold is a no-op 200, and a
  *     session ended with DELETE answers 404 afterwards;
  *   - an `initialize` that still carries an old id opens a new session;
  *   - with UPLOAD_POST_MCP_REQUIRE_SESSION_AUTH off (second pass, in a child
- *     process), a session rebuilt from a legacy id never serves a request that
- *     has no credential.
+ *     process), a session opened by its owner behaves as before.
  * Runs two real servers against a fake API on localhost. Run after `npm run build`.
  */
 import assert from "node:assert/strict";
@@ -156,13 +157,7 @@ if (LENIENT) {
   // (logged), as before.
   const lenient = await open(A, "key-a", "claude-ai");
   assert.equal((await tools(A, undefined, lenient)).status, 200, "unchanged for sessions opened by their owner");
-  // A legacy id is bound to no key: whoever presents it first gets the
-  // session, so it must not serve the next request that has no credential.
-  const stolen = randomUUID();
-  assert.equal((await tools(B, "key-b", stolen)).status, 200, "a legacy id is rebuilt for the key that presents it");
-  assert.equal((await tools(B, undefined, stolen)).status, 404, "but never serves a request without a credential");
-  assert.equal((await tools(B, "key-a", stolen)).status, 404, "nor one with another key");
-  assert.equal((await tools(B, "key-b", stolen)).status, 200);
+  assert.equal((await tools(B, "key-b", randomUUID())).status, 404, "a legacy id is not rebuilt for anyone");
   console.log("check-session-rehydrate (session auth off): ok");
   process.exit(0);
 }
@@ -204,6 +199,18 @@ const withViewsOnA = await tools(A, "key-a", withViews);
 assert.ok(withViewsOnA.names.includes("open_social_accounts"), "an MCP Apps host gets the social accounts view");
 assert.ok(!claudeOnA.names.includes("open_social_accounts"), "a host without MCP Apps does not");
 assert.deepEqual((await tools(B, "key-a", withViews)).names, withViewsOnA.names, "the view survives a rebuild");
+// The host reads the view from the session it holds: a rebuilt one serves it.
+const view = await call(B, {
+  headers: { ...auth("key-a"), "mcp-session-id": withViews },
+  body: { jsonrpc: "2.0", id: 7, method: "resources/read", params: { uri: "ui://upload-post/social-accounts.html" } },
+});
+assert.equal(view.json?.result?.contents?.[0]?.mimeType, "text/html;profile=mcp-app", "the view is readable on a rebuilt session");
+// And a session of a host without MCP Apps does not serve it, rebuilt or not.
+const noView = await call(B, {
+  headers: { ...auth("key-a"), "mcp-session-id": claude },
+  body: { jsonrpc: "2.0", id: 8, method: "resources/read", params: { uri: "ui://upload-post/social-accounts.html" } },
+});
+assert.ok(noView.json?.error, "no view for a host that did not declare MCP Apps");
 
 // A tool call works on the rebuilt session.
 const listUsers = await call(B, {
@@ -235,17 +242,14 @@ const forged = Buffer.from(
 ).toString("base64url");
 assert.equal((await tools(B, "key-a", `${prefix}.${forged}.${signature}`)).status, 404, "the payload is signed");
 
-// 3. Ids from before (plain UUIDs) keep working, shaped by the User-Agent.
-const legacyChatgpt = await tools(B, "key-a", randomUUID(), { "user-agent": "openai-mcp/1.0.0 (ChatGPT)" });
-assert.equal(legacyChatgpt.status, 200, "a legacy id is served");
-assert.deepEqual(legacyChatgpt.names, chatgptOnA.names, "a legacy ChatGPT session keeps ChatGPT's surface");
-const legacyClaude = await tools(B, "key-a", randomUUID(), { "user-agent": "Claude-User" });
-assert.deepEqual(legacyClaude.names, claudeOnA.names, "a legacy session of another client keeps its surface");
-// The name is not always the first word of the User-Agent.
-const legacyBrowserLike = await tools(B, "key-a", randomUUID(), {
-  "user-agent": "Mozilla/5.0 (compatible; openai-mcp/1.0.0)",
-});
-assert.deepEqual(legacyBrowserLike.names, chatgptOnA.names, "matched on the whole User-Agent");
+// 3. Ids from before ids were signed (plain UUIDs): 404, the client starts over
+//    and gets a signed one. Never a session built without knowing the client.
+assert.equal(
+  (await tools(B, "key-a", randomUUID(), { "user-agent": "openai-mcp/1.0.0 (ChatGPT)" })).status,
+  404,
+  "a legacy id is not rebuilt"
+);
+assert.equal((await tools(B, "key-a", randomUUID(), { "user-agent": "Claude-User" })).status, 404);
 
 // 4. Leaving the cache (cap of 6 here) ends nothing.
 const first = await open(A, "key-a", "claude-ai");
