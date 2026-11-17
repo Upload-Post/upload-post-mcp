@@ -77,6 +77,16 @@ Run the server on any Docker-capable host (Fly, Railway, Cloud Run, your own box
 
 ---
 
+### Sessions never expire
+
+A hosted session does not live only in the memory of the process that opened it. The `Mcp-Session-Id` the client holds is a token signed by the server that carries the client's `initialize` (who it said it was, the protocol version, its capabilities). Any process with the same `UPLOAD_POST_MCP_SESSION_SECRET` rebuilds the session the first time it sees the id, so:
+
+- a restart, a deploy or a second replica is invisible to the client: its next call is served, without "Session not found" and without re-initializing;
+- there is no limit on how many sessions exist. `UPLOAD_POST_MCP_MAX_SESSIONS` and the idle TTL only bound how many are kept in memory at once;
+- nothing is stored anywhere: no database, no file.
+
+The id is not a credential. It holds no key, every request still has to present its own `Authorization`, and an id only opens again for the key it was issued to. Ids issued by older versions (plain UUIDs) keep working: they are rebuilt from the request that presents them. Without `UPLOAD_POST_MCP_SESSION_SECRET` the server signs with a key made up at start, and after a restart the sessions opened before it are rebuilt as plain ones (named after the client's User-Agent).
+
 ## What can the agent do?
 
 The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
@@ -225,9 +235,10 @@ npx @modelcontextprotocol/inspector node dist/index.js
 | `UPLOAD_POST_MCP_MAX_BODY_MB` | http | `10`                            | Largest `/mcp` request body accepted; bigger ones get `413`. |
 | `UPLOAD_POST_MCP_VALIDATE_API_KEYS` | http | `true`                    | Check a pasted API key once against `GET /uploadposts/me` (cached) before opening a session for it; a rejected key gets `401`. |
 | `UPLOAD_POST_MCP_KEY_CHECK_TTL_MS` | http | `600000`                   | How long an accepted key is trusted before it is checked again. |
-| `UPLOAD_POST_MCP_MAX_SESSIONS` | http | `2000`                         | Live sessions kept in memory; past it the longest-idle one is closed. |
-| `UPLOAD_POST_MCP_MAX_SESSIONS_PER_KEY` | http | `200`                  | Live sessions per credential; past it that credential's own longest-idle session is closed. |
-| `UPLOAD_POST_MCP_SESSION_TTL_MS` | http | `1800000`                    | Idle time after which a session is closed. |
+| `UPLOAD_POST_MCP_SESSION_SECRET` | http | random at start              | Key that signs session ids. Set it (any long random string) so sessions survive a restart or a deploy, and give every replica the same one. |
+| `UPLOAD_POST_MCP_MAX_SESSIONS` | http | `2000`                         | Sessions kept in memory (about 2 MB each); past it the longest-idle one leaves memory and is rebuilt on its next request. Not a limit on how many sessions exist. |
+| `UPLOAD_POST_MCP_MAX_SESSIONS_PER_KEY` | http | `200`                  | Sessions of one credential kept in memory; past it that credential's own longest-idle one leaves memory (and is rebuilt when used again). |
+| `UPLOAD_POST_MCP_SESSION_TTL_MS` | http | `1800000`                    | Idle time after which a session leaves memory. It still works afterwards: it is rebuilt on its next request. |
 | `UPLOAD_POST_MCP_AUTH_FAIL_MAX` | http | `20`                          | `401`s on `/mcp` one client IP may collect per window; past it that IP gets `429` + `Retry-After` (sessions and keys already verified still pass; one request per probe interval is checked normally). `0` turns it off. |
 | `UPLOAD_POST_MCP_AUTH_FAIL_WINDOW_S` | http | `300`                    | Window for the count above; a held IP is released this long after its last failure. |
 | `UPLOAD_POST_MCP_AUTH_FAIL_PROBE_S` | http | `30`                      | While held, one request per this many seconds goes through the normal auth path. |

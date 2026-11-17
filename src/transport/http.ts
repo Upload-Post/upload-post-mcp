@@ -1,5 +1,4 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { ClientInfoLike } from "../client_profile.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -21,6 +20,14 @@ import { hasOAuthBearer, resolveAuth } from "../oauth/auth_resolver.js";
 import { stripSchemaDialect } from "./schema_dialect.js";
 import { ApiKeyChecker, keyFingerprint } from "./api_key_check.js";
 import { AuthFailureLimiter, clientAddress } from "./auth_failure_limiter.js";
+import {
+  SessionTokens,
+  isLegacySessionId,
+  legacySeed,
+  replayInitialize,
+  seedFromInitialize,
+  type SessionSeed,
+} from "./session_token.js";
 import { createHash } from "node:crypto";
 import { DEFAULT_BASE_URL } from "../client.js";
 
@@ -54,19 +61,22 @@ function credentialHash(header: string): string {
   return createHash("sha256").update(header).digest("hex");
 }
 
-// Most MCP clients never send the DELETE that ends a session — they just
-// abandon it. Without eviction every abandoned session pins a full McpServer
-// (tools + zod schemas + axios client) forever, which is exactly the leak that
-// OOM-crashed this server daily in production. Idle sessions past the TTL are
-// swept; the cap is a backstop against bursts between sweeps.
+// Sessions do not end: the id a client holds carries what is needed to open
+// the session again (session_token.ts), so the map below is only a cache of
+// the ones built in this process. Most MCP clients never send the DELETE that
+// ends a session, and every cached one pins a full McpServer (tools + zod
+// schemas + axios client, about 2 MB), which is the leak that OOM-crashed this
+// server in production. Entries idle past the TTL are dropped and the caps
+// bound the memory; a dropped session is rebuilt on its next request, and the
+// client never notices.
 const SESSION_IDLE_TTL_MS = Number(
   process.env.UPLOAD_POST_MCP_SESSION_TTL_MS ?? 30 * 60 * 1000
 );
 const SESSION_SWEEP_INTERVAL_MS = 60 * 1000;
 const MAX_SESSIONS = Number(process.env.UPLOAD_POST_MCP_MAX_SESSIONS ?? 2000);
-// One credential cannot hold more than this many live sessions: past it, its
-// own longest-idle session is recycled, so no single key can fill the global
-// cap and push other users' sessions out.
+// One credential cannot keep more than this many sessions in memory: past it,
+// its own longest-idle one leaves the cache, so no single key can fill it and
+// push other users' sessions out.
 const MAX_SESSIONS_PER_KEY = Number(process.env.UPLOAD_POST_MCP_MAX_SESSIONS_PER_KEY ?? 200);
 // Largest JSON-RPC request accepted on /mcp. Media belongs in a URL; inline
 // bytes over this size are refused with a 413 instead of being buffered.
@@ -132,7 +142,8 @@ const FAVICON_REDIRECTS: Record<string, string> = {
  *
  * Subsequent requests on the same session route to the same transport via the
  * `mcp-session-id` header. Closing the transport drops the session from the
- * map so the per-user state can be GC'd.
+ * map so the per-user state can be GC'd; a session that is no longer in the
+ * map (restart, deploy, idle sweep, full cache) is rebuilt from its id.
  *
  * The server itself stores nothing permanently — keys live only inside the
  * in-memory client of the session that received them. The OAuth introspection
@@ -140,6 +151,16 @@ const FAVICON_REDIRECTS: Record<string, string> = {
  */
 export async function runHttp(opts: HttpOptions): Promise<void> {
   const sessions = new Map<string, Session>();
+  // Sessions being rebuilt, so two requests of one session do not build two.
+  const rebuilding = new Map<string, Promise<Session | undefined>>();
+  const sessionTokens = new SessionTokens(process.env.UPLOAD_POST_MCP_SESSION_SECRET);
+  let rebuilt = 0;
+  if (!sessionTokens.durable) {
+    process.stderr.write(
+      "[upload-post-mcp] UPLOAD_POST_MCP_SESSION_SECRET is not set: session ids are signed with a " +
+        "key made up at start, so sessions opened now are rebuilt as plain ones after a restart\n"
+    );
+  }
 
   const oauthCfg = loadOAuthConfig();
   const upstream = new UpstreamOAuthClient(oauthCfg);
@@ -239,7 +260,9 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     if (method === "GET" && (url === "/healthz" || url === "/health")) {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: true, oauth: oauthCfg.enabled, sessions: sessions.size }));
+      res.end(
+        JSON.stringify({ ok: true, oauth: oauthCfg.enabled, sessions: sessions.size, rebuilt })
+      );
       return;
     }
 
@@ -302,15 +325,39 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     }
 
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    // A session that is being rebuilt is used once its handshake is replayed.
+    const settling = sessionId ? rebuilding.get(sessionId) : undefined;
+    if (settling) await settling;
     let session = sessionId ? sessions.get(sessionId) : undefined;
 
-    // A session id we don't know means the session was swept (idle TTL) or
-    // belonged to a previous deploy. The spec (and every client) expects a
-    // 404 here so the client transparently re-initializes; building a fresh
+    // A session id that is not in memory was swept (idle TTL, full cache) or
+    // belongs to a previous process (restart, deploy). It is rebuilt from what
+    // the id carries: ids signed here hold the client's `initialize`; ids from
+    // before that (plain UUIDs) are rebuilt from the request alone. Anything
+    // else gets the 404 that makes a client re-initialize (building a fresh
     // transport instead made the SDK answer 400 "Server not initialized",
-    // which clients surface as a fatal "session expired".
+    // which clients surface as a fatal "session expired").
+    let seed: SessionSeed | undefined;
     if (!session && sessionId) {
-      return sendSessionNotFound(res);
+      seed =
+        sessionTokens.verify(sessionId) ??
+        (isLegacySessionId(sessionId) ? legacySeed(req.headers["user-agent"]) : undefined);
+      if (!seed) return sendSessionNotFound(res);
+      // Nothing to end: the session holds no state outside this process.
+      if (method === "DELETE") {
+        res.statusCode = 200;
+        res.end();
+        return;
+      }
+      // A rebuild needs the credential (the id is not one). Without it the
+      // client is told to start over, as before.
+      if (req.headers["authorization"] === undefined) return sendSessionNotFound(res);
+      const underway = rebuilding.get(sessionId);
+      if (underway) {
+        session = await underway;
+        if (!session) return sendSessionNotFound(res);
+        seed = undefined;
+      }
     }
 
     // Sources that keep failing auth are slowed down (429) before anything is
@@ -458,6 +505,11 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       const keyId = keyFingerprint(resolution.apiKey);
       const authHash = credentialHash(String(req.headers["authorization"] ?? ""));
 
+      // A signed id only opens again for the key it was issued to.
+      if (seed && seed.key && !SessionTokens.sameKey(seed, keyId)) {
+        return sendSessionNotFound(res);
+      }
+
       // Per-key cap: recycle this key's own longest-idle session.
       evictOldest(sessions, (s) => s.keyId === keyId, MAX_SESSIONS_PER_KEY);
 
@@ -477,28 +529,72 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
 
       if (!(await readBody())) return;
 
-      const client = new UploadPostMcpClient({
-        apiKey: resolution.apiKey,
-        baseUrl: opts.baseUrl,
-        allowLocalFiles: ALLOW_LOCAL_FILES,
-      });
-      const server = opts.buildServer(client, {
-        ...clientInfoFromInitialize(body),
-        userAgent: req.headers["user-agent"],
-      });
-      const transport = stripSchemaDialect(
-        new StreamableHTTPServerTransport({
-          sessionIdGenerator: () => randomUUID(),
-          onsessioninitialized: (id) => {
-            sessions.set(id, session!);
-          },
-        })
-      );
-      transport.onclose = () => {
-        if (transport.sessionId) sessions.delete(transport.sessionId);
-      };
-      session = { transport, server, lastSeenAt: Date.now(), keyId, authHash };
-      await server.connect(transport);
+      // While the credential was being checked another request of the same
+      // session may have rebuilt it, or be doing so: use that one.
+      if (seed && sessionId) {
+        let ready = sessions.get(sessionId);
+        const underway = ready ? undefined : rebuilding.get(sessionId);
+        if (underway) ready = await underway;
+        if (ready) {
+          if (ready.keyId !== keyId) return sendSessionNotFound(res);
+          ready.lastSeenAt = Date.now();
+          session = ready;
+        }
+      }
+
+      if (!session) {
+        const client = new UploadPostMcpClient({
+          apiKey: resolution.apiKey,
+          baseUrl: opts.baseUrl,
+          allowLocalFiles: ALLOW_LOCAL_FILES,
+        });
+        const server = opts.buildServer(client, {
+          ...(seed ? seed.clientInfo : clientInfoFromInitialize(body)),
+          userAgent: req.headers["user-agent"],
+        });
+        const transport = stripSchemaDialect(
+          new StreamableHTTPServerTransport({
+            sessionIdGenerator: () =>
+              seed && sessionId ? sessionId : sessionTokens.issue(seedFromInitialize(body, keyId)),
+            onsessioninitialized: (id) => {
+              sessions.set(id, built);
+            },
+          })
+        );
+        const built: Session = { transport, server, lastSeenAt: Date.now(), keyId, authHash };
+        transport.onclose = () => {
+          const id = transport.sessionId;
+          if (id && sessions.get(id) === built) sessions.delete(id);
+        };
+        if (seed && sessionId) {
+          // Replay the client's own `initialize`, then serve this request.
+          const rebuilding_ = (async (): Promise<Session | undefined> => {
+            try {
+              await server.connect(transport);
+              await replayInitialize(transport, seed, sessionId);
+              rebuilt++;
+              return built;
+            } catch (err) {
+              process.stderr.write(
+                `[upload-post-mcp] session rebuild failed: ${(err as Error)?.message ?? err}\n`
+              );
+              if (sessions.get(sessionId) === built) sessions.delete(sessionId);
+              void transport.close().catch(() => undefined);
+              return undefined;
+            }
+          })();
+          rebuilding.set(sessionId, rebuilding_);
+          try {
+            session = await rebuilding_;
+          } finally {
+            rebuilding.delete(sessionId);
+          }
+          if (!session) return sendSessionNotFound(res);
+        } else {
+          session = built;
+          await server.connect(transport);
+        }
+      }
     }
 
     if (!(await readBody())) return;

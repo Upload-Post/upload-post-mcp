@@ -4,8 +4,9 @@
  *   - a pasted API key is checked once against GET /uploadposts/me (cached,
  *     including rejections) before a session is built for it;
  *   - /mcp request bodies over UPLOAD_POST_MCP_MAX_BODY_MB get a 413;
- *   - one credential cannot hold more than UPLOAD_POST_MCP_MAX_SESSIONS_PER_KEY
- *     sessions (its own oldest is recycled).
+ *   - one credential cannot keep more than UPLOAD_POST_MCP_MAX_SESSIONS_PER_KEY
+ *     sessions in memory (its own oldest leaves the cache), and the one that
+ *     left still answers: it is rebuilt on its next request.
  * Runs the real server against a fake API on localhost. Run after `npm run build`.
  */
 import assert from "node:assert/strict";
@@ -85,6 +86,18 @@ const auth = (key) => ({ authorization: `ApiKey ${key}` });
 
 // The server installs process-wide rejection handlers that only log, so a
 // failed assertion has to end the process explicitly.
+function cachedSessions() {
+  return new Promise((resolve, reject) => {
+    request({ host: "127.0.0.1", port: mcpPort, path: "/health" }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => resolve(JSON.parse(data).sessions));
+    })
+      .on("error", reject)
+      .end();
+  });
+}
+
 async function main() {
   // 1. A key the API rejects never gets a session, and the rejection is cached.
   let r = await post(auth("junk-key"), initialize);
@@ -103,12 +116,15 @@ async function main() {
   assert.equal(r.status, 200, r.body);
   assert.equal(meCalls, 2, "accepted key must be cached");
 
-  // 3. Per-key cap (2): a third session recycles this key's oldest one.
+  // 3. Per-key cap (2): a third session pushes this key's oldest one out of
+  //    memory, and that one is rebuilt (not refused) when it is used again.
   r = await post(auth(GOOD_KEY), initialize);
   assert.equal(r.status, 200, r.body);
+  assert.equal(await cachedSessions(), 2, "the key keeps at most 2 sessions in memory");
   const ping = JSON.stringify({ jsonrpc: "2.0", id: 2, method: "ping" });
   r = await post({ ...auth(GOOD_KEY), "mcp-session-id": first, "mcp-protocol-version": "2025-03-26" }, ping);
-  assert.equal(r.status, 404, "oldest session of the key should have been recycled");
+  assert.equal(r.status, 200, "a session that left the cache is rebuilt on its next request");
+  assert.equal(await cachedSessions(), 2, "rebuilding it pushed another one out");
 
   // 4. Oversized bodies: 413 with a JSON-RPC error, with or without Content-Length.
   const big = JSON.stringify({ jsonrpc: "2.0", id: 3, method: "initialize", params: { pad: "x".repeat(32 * 1024) } });
