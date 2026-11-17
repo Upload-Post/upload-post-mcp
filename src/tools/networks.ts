@@ -256,6 +256,17 @@ export interface NetworksViewHandles {
   resource: RegisteredResource;
 }
 
+/** `url` with the network the connection page should start with. */
+export function startingWith(url: string, network: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set("connect", network);
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 export function registerNetworksView(
   server: McpServer,
   client: UploadPostMcpClient,
@@ -350,6 +361,10 @@ export function registerNetworksView(
         profile,
         platforms: network.mode === "oauth" ? [network.id] : undefined,
       });
+      // The connection page starts this network by itself (`connect=`), so the
+      // user lands on the network's own sign-in (or on its form) without
+      // looking for the button again. The dashboard link is left as it is.
+      if (link.signed) link.connect_url = startingWith(link.connect_url, network.id);
       // The open of a connection link from the chat, which nothing recorded before.
       process.stderr.write(
         `[upload-post-mcp] connect-link opened platform=${network.id} signed=${link.signed} ` +
