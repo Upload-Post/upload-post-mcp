@@ -92,7 +92,7 @@ const SILENT_SENDER_ACTIONS = new Set(["mark_seen", "mark_read", "mute", "unmute
 
 const sendDm = (a: Args): string | undefined => {
   const platform = str(a.platform ?? "instagram");
-  const network = platform === "bluesky" ? "Bluesky" : "Instagram";
+  const network = platform === "bluesky" ? "Bluesky" : platform === "telegram" ? "Telegram" : "Instagram";
   const to = a.recipient_id !== undefined ? `recipient ${str(a.recipient_id)}` : `conversation ${str(a.conversation_id)}`;
   const action = typeof a.sender_action === "string" ? a.sender_action : undefined;
   if (action) {
@@ -102,6 +102,9 @@ const sendDm = (a: Args): string | undefined => {
     }
     if (action === "accept") return `Accepts the ${network} message request from ${to} as profile "${str(a.user)}".`;
     if (action === "leave") return `Leaves the ${network} conversation with ${to} as profile "${str(a.user)}"; it disappears from the account's inbox.`;
+    if (action === "delete" && platform === "telegram") {
+      return `Deletes ${a.message_ids !== undefined ? `messages ${list(a.message_ids)}` : `message ${str(a.message_id)}`} from the Telegram chat with ${to} for both sides, as profile "${str(a.user)}"; it cannot be undone.`;
+    }
     if (action === "delete") return `Deletes message ${str(a.message_id)} for profile "${str(a.user)}" only (the other participant keeps it).`;
     return `Runs ${action} on the ${network} conversation with ${to} as profile "${str(a.user)}".`;
   }

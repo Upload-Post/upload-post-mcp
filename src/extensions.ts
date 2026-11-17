@@ -296,6 +296,52 @@ export function applySecondWaveParameters(server: McpServer): void {
 
   widen("get_analytics", (s) => retype(s, "platforms", z.array(AnalyticsPlatformWithTelegram).optional()), "Telegram returns `followers` (subscribers or members), `boosts_active` and the chat's title and link; Telegram reports no views.");
 
+  // Telegram DMs: the profile's own bot talking to people in private chats.
+  widen(
+    "send_dm",
+    (s) => {
+      retype(s, "platform", z.enum(["instagram", "bluesky", "telegram"]).describe("DM platform: 'instagram', 'bluesky' or 'telegram'."));
+      retype(
+        s,
+        "buttons",
+        z
+          .union([(s.buttons as z.ZodOptional<z.ZodTypeAny>).unwrap(), z.array(z.union([z.record(z.unknown()), z.array(z.record(z.unknown()))])).max(100)])
+          .optional()
+          .describe(
+            "Instagram: up to 3 web_url buttons { title, url }. Telegram: inline buttons, a flat list or rows of { text, url } or { text, callback_data } (up to 100)."
+          )
+      );
+      retype(
+        s,
+        "attachments",
+        z
+          .union([(s.attachments as z.ZodOptional<z.ZodTypeAny>).unwrap(), z.array(z.record(z.unknown())).max(10)])
+          .optional()
+          .describe(
+            "Bluesky: one post to share, { type: 'post', url }. Telegram: up to 10 files [{ type: photo|video|document|audio|voice|animation|sticker|video_note, url or media_id (a Telegram file_id), caption }]; several go as one album (photos and videos together, or only documents, or only audios)."
+          )
+      );
+      retype(s, "reply_to", z.union([z.string(), z.number().int()]).optional().describe("Bluesky: id of the message this DM replies to. Telegram: message_id in that chat."));
+      retype(
+        s,
+        "sender_action",
+        z
+          .string()
+          .optional()
+          .describe(
+            "Act on the conversation instead of sending text. Bluesky: mark_seen/mark_read, react, unreact, delete, accept, mute, unmute, leave. Telegram: typing (and the other chat actions: upload_photo, record_video, upload_video, record_voice, upload_voice, upload_document, choose_sticker, find_location, record_video_note, upload_video_note), react / unreact (`message_id`, `reaction`), delete (`message_id` or `message_ids`; gone for both sides), and in Business chats mark_read and edit_checklist (with `business_connection_id`)."
+          )
+      );
+      s.business_connection_id = z.string().optional().describe("Telegram: send as the connected Telegram Business account (manage_telegram_business connections).");
+      s.parse_mode = z.enum(["MarkdownV2", "HTML", "Markdown"]).optional().describe("Telegram: text formatting.");
+      s.location = z.record(z.unknown()).optional().describe("Telegram: { latitude, longitude } or a venue with title and address.");
+      s.contact = z.record(z.unknown()).optional().describe("Telegram: { phone_number, first_name, last_name?, vcard? }.");
+      s.checklist = z.record(z.unknown()).optional().describe("Telegram Business: an InputChecklist { title, tasks: [{ id, text }] } (1-30 tasks); needs business_connection_id.");
+      s.message_ids = z.array(z.union([z.number().int(), z.string()])).min(1).max(100).optional().describe("Telegram: sender_action delete for up to 100 messages.");
+    },
+    "Telegram (the profile's own bot): `recipient_id` is the person's numeric chat id (sender.id of a dm_received event); only private chats (groups and channels: 403 telegram_private_chats_only, publish there with the upload tools); text up to 4096 characters. 403 telegram_recipient_not_started (the person never started the bot) or telegram_recipient_blocked; 504 telegram_send_unconfirmed means it may have been sent: list the conversation before retrying."
+  );
+
   widen("list_dm_conversations", (s) => {
     s.kind = z.literal("direct").optional().describe("Bluesky only: only direct (1:1) conversations.");
     s.view = z
@@ -306,5 +352,15 @@ export function applySecondWaveParameters(server: McpServer): void {
       .literal("unread_counts")
       .optional()
       .describe("Bluesky only: add `unread_counts` {accepted, request} to the answer.");
-  });
+    const platformHelp = s.platform?.description ?? "";
+    s.platform = z
+      .string()
+      .optional()
+      .describe(platformHelp.replace("or 'bluesky'.", "'bluesky' or 'telegram'."));
+    s.business_connection_id = z
+      .string()
+      .optional()
+      .describe("Telegram only: the chats of this connected Telegram Business account instead of the bot's.");
+    s.include_profile_photos = z.boolean().optional().describe("Telegram only: add each participant's profile photo.");
+  }, "Telegram (`platform: \"telegram\"`): the private chats of the profile's own bot, with `participant_id` = the person's numeric chat id (what send_dm takes as recipient_id). It needs the bot's updates on (manage_telegram_bot set_updates); otherwise 409 telegram_updates_not_enabled. Files people send come with a `media_id` (a Telegram file_id), which send_dm attachments can send again.");
 }
