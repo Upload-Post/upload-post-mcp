@@ -22,6 +22,7 @@ import { ApiKeyChecker, keyFingerprint } from "./api_key_check.js";
 import { AuthFailureLimiter, clientAddress } from "./auth_failure_limiter.js";
 import {
   SessionTokens,
+  hasInitialize,
   isLegacySessionId,
   legacySeed,
   replayInitialize,
@@ -55,6 +56,12 @@ interface Session {
    * is unreachable.
    */
   authHash: string;
+  /**
+   * Rebuilt from an id that is bound to no key (issued before ids were
+   * signed): whoever presents such an id first gets the session, so it never
+   * serves a request that does not carry its own credential.
+   */
+  strictAuth: boolean;
 }
 
 function credentialHash(header: string): string {
@@ -73,6 +80,8 @@ const SESSION_IDLE_TTL_MS = Number(
   process.env.UPLOAD_POST_MCP_SESSION_TTL_MS ?? 30 * 60 * 1000
 );
 const SESSION_SWEEP_INTERVAL_MS = 60 * 1000;
+const ENDED_SESSION_MS = 60 * 60 * 1000;
+const ENDED_SESSIONS_KEPT = 20000;
 const MAX_SESSIONS = Number(process.env.UPLOAD_POST_MCP_MAX_SESSIONS ?? 2000);
 // One credential cannot keep more than this many sessions in memory: past it,
 // its own longest-idle one leaves the cache, so no single key can fill it and
@@ -158,9 +167,19 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
   if (!sessionTokens.durable) {
     process.stderr.write(
       "[upload-post-mcp] UPLOAD_POST_MCP_SESSION_SECRET is not set: session ids are signed with a " +
-        "key made up at start, so sessions opened now are rebuilt as plain ones after a restart\n"
+        "key made up at start, so after a restart clients get a 404 and re-initialize\n"
     );
   }
+  // Sessions a client ended with DELETE: their id answers 404 from then on
+  // (in this process, for a while), as the spec asks of a terminated session.
+  const ended = new Map<string, number>();
+  const markEnded = (id: string): void => {
+    if (ended.size >= ENDED_SESSIONS_KEPT) {
+      const oldest = ended.keys().next().value;
+      if (oldest !== undefined) ended.delete(oldest);
+    }
+    ended.set(id, Date.now() + ENDED_SESSION_MS);
+  };
 
   const oauthCfg = loadOAuthConfig();
   const upstream = new UpstreamOAuthClient(oauthCfg);
@@ -261,7 +280,13 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(
-        JSON.stringify({ ok: true, oauth: oauthCfg.enabled, sessions: sessions.size, rebuilt })
+        JSON.stringify({
+          ok: true,
+          oauth: oauthCfg.enabled,
+          sessions: sessions.size,
+          rebuilt,
+          durableSessions: sessionTokens.durable,
+        })
       );
       return;
     }
@@ -325,9 +350,9 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     }
 
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    if (sessionId && ended.has(sessionId)) return sendSessionNotFound(res);
     // A session that is being rebuilt is used once its handshake is replayed.
-    const settling = sessionId ? rebuilding.get(sessionId) : undefined;
-    if (settling) await settling;
+    while (sessionId && rebuilding.has(sessionId)) await rebuilding.get(sessionId);
     let session = sessionId ? sessions.get(sessionId) : undefined;
 
     // A session id that is not in memory was swept (idle TTL, full cache) or
@@ -352,12 +377,6 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       // A rebuild needs the credential (the id is not one). Without it the
       // client is told to start over, as before.
       if (req.headers["authorization"] === undefined) return sendSessionNotFound(res);
-      const underway = rebuilding.get(sessionId);
-      if (underway) {
-        session = await underway;
-        if (!session) return sendSessionNotFound(res);
-        seed = undefined;
-      }
     }
 
     // Sources that keep failing auth are slowed down (429) before anything is
@@ -439,6 +458,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       if (REQUIRE_SESSION_AUTH) {
         return refuse();
       }
+      if (session.strictAuth) return sendSessionNotFound(res);
       const agent = String(req.headers["user-agent"] ?? "-").slice(0, 120);
       process.stderr.write(
         `[upload-post-mcp] session-without-credential ${req.method ?? "?"} ua="${agent}"\n`
@@ -505,11 +525,6 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       const keyId = keyFingerprint(resolution.apiKey);
       const authHash = credentialHash(String(req.headers["authorization"] ?? ""));
 
-      // A signed id only opens again for the key it was issued to.
-      if (seed && seed.key && !SessionTokens.sameKey(seed, keyId)) {
-        return sendSessionNotFound(res);
-      }
-
       // Per-key cap: recycle this key's own longest-idle session.
       evictOldest(sessions, (s) => s.keyId === keyId, MAX_SESSIONS_PER_KEY);
 
@@ -529,12 +544,21 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
 
       if (!(await readBody())) return;
 
+      // A client that sends `initialize` is starting over: it gets a new
+      // session, whatever id it still carries.
+      if (seed && hasInitialize(body)) seed = undefined;
+
+      // A signed id only opens again for the key it was issued to.
+      if (seed && !seed.legacy && !sessionTokens.sameKey(seed, keyId)) {
+        return sendSessionNotFound(res);
+      }
+
       // While the credential was being checked another request of the same
-      // session may have rebuilt it, or be doing so: use that one.
+      // session may have rebuilt it, or be doing so: use that one. From the
+      // end of this loop to `rebuilding.set` below nothing awaits.
       if (seed && sessionId) {
-        let ready = sessions.get(sessionId);
-        const underway = ready ? undefined : rebuilding.get(sessionId);
-        if (underway) ready = await underway;
+        while (rebuilding.has(sessionId)) await rebuilding.get(sessionId);
+        const ready = sessions.get(sessionId);
         if (ready) {
           if (ready.keyId !== keyId) return sendSessionNotFound(res);
           ready.lastSeenAt = Date.now();
@@ -550,18 +574,33 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
         });
         const server = opts.buildServer(client, {
           ...(seed ? seed.clientInfo : clientInfoFromInitialize(body)),
-          userAgent: req.headers["user-agent"],
+          // The surface a session had depends on the User-Agent it was opened
+          // with, not on the one of the request that happens to rebuild it.
+          userAgent: seed ? seed.userAgent : req.headers["user-agent"],
         });
         const transport = stripSchemaDialect(
           new StreamableHTTPServerTransport({
             sessionIdGenerator: () =>
-              seed && sessionId ? sessionId : sessionTokens.issue(seedFromInitialize(body, keyId)),
+              seed && sessionId
+                ? sessionId
+                : sessionTokens.issue(seedFromInitialize(body, req.headers["user-agent"]), keyId),
             onsessioninitialized: (id) => {
+              const previous = sessions.get(id);
               sessions.set(id, built);
+              if (previous && previous !== built) {
+                void previous.transport.close().catch(() => undefined);
+              }
             },
           })
         );
-        const built: Session = { transport, server, lastSeenAt: Date.now(), keyId, authHash };
+        const built: Session = {
+          transport,
+          server,
+          lastSeenAt: Date.now(),
+          keyId,
+          authHash,
+          strictAuth: Boolean(seed?.legacy),
+        };
         transport.onclose = () => {
           const id = transport.sessionId;
           if (id && sessions.get(id) === built) sessions.delete(id);
@@ -587,7 +626,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
           try {
             session = await rebuilding_;
           } finally {
-            rebuilding.delete(sessionId);
+            if (rebuilding.get(sessionId) === rebuilding_) rebuilding.delete(sessionId);
           }
           if (!session) return sendSessionNotFound(res);
         } else {
@@ -599,6 +638,7 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
 
     if (!(await readBody())) return;
 
+    if (method === "DELETE" && sessionId) markEnded(sessionId);
     await session.transport.handleRequest(req, res, body);
    } catch (err) {
     // Any throw/rejection from the request path lands here instead of becoming
@@ -626,6 +666,9 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     introspectCache.purgeExpired();
     keyChecker.purgeExpired();
     authFailures.purgeExpired();
+    for (const [id, until] of ended) {
+      if (until < Date.now()) ended.delete(id);
+    }
     const cutoff = Date.now() - SESSION_IDLE_TTL_MS;
     let swept = 0;
     for (const [id, s] of sessions) {

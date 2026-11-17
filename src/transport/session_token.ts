@@ -12,17 +12,25 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
  * only a cache and nothing has to be stored anywhere.
  *
  * The id is not a credential: it holds no key and every request still has to
- * present its own `Authorization`. It only names the key it was opened with
- * (a short fingerprint), so it cannot be replayed with someone else's.
+ * present its own `Authorization`. It only carries a keyed digest of the key
+ * it was opened with, so it cannot be replayed with someone else's.
  */
 
-/** What `initialize` told the server, kept to replay it. */
+/** What the server knew when the session was opened, kept to open it again. */
 export interface SessionSeed {
-  /** Fingerprint prefix of the API key the session was opened with. */
+  /**
+   * Keyed digest of the fingerprint of the API key the session was opened
+   * with (not the fingerprint itself: ids show up in logs, and a plain one
+   * would tell which sessions belong to the same account). Empty on a legacy id.
+   */
   key: string;
   protocolVersion?: string;
   clientInfo?: { name?: string; version?: string };
   capabilities?: Record<string, unknown>;
+  /** User-Agent of the request that opened the session: part of how the tool surface is chosen. */
+  userAgent?: string;
+  /** True for an id issued before ids were signed: it is bound to no key. */
+  legacy?: boolean;
 }
 
 const PREFIX = "s1";
@@ -31,6 +39,7 @@ const KEY_PREFIX_LENGTH = 24;
 const MAX_CAPABILITIES_BYTES = 1024;
 /** A session id travels in a header on every request: keep it bounded. */
 const MAX_TOKEN_LENGTH = 4096;
+const MAX_USER_AGENT_LENGTH = 160;
 
 function clip(value: unknown, max: number): string | undefined {
   return typeof value === "string" && value.length > 0 ? value.slice(0, max) : undefined;
@@ -48,9 +57,18 @@ function compactCapabilities(value: unknown): Record<string, unknown> | undefine
   return {};
 }
 
-/** The parts of an `initialize` request (single or batched) worth keeping. */
-export function seedFromInitialize(body: unknown, keyFingerprint: string): SessionSeed {
-  const seed: SessionSeed = { key: keyFingerprint.slice(0, KEY_PREFIX_LENGTH) };
+/** Whether `body` (single or batched) carries an `initialize` request. */
+export function hasInitialize(body: unknown): boolean {
+  const messages = Array.isArray(body) ? body : [body];
+  return messages.some(
+    (message) =>
+      Boolean(message) && typeof message === "object" && (message as { method?: unknown }).method === "initialize"
+  );
+}
+
+/** The parts of an `initialize` request (single or batched) worth keeping. `key` is set by `issue`. */
+export function seedFromInitialize(body: unknown, userAgent?: unknown): SessionSeed {
+  const seed: SessionSeed = { key: "", userAgent: clip(userAgent, MAX_USER_AGENT_LENGTH) };
   const messages = Array.isArray(body) ? body : [body];
   for (const message of messages) {
     if (!message || typeof message !== "object") continue;
@@ -78,15 +96,18 @@ export function isLegacySessionId(id: string): boolean {
 
 /**
  * Seed for a legacy id. Such an id says nothing about the client, so the
- * replayed `initialize` names it after the product token of its User-Agent
- * (`openai-mcp/1.0.0 (...)` gives `openai-mcp` / `1.0.0`): the same name the
- * client gave when it opened the session, which keeps the tool surface it had.
+ * replayed `initialize` names it after its whole User-Agent: the tool surface
+ * is chosen by matching the client's name or User-Agent against one pattern,
+ * and with the same text in both the choice does not depend on which is read.
  */
 export function legacySeed(userAgent: unknown): SessionSeed {
-  const product = /^([^\/\s]+)(?:\/(\S+))?/.exec(typeof userAgent === "string" ? userAgent : "");
+  const agent = clip(userAgent, MAX_USER_AGENT_LENGTH);
+  const version = /^[^\/\s]+\/(\S+)/.exec(agent ?? "")?.[1];
   return {
     key: "",
-    clientInfo: { name: clip(product?.[1], 80), version: clip(product?.[2], 40) },
+    legacy: true,
+    userAgent: agent,
+    clientInfo: { name: clip(agent, 80), version: clip(version, 40) },
   };
 }
 
@@ -105,15 +126,24 @@ export class SessionTokens {
     return createHmac("sha256", this.secret).update(`${PREFIX}.${payload}`).digest();
   }
 
-  /** A new session id for `seed`. Unique: every id carries its own nonce. */
-  issue(seed: SessionSeed): string {
+  /** What an id says about the key it belongs to. */
+  private keyMark(fingerprint: string): string {
+    return createHmac("sha256", this.secret)
+      .update(`key.${fingerprint}`)
+      .digest("base64url")
+      .slice(0, KEY_PREFIX_LENGTH);
+  }
+
+  /** A new session id for `seed`, bound to the key with that fingerprint. Unique: every id carries its own nonce. */
+  issue(seed: SessionSeed, fingerprint: string): string {
     const payload = Buffer.from(
       JSON.stringify({
         n: randomBytes(9).toString("base64url"),
-        k: seed.key.slice(0, KEY_PREFIX_LENGTH),
+        k: this.keyMark(fingerprint),
         p: seed.protocolVersion,
         c: seed.clientInfo,
         x: seed.capabilities,
+        u: seed.userAgent,
       }),
       "utf8"
     ).toString("base64url");
@@ -126,13 +156,9 @@ export class SessionTokens {
     const parts = id.split(".");
     if (parts.length !== 3 || parts[0] !== PREFIX) return undefined;
     const [, payload, signature] = parts;
-    let given: Buffer;
-    try {
-      given = Buffer.from(signature, "base64url");
-    } catch {
-      return undefined;
-    }
-    const expected = this.sign(payload);
+    // Compared as text: decoding would accept several spellings of one signature.
+    const given = Buffer.from(signature, "utf8");
+    const expected = Buffer.from(this.sign(payload).toString("base64url"), "utf8");
     if (given.length !== expected.length || !timingSafeEqual(given, expected)) return undefined;
     try {
       const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
@@ -140,6 +166,7 @@ export class SessionTokens {
         p?: unknown;
         c?: unknown;
         x?: unknown;
+        u?: unknown;
       };
       if (typeof data.k !== "string" || data.k.length === 0) return undefined;
       const seed: SessionSeed = { key: data.k };
@@ -151,15 +178,18 @@ export class SessionTokens {
       if (data.x && typeof data.x === "object" && !Array.isArray(data.x)) {
         seed.capabilities = data.x as Record<string, unknown>;
       }
+      seed.userAgent = clip(data.u, MAX_USER_AGENT_LENGTH);
       return seed;
     } catch {
       return undefined;
     }
   }
 
-  /** Whether `fingerprint` (full key fingerprint) is the key `seed` was opened with. */
-  static sameKey(seed: SessionSeed, fingerprint: string): boolean {
-    return seed.key === fingerprint.slice(0, KEY_PREFIX_LENGTH);
+  /** Whether the key with that fingerprint is the one `seed` was opened with. */
+  sameKey(seed: SessionSeed, fingerprint: string): boolean {
+    const mark = Buffer.from(this.keyMark(fingerprint), "utf8");
+    const given = Buffer.from(seed.key, "utf8");
+    return given.length === mark.length && timingSafeEqual(given, mark);
   }
 }
 

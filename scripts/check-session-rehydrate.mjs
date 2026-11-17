@@ -11,12 +11,22 @@
  *   - ids from before (plain UUIDs) are served too, shaped by the User-Agent;
  *   - a session that left the in-memory cache (cap, idle sweep) keeps working;
  *   - concurrent requests of one session rebuild it once;
- *   - DELETE of a session this process does not hold is a no-op 200.
+ *   - DELETE of a session this process does not hold is a no-op 200, and a
+ *     session ended with DELETE answers 404 afterwards;
+ *   - an `initialize` that still carries an old id opens a new session;
+ *   - with UPLOAD_POST_MCP_REQUIRE_SESSION_AUTH off (second pass, in a child
+ *     process), a session rebuilt from a legacy id never serves a request that
+ *     has no credential.
  * Runs two real servers against a fake API on localhost. Run after `npm run build`.
  */
 import assert from "node:assert/strict";
 import { createServer, request } from "node:http";
 import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+// Second pass: the same servers with session auth not enforced.
+const LENIENT = process.env.CHECK_SESSION_REHYDRATE_PASS === "lenient";
 
 // key-slow answers late, so requests that wait for its check resume together.
 const KEYS = new Set(["key-a", "key-b", "key-slow"]);
@@ -36,7 +46,7 @@ await new Promise((r) => fakeApi.listen(0, "127.0.0.1", r));
 const apiPort = fakeApi.address().port;
 
 process.env.UPLOAD_POST_MCP_ACCESS_LOG = "off";
-process.env.UPLOAD_POST_MCP_REQUIRE_SESSION_AUTH = "true";
+process.env.UPLOAD_POST_MCP_REQUIRE_SESSION_AUTH = LENIENT ? "false" : "true";
 process.env.UPLOAD_POST_MCP_SESSION_SECRET = "check-session-rehydrate";
 process.env.UPLOAD_POST_MCP_MAX_SESSIONS = "6";
 process.env.UPLOAD_POST_MCP_AUTH_FAIL_MAX = "0";
@@ -141,6 +151,22 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 try {
+if (LENIENT) {
+  // A session opened here still accepts a request without Authorization
+  // (logged), as before.
+  const lenient = await open(A, "key-a", "claude-ai");
+  assert.equal((await tools(A, undefined, lenient)).status, 200, "unchanged for sessions opened by their owner");
+  // A legacy id is bound to no key: whoever presents it first gets the
+  // session, so it must not serve the next request that has no credential.
+  const stolen = randomUUID();
+  assert.equal((await tools(B, "key-b", stolen)).status, 200, "a legacy id is rebuilt for the key that presents it");
+  assert.equal((await tools(B, undefined, stolen)).status, 404, "but never serves a request without a credential");
+  assert.equal((await tools(B, "key-a", stolen)).status, 404, "nor one with another key");
+  assert.equal((await tools(B, "key-b", stolen)).status, 200);
+  console.log("check-session-rehydrate (session auth off): ok");
+  process.exit(0);
+}
+
 // 1. Signed ids, and the same surface on another process.
 const chatgpt = await open(A, "key-a", "openai-mcp", "openai-mcp/1.0.0");
 const claude = await open(A, "key-a", "claude-ai", "Claude-User");
@@ -156,9 +182,18 @@ assert.equal(chatgptOnB.status, 200, "a session opened on A is served by B");
 assert.deepEqual(chatgptOnB.names, chatgptOnA.names, "ChatGPT keeps its surface after a rebuild");
 const claudeOnB = await tools(B, "key-a", claude, { "user-agent": "Claude-User" });
 assert.deepEqual(claudeOnB.names, claudeOnA.names, "other clients keep theirs");
-// The surface comes from the id, not from the User-Agent of the request.
-const claudeNoAgent = await tools(B, "key-a", await open(A, "key-a", "claude-ai"), {});
-assert.deepEqual(claudeNoAgent.names, claudeOnA.names);
+// The surface comes from the id, not from the User-Agent of the request that
+// rebuilds the session.
+const asOpenAi = await tools(B, "key-a", await open(A, "key-a", "claude-ai", "Claude-User"), {
+  "user-agent": "openai-mcp/1.0.0",
+});
+assert.deepEqual(asOpenAi.names, claudeOnA.names, "an OpenAI User-Agent does not turn a session into ChatGPT's");
+const noAgent = await tools(B, "key-a", await open(A, "key-a", "openai-mcp", "openai-mcp/1.0.0"), {});
+assert.deepEqual(noAgent.names, chatgptOnA.names, "and a missing one does not take ChatGPT's away");
+// A client whose name says nothing and whose User-Agent is OpenAI's.
+const odd = await open(A, "key-a", "some-client", "openai-mcp/1.0.0");
+const oddOnA = await tools(A, "key-a", odd, { "user-agent": "openai-mcp/1.0.0" });
+assert.deepEqual((await tools(B, "key-a", odd, {})).names, oddOnA.names, "rebuilt exactly as it was opened");
 
 // A tool call works on the rebuilt session.
 const listUsers = await call(B, {
@@ -177,6 +212,14 @@ const tampered = other.slice(0, -3) + (other.endsWith("AAA") ? "BBB" : "AAA");
 assert.equal((await tools(B, "key-a", tampered)).status, 404, "a tampered id is unknown");
 assert.equal((await tools(B, "key-a", "not-a-session")).status, 404, "an unknown id is unknown");
 const [prefix, payload, signature] = other.split(".");
+// The last character of the signature carries padding bits: its other
+// spellings decode to the same bytes and must not be accepted.
+const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+const last = alphabet.indexOf(signature.at(-1));
+for (const twin of [1, 2, 3].map((bits) => alphabet[last ^ bits])) {
+  const respelled = `${prefix}.${payload}.${signature.slice(0, -1)}${twin}`;
+  assert.equal((await tools(B, "key-a", respelled)).status, 404, "one spelling per signature");
+}
 const forged = Buffer.from(
   JSON.stringify({ ...JSON.parse(Buffer.from(payload, "base64url")), c: { name: "openai-mcp" } })
 ).toString("base64url");
@@ -188,6 +231,11 @@ assert.equal(legacyChatgpt.status, 200, "a legacy id is served");
 assert.deepEqual(legacyChatgpt.names, chatgptOnA.names, "a legacy ChatGPT session keeps ChatGPT's surface");
 const legacyClaude = await tools(B, "key-a", randomUUID(), { "user-agent": "Claude-User" });
 assert.deepEqual(legacyClaude.names, claudeOnA.names, "a legacy session of another client keeps its surface");
+// The name is not always the first word of the User-Agent.
+const legacyBrowserLike = await tools(B, "key-a", randomUUID(), {
+  "user-agent": "Mozilla/5.0 (compatible; openai-mcp/1.0.0)",
+});
+assert.deepEqual(legacyBrowserLike.names, chatgptOnA.names, "matched on the whole User-Agent");
 
 // 4. Leaving the cache (cap of 6 here) ends nothing.
 const first = await open(A, "key-a", "claude-ai");
@@ -209,6 +257,32 @@ assert.equal(after.rebuilt - before.rebuilt, 1, "one rebuild for eight concurren
 const gone = await open(A, "key-a", "claude-ai");
 assert.equal((await call(B, { method: "DELETE", headers: { ...auth("key-a"), "mcp-session-id": gone } })).status, 200);
 assert.equal((await call(B, { method: "DELETE", headers: { "mcp-session-id": "not-a-session" } })).status, 404);
+// A session ended by its client stays ended.
+const ending = await open(A, "key-a", "claude-ai");
+assert.equal((await call(A, { method: "DELETE", headers: { ...auth("key-a"), "mcp-session-id": ending } })).status, 200);
+assert.equal((await tools(A, "key-a", ending)).status, 404, "a session ended with DELETE is not rebuilt");
+
+// 7. `initialize` with an id still attached starts a new session.
+const stale = await open(A, "key-a", "claude-ai");
+const again = await call(B, {
+  headers: { ...auth("key-a"), "mcp-session-id": stale },
+  body: {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "openai-mcp", version: "1.0.0" } },
+  },
+});
+assert.equal(again.status, 200, `initialize with an old id: ${again.raw.slice(0, 200)}`);
+assert.ok(again.headers["mcp-session-id"] && again.headers["mcp-session-id"] !== stale, "a new session id");
+assert.equal((await health(B)).durableSessions, true);
+
+// Second pass, with session auth not enforced.
+const lenientPass = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], {
+  env: { ...process.env, CHECK_SESSION_REHYDRATE_PASS: "lenient" },
+  encoding: "utf8",
+});
+assert.equal(lenientPass.status, 0, `lenient pass failed:\n${lenientPass.stdout}${lenientPass.stderr}`);
 
 console.log("check-session-rehydrate: ok");
 process.exit(0);
