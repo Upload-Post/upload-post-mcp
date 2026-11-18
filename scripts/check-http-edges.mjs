@@ -5,7 +5,9 @@
  *     the 400 the SDK transport gives an uninitialized server, without a
  *     server being built for it and without pushing a live session out of
  *     the cache; a 401 still comes first when there is no credential;
- *   - /mcp. and /mcp/ (with or without a query) are the MCP endpoint too.
+ *   - /mcp. and /mcp/ (with or without a query) are the MCP endpoint too;
+ *   - a new GET stream of a session replaces the previous one (no 409), and
+ *     server messages go to the new one.
  * Runs the real server against a fake API on localhost. Run after `npm run build`.
  */
 import assert from "node:assert/strict";
@@ -35,12 +37,13 @@ process.env.OAUTH_ISSUER = "";
 const { runHttp } = await import("../dist/transport/http.js");
 const { buildServer } = await import("../dist/server.js");
 let builds = 0;
+let lastServer;
 await runHttp({
   port: mcpPort,
   baseUrl: `http://127.0.0.1:${apiPort}/api`,
   buildServer: (...args) => {
     builds++;
-    return buildServer(...args);
+    return (lastServer = buildServer(...args));
   },
 });
 
@@ -152,6 +155,51 @@ async function main() {
     r = await call("POST", path, { ...ACCEPT, ...auth }, initialize);
     assert.equal(r.status, 404, path);
   }
+
+  // A second GET stream of a session replaces the first one (a client that
+  // reconnects after losing it) instead of getting 409.
+  r = await call("POST", "/mcp", { ...ACCEPT, ...auth }, initialize);
+  const sid = r.headers["mcp-session-id"];
+  const sseHeaders = { accept: "text/event-stream", ...auth, "mcp-session-id": sid, "mcp-protocol-version": "2025-03-26" };
+  const first = await openStream(sseHeaders);
+  assert.equal(first.status, 200);
+  const second = await openStream(sseHeaders);
+  assert.equal(second.status, 200, "the new stream is accepted");
+  await Promise.race([
+    first.ended,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("the old stream was not closed")), 2000)),
+  ]);
+  // The new stream is the live one: a server-initiated message reaches it.
+  const got = new Promise((resolve, reject) => {
+    let seen = "";
+    second.res.on("data", (c) => {
+      seen += c;
+      if (seen.includes("notifications/tools/list_changed")) resolve();
+    });
+    setTimeout(() => reject(new Error("the new stream got no server message")), 2000);
+  });
+  lastServer.sendToolListChanged();
+  await got;
+  r = await call(
+    "POST",
+    "/mcp",
+    { ...ACCEPT, ...auth, "mcp-session-id": sid, "mcp-protocol-version": "2025-03-26" },
+    toolsList
+  );
+  assert.equal(r.status, 200, r.body);
+  second.res.destroy();
+}
+
+function openStream(headers) {
+  return new Promise((resolve, reject) => {
+    const req = request({ host: "127.0.0.1", port: mcpPort, path: "/mcp", method: "GET", headers }, (res) => {
+      const ended = new Promise((done) => res.on("close", done));
+      res.on("data", () => {});
+      resolve({ status: res.statusCode, res, ended });
+    });
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 main().then(

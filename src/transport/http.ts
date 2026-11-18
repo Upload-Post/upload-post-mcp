@@ -648,6 +648,13 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     if (!(await readBody())) return;
 
     if (method === "DELETE" && sessionId) markEnded(sessionId);
+    // A session has one GET stream for server messages. A client opening a
+    // new one has lost the old one (the spec lets it reconnect at any time),
+    // often without the server noticing yet: the new stream replaces it
+    // instead of being refused with 409.
+    if (method === "GET" && sessionId && String(req.headers["accept"] ?? "").includes("text/event-stream")) {
+      session.transport.closeStandaloneSSEStream();
+    }
     await session.transport.handleRequest(req, res, body);
    } catch (err) {
     // Any throw/rejection from the request path lands here instead of becoming
