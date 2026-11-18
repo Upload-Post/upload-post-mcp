@@ -291,8 +291,14 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       // RFC 9728 §3.1 / RFC 8414 §3.1: clients that never saw our 401 build
       // the metadata URL by inserting the well-known prefix before the
       // resource path, i.e. `/.well-known/<name>/mcp`. Serve both shapes.
+      // Some append it to the resource URL instead (`/mcp/.well-known/...`),
+      // so the protected resource metadata is served there as well.
       const wellKnown = requestPath(url).replace(/\/mcp$/, "");
-      if (method === "GET" && wellKnown === "/.well-known/oauth-protected-resource") {
+      if (
+        method === "GET" &&
+        (wellKnown === "/.well-known/oauth-protected-resource" ||
+          wellKnown === "/mcp/.well-known/oauth-protected-resource")
+      ) {
         return serveJson(res, protectedResourceMetadata(oauthCfg));
       }
       if (method === "GET" && wellKnown === "/.well-known/oauth-authorization-server") {
