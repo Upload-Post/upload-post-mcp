@@ -2,6 +2,7 @@ import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { ClientInfoLike } from "../client_profile.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { JSONRPCMessageSchema } from "@modelcontextprotocol/sdk/types.js";
 import { UploadPostMcpClient } from "../client.js";
 
 import { loadOAuthConfig } from "../oauth/config.js";
@@ -517,24 +518,12 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       const keyId = keyFingerprint(resolution.apiKey);
       const authHash = credentialHash(String(req.headers["authorization"] ?? ""));
 
-      // Per-key cap: recycle this key's own longest-idle session.
-      evictOldest(sessions, (s) => s.keyId === keyId, MAX_SESSIONS_PER_KEY);
-
-      // Cap enforcement: evict the longest-idle session rather than refusing
-      // the new one — the evicted client can always re-initialize.
-      if (sessions.size >= MAX_SESSIONS) {
-        let oldestId: string | undefined;
-        let oldestSeen = Infinity;
-        for (const [id, s] of sessions) {
-          if (s.lastSeenAt < oldestSeen) {
-            oldestSeen = s.lastSeenAt;
-            oldestId = id;
-          }
-        }
-        if (oldestId) closeSession(sessions, oldestId);
-      }
-
       if (!(await readBody())) return;
+
+      // Without a session id only `initialize` can open a session (MCP
+      // lifecycle). Anything else gets the answer the SDK transport gives an
+      // uninitialized server, here, without building one for it.
+      if (!sessionId && answersNotInitialized(req, body)) return sendNotInitialized(res);
 
       // A client that sends `initialize` is starting over: it gets a new
       // session, whatever id it still carries.
@@ -559,6 +548,23 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       }
 
       if (!session) {
+        // Per-key cap: recycle this key's own longest-idle session.
+        evictOldest(sessions, (s) => s.keyId === keyId, MAX_SESSIONS_PER_KEY);
+
+        // Cap enforcement: evict the longest-idle session rather than refusing
+        // the new one — the evicted client can always re-initialize.
+        if (sessions.size >= MAX_SESSIONS) {
+          let oldestId: string | undefined;
+          let oldestSeen = Infinity;
+          for (const [id, s] of sessions) {
+            if (s.lastSeenAt < oldestSeen) {
+              oldestSeen = s.lastSeenAt;
+              oldestId = id;
+            }
+          }
+          if (oldestId) closeSession(sessions, oldestId);
+        }
+
         const client = new UploadPostMcpClient({
           apiKey: resolution.apiKey,
           baseUrl: opts.baseUrl,
@@ -749,6 +755,44 @@ function sendBodyTooLarge(req: IncomingMessage, res: ServerResponse): void {
   );
   // Discard whatever of the body is still unread; the connection closes.
   req.resume();
+}
+
+/**
+ * Whether the SDK transport of a server that was never initialized would
+ * answer this request (which has no session id) with its 400 "Server not
+ * initialized": the request is well formed and is not an `initialize`.
+ * Malformed requests (wrong Accept or Content-Type, not JSON-RPC) and other
+ * methods still reach the SDK, so its answer to them does not change.
+ */
+function answersNotInitialized(req: IncomingMessage, body: unknown): boolean {
+  const accept = String(req.headers["accept"] ?? "");
+  switch (req.method) {
+    case "DELETE":
+      return true;
+    case "GET":
+      return accept.includes("text/event-stream");
+    case "POST": {
+      if (!accept.includes("application/json") || !accept.includes("text/event-stream")) return false;
+      if (!String(req.headers["content-type"] ?? "").includes("application/json")) return false;
+      const messages = Array.isArray(body) ? body : [body];
+      if (body === undefined || !messages.every((m) => JSONRPCMessageSchema.safeParse(m).success)) return false;
+      return !hasInitialize(body);
+    }
+    default:
+      return false;
+  }
+}
+
+function sendNotInitialized(res: ServerResponse): void {
+  res.statusCode = 400;
+  res.setHeader("content-type", "application/json");
+  res.end(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Bad Request: Server not initialized" },
+      id: null,
+    })
+  );
 }
 
 function sendSessionNotFound(res: ServerResponse): void {

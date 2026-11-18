@@ -1,0 +1,146 @@
+#!/usr/bin/env node
+/**
+ * Regression check for requests on /mcp that cannot be served by a session:
+ *   - without Mcp-Session-Id, only `initialize` opens one. Anything else gets
+ *     the 400 the SDK transport gives an uninitialized server, without a
+ *     server being built for it and without pushing a live session out of
+ *     the cache; a 401 still comes first when there is no credential.
+ * Runs the real server against a fake API on localhost. Run after `npm run build`.
+ */
+import assert from "node:assert/strict";
+import { createServer, request } from "node:http";
+
+const GOOD_KEY = "good-key";
+
+const fakeApi = createServer((req, res) => {
+  req.resume();
+  if (req.url === "/api/uploadposts/me") {
+    const ok = req.headers.authorization === `Apikey ${GOOD_KEY}`;
+    res.statusCode = ok ? 200 : 401;
+    res.setHeader("content-type", "application/json");
+    return res.end(JSON.stringify({ success: ok }));
+  }
+  res.statusCode = 404;
+  res.end();
+});
+await new Promise((r) => fakeApi.listen(0, "127.0.0.1", r));
+const apiPort = fakeApi.address().port;
+
+const mcpPort = 20000 + Math.floor(Math.random() * 20000);
+process.env.UPLOAD_POST_MCP_MAX_SESSIONS_PER_KEY = "2";
+process.env.UPLOAD_POST_MCP_ACCESS_LOG = "off";
+process.env.OAUTH_ISSUER = "";
+
+const { runHttp } = await import("../dist/transport/http.js");
+const { buildServer } = await import("../dist/server.js");
+let builds = 0;
+await runHttp({
+  port: mcpPort,
+  baseUrl: `http://127.0.0.1:${apiPort}/api`,
+  buildServer: (...args) => {
+    builds++;
+    return buildServer(...args);
+  },
+});
+
+function call(method, path, headers = {}, body) {
+  return new Promise((resolve, reject) => {
+    const req = request(
+      {
+        host: "127.0.0.1",
+        port: mcpPort,
+        path,
+        method,
+        headers: {
+          ...(body !== undefined
+            ? { "content-type": "application/json", "content-length": Buffer.byteLength(body) }
+            : {}),
+          ...headers,
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (c) => (data += c));
+        res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body: data }));
+      }
+    );
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+function cachedSessions() {
+  return call("GET", "/health").then((r) => JSON.parse(r.body).sessions);
+}
+
+const ACCEPT = { accept: "application/json, text/event-stream" };
+const auth = { authorization: `ApiKey ${GOOD_KEY}` };
+const initialize = JSON.stringify({
+  jsonrpc: "2.0",
+  id: 1,
+  method: "initialize",
+  params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "check", version: "0" } },
+});
+const toolsList = JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" });
+const NOT_INITIALIZED = JSON.stringify({
+  jsonrpc: "2.0",
+  error: { code: -32000, message: "Bad Request: Server not initialized" },
+  id: null,
+});
+
+async function main() {
+  // Fill this key's cache (cap 2).
+  for (let i = 0; i < 2; i++) {
+    const r = await call("POST", "/mcp", { ...ACCEPT, ...auth }, initialize);
+    assert.equal(r.status, 200, r.body);
+  }
+  assert.equal(await cachedSessions(), 2);
+  builds = 0;
+
+  // No credential: still the 401 that starts OAuth / asks for a key.
+  let r = await call("POST", "/mcp", ACCEPT, toolsList);
+  assert.equal(r.status, 401, r.body);
+
+  // No session id and not `initialize`: the SDK's 400, nothing built or evicted.
+  r = await call("POST", "/mcp", { ...ACCEPT, ...auth }, toolsList);
+  assert.equal(r.status, 400, r.body);
+  assert.equal(r.body, NOT_INITIALIZED);
+  assert.match(String(r.headers["content-type"]), /application\/json/);
+  r = await call("POST", "/mcp", { ...ACCEPT, ...auth }, JSON.stringify([JSON.parse(toolsList)]));
+  assert.equal(r.status, 400, r.body);
+  assert.equal(r.body, NOT_INITIALIZED);
+  r = await call("GET", "/mcp", { accept: "text/event-stream", ...auth });
+  assert.equal(r.status, 400, r.body);
+  assert.equal(r.body, NOT_INITIALIZED);
+  r = await call("DELETE", "/mcp", auth);
+  assert.equal(r.status, 400, r.body);
+  assert.equal(r.body, NOT_INITIALIZED);
+  assert.equal(await cachedSessions(), 2, "no live session is pushed out for it");
+  assert.equal(builds, 0, "no server is built for a request that cannot open a session");
+
+  // What the SDK answers to malformed requests is unchanged.
+  r = await call("POST", "/mcp", { accept: "application/json", ...auth }, toolsList);
+  assert.equal(r.status, 406, r.body);
+  r = await call("GET", "/mcp", { accept: "application/json", ...auth });
+  assert.equal(r.status, 406, r.body);
+  r = await call("POST", "/mcp", { ...ACCEPT, ...auth }, JSON.stringify({ hello: "world" }));
+  assert.equal(r.status, 400, r.body);
+  assert.equal(JSON.parse(r.body).error.code, -32700);
+
+  // `initialize` still opens a session (and the per-key cap still applies).
+  r = await call("POST", "/mcp", { ...ACCEPT, ...auth }, initialize);
+  assert.equal(r.status, 200, r.body);
+  assert.ok(r.headers["mcp-session-id"]);
+  assert.equal(await cachedSessions(), 2);
+}
+
+main().then(
+  () => {
+    console.log("check-http-edges: ok");
+    process.exit(0);
+  },
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  }
+);
