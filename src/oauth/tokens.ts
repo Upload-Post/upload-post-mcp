@@ -22,6 +22,13 @@ export async function handleToken(
 
   if (!form.grant_type) return sendError(res, 400, "invalid_request", "grant_type required");
 
+  // Clients may send their credentials as HTTP Basic instead (RFC 6749
+  // §2.3.1). This is a public client (PKCE), so only the client_id is used.
+  if (!form.client_id) {
+    const basicClientId = clientIdFromBasic(req.headers["authorization"]);
+    if (basicClientId) form.client_id = basicClientId;
+  }
+
   const params = new URLSearchParams(form);
   let response: { status: number; body: string };
   try {
@@ -34,6 +41,20 @@ export async function handleToken(
   res.setHeader("content-type", "application/json");
   res.setHeader("cache-control", "no-store");
   res.end(response.body);
+}
+
+/** The client_id of an `Authorization: Basic` header (RFC 6749 §2.3.1), if any. */
+function clientIdFromBasic(header: string | undefined): string | undefined {
+  const match = header?.match(/^Basic\s+([A-Za-z0-9+/]+=*)\s*$/i);
+  if (!match) return undefined;
+  const decoded = Buffer.from(match[1], "base64").toString("utf8");
+  const colon = decoded.indexOf(":");
+  if (colon <= 0) return undefined;
+  try {
+    return decodeURIComponent(decoded.slice(0, colon).replace(/\+/g, " ")).trim() || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
