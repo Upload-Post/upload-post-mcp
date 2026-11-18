@@ -4,6 +4,7 @@ import type { UploadPostMcpClient } from "../client.js";
 import { compact } from "../client.js";
 import { genericResultOutputSchema, safe } from "../schemas.js";
 import { withApprovalNote } from "./approvals.js";
+import { isChatGpt, type SessionContext } from "../client_profile.js";
 
 // /api/uploadposts/history answers 400 to any page size outside this set.
 const HISTORY_PAGE_SIZES = [10, 20, 50, 100] as const;
@@ -12,8 +13,19 @@ export function historyPageSize(limit: number): number {
   return HISTORY_PAGE_SIZES.find((size) => size >= limit) ?? 100;
 }
 
-export function registerStatusTools(server: McpServer, client: UploadPostMcpClient): void {
-  server.registerTool(
+// The statuses GET /uploadposts/status answers with. The reviewed ChatGPT
+// surface keeps its original description until the next app submission.
+const GET_STATUS_DESCRIPTION =
+  "Check the status of an async upload by `request_id`. While it runs, `status` is `pending`, `queued`, `processing` or `in_progress`. " +
+  "It ends as `completed` (every platform finished; check each entry of `results`, one of them can still have failed), `failed`, or `retryable` (retry_post resends only the platforms that failed). " +
+  "`pending_approval` and `draft` wait for a team member's approval, so stop polling; `rejected`, `withdrawn` and `expired` will not publish. `not_found` (404) means no upload has that request_id. " +
+  "Poll about every 10 seconds and stop after about 15 minutes; a long video can take longer, so tell the user it is still processing and check again later instead of polling on.";
+
+export function registerStatusTools(
+  server: McpServer,
+  client: UploadPostMcpClient
+): { applyClientProfile(ctx: SessionContext): void } {
+  const getStatusTool = server.registerTool(
     "get_status",
     {
       title: "Get async upload status",
@@ -129,4 +141,11 @@ export function registerStatusTools(server: McpServer, client: UploadPostMcpClie
       })
     )
   );
+
+  return {
+    applyClientProfile(ctx) {
+      if (isChatGpt(ctx)) return;
+      getStatusTool.update({ description: GET_STATUS_DESCRIPTION });
+    },
+  };
 }
