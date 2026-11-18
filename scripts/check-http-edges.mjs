@@ -4,7 +4,8 @@
  *   - without Mcp-Session-Id, only `initialize` opens one. Anything else gets
  *     the 400 the SDK transport gives an uninitialized server, without a
  *     server being built for it and without pushing a live session out of
- *     the cache; a 401 still comes first when there is no credential.
+ *     the cache; a 401 still comes first when there is no credential;
+ *   - /mcp. and /mcp/ (with or without a query) are the MCP endpoint too.
  * Runs the real server against a fake API on localhost. Run after `npm run build`.
  */
 import assert from "node:assert/strict";
@@ -132,6 +133,25 @@ async function main() {
   assert.equal(r.status, 200, r.body);
   assert.ok(r.headers["mcp-session-id"]);
   assert.equal(await cachedSessions(), 2);
+
+  // The endpoint URL pasted with a trailing dot or slash, or with a query.
+  for (const path of ["/mcp.", "/mcp/", "/mcp?source=x", "/mcp.?source=x", "/mcp/?source=x"]) {
+    r = await call("POST", path, { ...ACCEPT, ...auth }, initialize);
+    assert.equal(r.status, 200, `${path}: ${r.body}`);
+    const sid = r.headers["mcp-session-id"];
+    assert.ok(sid, path);
+    r = await call(
+      "POST",
+      path,
+      { ...ACCEPT, ...auth, "mcp-session-id": sid, "mcp-protocol-version": "2025-03-26" },
+      toolsList
+    );
+    assert.equal(r.status, 200, `${path}: ${r.body}`);
+  }
+  for (const path of ["/mcpx", "/mcp..", "/mcp/x", "/mcp./"]) {
+    r = await call("POST", path, { ...ACCEPT, ...auth }, initialize);
+    assert.equal(r.status, 404, path);
+  }
 }
 
 main().then(

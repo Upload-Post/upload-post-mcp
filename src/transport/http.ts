@@ -105,6 +105,8 @@ const AUTH_FAIL_PROBE_MS = Number(process.env.UPLOAD_POST_MCP_AUTH_FAIL_PROBE_S 
 // private address, i.e. a local reverse proxy), "true" or "false".
 const TRUST_PROXY = (process.env.UPLOAD_POST_MCP_TRUST_PROXY ?? "auto").toLowerCase();
 
+const MCP_PATHS = new Set(["/mcp", "/mcp.", "/mcp/"]);
+
 const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
 
 // Glama directory ownership verification. Glama claims a connector by fetching
@@ -336,7 +338,9 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     }
 
     // ----- MCP -----------------------------------------------------------
-    if (url !== "/mcp") {
+    // The endpoint URL is often copied from prose, so a trailing dot or slash
+    // (and any query string) still names it.
+    if (!MCP_PATHS.has(requestPath(url))) {
       res.statusCode = 404;
       res.end("Not Found");
       return;
