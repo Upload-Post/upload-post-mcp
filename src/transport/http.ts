@@ -2,6 +2,7 @@ import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { ClientInfoLike } from "../client_profile.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { JSONRPCMessageSchema } from "@modelcontextprotocol/sdk/types.js";
 import { UploadPostMcpClient } from "../client.js";
 
 import { loadOAuthConfig } from "../oauth/config.js";
@@ -103,6 +104,8 @@ const AUTH_FAIL_PROBE_MS = Number(process.env.UPLOAD_POST_MCP_AUTH_FAIL_PROBE_S 
 // Whether X-Forwarded-For names the client: "auto" (only when the peer is a
 // private address, i.e. a local reverse proxy), "true" or "false".
 const TRUST_PROXY = (process.env.UPLOAD_POST_MCP_TRUST_PROXY ?? "auto").toLowerCase();
+
+const MCP_PATHS = new Set(["/mcp", "/mcp.", "/mcp/"]);
 
 const OPENAI_APPS_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
 
@@ -288,8 +291,14 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       // RFC 9728 §3.1 / RFC 8414 §3.1: clients that never saw our 401 build
       // the metadata URL by inserting the well-known prefix before the
       // resource path, i.e. `/.well-known/<name>/mcp`. Serve both shapes.
+      // Some append it to the resource URL instead (`/mcp/.well-known/...`),
+      // so the protected resource metadata is served there as well.
       const wellKnown = requestPath(url).replace(/\/mcp$/, "");
-      if (method === "GET" && wellKnown === "/.well-known/oauth-protected-resource") {
+      if (
+        method === "GET" &&
+        (wellKnown === "/.well-known/oauth-protected-resource" ||
+          wellKnown === "/mcp/.well-known/oauth-protected-resource")
+      ) {
         return serveJson(res, protectedResourceMetadata(oauthCfg));
       }
       if (method === "GET" && wellKnown === "/.well-known/oauth-authorization-server") {
@@ -335,7 +344,9 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     }
 
     // ----- MCP -----------------------------------------------------------
-    if (url !== "/mcp") {
+    // The endpoint URL is often copied from prose, so a trailing dot or slash
+    // (and any query string) still names it.
+    if (!MCP_PATHS.has(requestPath(url))) {
       res.statusCode = 404;
       res.end("Not Found");
       return;
@@ -517,24 +528,12 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       const keyId = keyFingerprint(resolution.apiKey);
       const authHash = credentialHash(String(req.headers["authorization"] ?? ""));
 
-      // Per-key cap: recycle this key's own longest-idle session.
-      evictOldest(sessions, (s) => s.keyId === keyId, MAX_SESSIONS_PER_KEY);
-
-      // Cap enforcement: evict the longest-idle session rather than refusing
-      // the new one — the evicted client can always re-initialize.
-      if (sessions.size >= MAX_SESSIONS) {
-        let oldestId: string | undefined;
-        let oldestSeen = Infinity;
-        for (const [id, s] of sessions) {
-          if (s.lastSeenAt < oldestSeen) {
-            oldestSeen = s.lastSeenAt;
-            oldestId = id;
-          }
-        }
-        if (oldestId) closeSession(sessions, oldestId);
-      }
-
       if (!(await readBody())) return;
+
+      // Without a session id only `initialize` can open a session (MCP
+      // lifecycle). Anything else gets the answer the SDK transport gives an
+      // uninitialized server, here, without building one for it.
+      if (!sessionId && answersNotInitialized(req, body)) return sendNotInitialized(res);
 
       // A client that sends `initialize` is starting over: it gets a new
       // session, whatever id it still carries.
@@ -559,6 +558,23 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
       }
 
       if (!session) {
+        // Per-key cap: recycle this key's own longest-idle session.
+        evictOldest(sessions, (s) => s.keyId === keyId, MAX_SESSIONS_PER_KEY);
+
+        // Cap enforcement: evict the longest-idle session rather than refusing
+        // the new one — the evicted client can always re-initialize.
+        if (sessions.size >= MAX_SESSIONS) {
+          let oldestId: string | undefined;
+          let oldestSeen = Infinity;
+          for (const [id, s] of sessions) {
+            if (s.lastSeenAt < oldestSeen) {
+              oldestSeen = s.lastSeenAt;
+              oldestId = id;
+            }
+          }
+          if (oldestId) closeSession(sessions, oldestId);
+        }
+
         const client = new UploadPostMcpClient({
           apiKey: resolution.apiKey,
           baseUrl: opts.baseUrl,
@@ -632,6 +648,13 @@ export async function runHttp(opts: HttpOptions): Promise<void> {
     if (!(await readBody())) return;
 
     if (method === "DELETE" && sessionId) markEnded(sessionId);
+    // A session has one GET stream for server messages. A client opening a
+    // new one has lost the old one (the spec lets it reconnect at any time),
+    // often without the server noticing yet: the new stream replaces it
+    // instead of being refused with 409.
+    if (method === "GET" && sessionId && String(req.headers["accept"] ?? "").includes("text/event-stream")) {
+      session.transport.closeStandaloneSSEStream();
+    }
     await session.transport.handleRequest(req, res, body);
    } catch (err) {
     // Any throw/rejection from the request path lands here instead of becoming
@@ -749,6 +772,44 @@ function sendBodyTooLarge(req: IncomingMessage, res: ServerResponse): void {
   );
   // Discard whatever of the body is still unread; the connection closes.
   req.resume();
+}
+
+/**
+ * Whether the SDK transport of a server that was never initialized would
+ * answer this request (which has no session id) with its 400 "Server not
+ * initialized": the request is well formed and is not an `initialize`.
+ * Malformed requests (wrong Accept or Content-Type, not JSON-RPC) and other
+ * methods still reach the SDK, so its answer to them does not change.
+ */
+function answersNotInitialized(req: IncomingMessage, body: unknown): boolean {
+  const accept = String(req.headers["accept"] ?? "");
+  switch (req.method) {
+    case "DELETE":
+      return true;
+    case "GET":
+      return accept.includes("text/event-stream");
+    case "POST": {
+      if (!accept.includes("application/json") || !accept.includes("text/event-stream")) return false;
+      if (!String(req.headers["content-type"] ?? "").includes("application/json")) return false;
+      const messages = Array.isArray(body) ? body : [body];
+      if (body === undefined || !messages.every((m) => JSONRPCMessageSchema.safeParse(m).success)) return false;
+      return !hasInitialize(body);
+    }
+    default:
+      return false;
+  }
+}
+
+function sendNotInitialized(res: ServerResponse): void {
+  res.statusCode = 400;
+  res.setHeader("content-type", "application/json");
+  res.end(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Bad Request: Server not initialized" },
+      id: null,
+    })
+  );
 }
 
 function sendSessionNotFound(res: ServerResponse): void {

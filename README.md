@@ -119,7 +119,9 @@ The server exposes Upload-Post API tools plus one ChatGPT App UI launcher.
 | Queue         | `get_queue_settings`, `update_queue_settings`, `preview_queue`, `mark_queue_slot` (skip or free one slot; not exposed in ChatGPT yet) |
 | Feedback      | `send_feedback`: the agent tells the Upload-Post team about an unclear error, a wrong tool description or a missing capability (not exposed in ChatGPT) |
 
-Async uploads return a `request_id`. The agent should poll `get_status` until `success: true`.
+Async uploads return a `request_id`. The agent should poll `get_status` (about every 10 seconds, for up to about 15 minutes) until `status` is `completed`, `failed` or `retryable`; `completed` means every platform finished, and each entry of `results` says whether it published. `pending_approval` waits for a team approval.
+
+Every upload carries an `Idempotency-Key` derived from the tool, its arguments and a 10-minute time window, so a call repeated after a timeout does not publish twice: an identical call repeated in the following minutes returns the earlier result, marked `idempotent_replay: true`, while the same call made deliberately later publishes again. A failed upload is retried with `retry_post`, which only resends the platforms that failed.
 
 A team member's post can go to the approval queue instead (the API answers `202` with `pending_approval: true` and an `approval_id`): nothing is published until the owner or an Admin approves it. The upload tools and `get_status` return that as a success with a `next_step` explaining it, not as an error. To act as a team member on the owner's account from a local server, set `UPLOAD_POST_ACT_AS_USER` to the owner's email.
 

@@ -294,7 +294,20 @@ export function applySecondWaveParameters(server: McpServer): void {
     "Telegram posts can be deleted too: pass the post id returned by the upload."
   );
 
-  widen("get_analytics", (s) => retype(s, "platforms", z.array(AnalyticsPlatformWithTelegram).optional()), "Telegram returns `followers` (subscribers or members), `boosts_active` and the chat's title and link; Telegram reports no views.");
+  // The API answers 400 without `platforms`, so it is required here.
+  widen(
+    "get_analytics",
+    (s) =>
+      retype(
+        s,
+        "platforms",
+        z
+          .array(AnalyticsPlatformWithTelegram)
+          .min(1)
+          .describe("Platforms to read (the API requires at least one): the ones connected to the profile, see list_users.")
+      ),
+    "Telegram returns `followers` (subscribers or members), `boosts_active` and the chat's title and link; Telegram reports no views."
+  );
 
   // Telegram DMs: the profile's own bot talking to people in private chats.
   widen(

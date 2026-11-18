@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ignoredPlatformOptions, withIgnoredOptionsWarning } from "../sdk-options.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { writeFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -424,6 +424,38 @@ function truthyFlag(value: unknown): boolean {
  *   `tiktokUploadToDraft=true` (plus API names `post_mode` /
  *   `tiktok_upload_to_draft`) all map to the same SDK kwargs.
  */
+/** JSON with object keys sorted, so equal arguments always serialize the same. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).filter((k) => obj[k] !== undefined).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+const IDEMPOTENCY_WINDOW_MS = 10 * 60 * 1000;
+
+/** Clock used for the idempotency window; replaceable in tests. */
+export const idempotencyClock = { now: (): number => Date.now() };
+
+/**
+ * Idempotency-Key of an upload: a hash of the tool, its arguments and a fixed
+ * 10-minute time window. A call repeated right after a timeout (the client
+ * gave up, the upload went through) gets the first upload back instead of
+ * publishing it twice, while the same call made deliberately later publishes
+ * again. A repeat that crosses a window boundary is not deduplicated. The API
+ * keeps keys per account, so the credential is not part of the hash.
+ */
+function uploadIdempotencyKey(tool: string, args: unknown): string {
+  const window = Math.floor(idempotencyClock.now() / IDEMPOTENCY_WINDOW_MS);
+  return `mcp-${tool}-${createHash("sha256").update(canonicalJson([window, args])).digest("hex")}`;
+}
+
+const REPEATED_CALL_NOTE =
+  "An identical call repeated in the following minutes (same arguments, e.g. after a timeout) returns the earlier result, marked `idempotent_replay: true`, instead of publishing again. To retry the platforms of an upload that failed, use retry_post.";
+
 async function resolvePlatformRouting(
   client: UploadPostMcpClient,
   options: Record<string, unknown>
@@ -619,7 +651,9 @@ const UPLOAD_VIDEO_DESCRIPTION_OTHER =
   "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.). " +
   LINKEDIN_MENTIONS +
   " " +
-  LOCAL_FILE_GUIDANCE;
+  LOCAL_FILE_GUIDANCE +
+  " " +
+  REPEATED_CALL_NOTE;
 
 const VIDEO_PATH_OR_URL_DESCRIPTION_CHATGPT =
   "Public/signed HTTPS URL of the video. Absolute local paths are supported only for local/self-hosted MCP clients sharing the same filesystem. Do not pass `/mnt/data`, sandbox, or other mounted attachment paths; use open_upload_studio instead.";
@@ -646,7 +680,13 @@ const UPLOAD_PHOTOS_DESCRIPTION_OTHER =
   " " +
   LINKEDIN_MENTIONS +
   " " +
-  LOCAL_FILE_GUIDANCE;
+  LOCAL_FILE_GUIDANCE +
+  " " +
+  REPEATED_CALL_NOTE;
+
+const UPLOAD_TEXT_DESCRIPTION =
+  "Publish a text-only post. `linkUrl` (or platform-specific *LinkUrl) attaches a link preview where supported. " +
+  LINKEDIN_MENTIONS;
 
 const HOSTED_PATH_STUDIO_PHOTOS =
   "The MCP server cannot read mounted paths such as /mnt/data, so it cannot see images attached in the chat. Call open_upload_studio with mediaType \"photos\" so the user can select the image(s) in the browser (several for a carousel). The Studio stages them through Upload-Post and publishes them, or returns the staged media URLs in order; pass those URLs to upload_photos.";
@@ -703,10 +743,13 @@ export function registerUploadTools(
         );
       }
 
-      const options = (await resolvePlatformRouting(client, {
-        ...(rest as Record<string, unknown>),
-        ...(platformOptions ?? {}),
-      })) as never;
+      const options = {
+        ...(await resolvePlatformRouting(client, {
+          ...(rest as Record<string, unknown>),
+          ...(platformOptions ?? {}),
+        })),
+        idempotencyKey: uploadIdempotencyKey("upload_video", args),
+      } as never;
       const ignored = ignoredPlatformOptions(platformOptions);
 
       assertNoServerPaths(
@@ -792,23 +835,24 @@ export function registerUploadTools(
               : "The MCP server cannot read mounted paths such as /mnt/data. " + LOCAL_FILE_GUIDANCE)
         );
       }
-      const options = (await resolvePlatformRouting(client, {
-        ...(rest as Record<string, unknown>),
-        ...(platformOptions ?? {}),
-      })) as never;
+      const options = {
+        ...(await resolvePlatformRouting(client, {
+          ...(rest as Record<string, unknown>),
+          ...(platformOptions ?? {}),
+        })),
+        idempotencyKey: uploadIdempotencyKey("upload_photos", args),
+      } as never;
       assertNoServerPaths(client, { photosPathsOrUrls }, options as unknown as Record<string, unknown>);
       const ignored = ignoredPlatformOptions(platformOptions);
       return withIgnoredOptionsWarning(await client.sdk.uploadPhotos(photosPathsOrUrls, options), ignored);
     })
   );
 
-  server.registerTool(
+  const uploadTextTool = server.registerTool(
     "upload_text",
     {
       title: "Upload text post",
-      description:
-        "Publish a text-only post. `linkUrl` (or platform-specific *LinkUrl) attaches a link preview where supported. " +
-        LINKEDIN_MENTIONS,
+      description: UPLOAD_TEXT_DESCRIPTION,
       inputSchema: {
         title: z.string().describe("Post text / caption."),
         user: z.string(),
@@ -836,10 +880,13 @@ export function registerUploadTools(
         platformOptions?: Record<string, unknown>;
         [k: string]: unknown;
       };
-      const options = (await resolvePlatformRouting(client, {
-        ...(rest as Record<string, unknown>),
-        ...(platformOptions ?? {}),
-      })) as never;
+      const options = {
+        ...(await resolvePlatformRouting(client, {
+          ...(rest as Record<string, unknown>),
+          ...(platformOptions ?? {}),
+        })),
+        idempotencyKey: uploadIdempotencyKey("upload_text", args),
+      } as never;
       // Text posts take files too (firstCommentMedia): same hosted-path guard.
       assertNoServerPaths(client, {}, options as unknown as Record<string, unknown>);
       const ignored = ignoredPlatformOptions(platformOptions);
@@ -883,7 +930,10 @@ export function registerUploadTools(
         [k: string]: unknown;
       };
       assertNoServerPaths(client, { documentPathOrUrl }, rest);
-      return client.sdk.uploadDocument(documentPathOrUrl, rest as never);
+      return client.sdk.uploadDocument(documentPathOrUrl, {
+        ...rest,
+        idempotencyKey: uploadIdempotencyKey("upload_document", args),
+      } as never);
     })
   );
 
@@ -895,6 +945,7 @@ export function registerUploadTools(
         paramsSchema: uploadVideoShape(VIDEO_PATH_OR_URL_DESCRIPTION_OTHER),
       });
       uploadPhotosTool.update({ description: UPLOAD_PHOTOS_DESCRIPTION_OTHER });
+      uploadTextTool.update({ description: `${UPLOAD_TEXT_DESCRIPTION} ${REPEATED_CALL_NOTE}` });
     },
   };
 }

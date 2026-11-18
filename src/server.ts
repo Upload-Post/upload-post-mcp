@@ -68,7 +68,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     },
     {
       instructions:
-        "Tools for publishing, scheduling, analyzing and managing social media posts via Upload-Post (TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X, Google Business, Discord, Telegram). Async uploads return a request_id — poll get_status until success. " +
+        "Tools for publishing, scheduling, analyzing and managing social media posts via Upload-Post (TikTok, Instagram, YouTube, LinkedIn, Facebook, Pinterest, Threads, Reddit, Bluesky, X, Google Business, Discord, Telegram). Async uploads return a request_id — poll get_status about every 10 s, for up to about 15 min, until `status` is completed, failed or retryable (pending_approval: it waits for a team approval, stop polling). " +
         "Before publishing, call list_users to get the exact profile name (`user`) and see which platforms are connected; never invent a profile name. " +
         "New accounts start with no profile and no connected social account. If list_users returns no profiles, or the platform the user wants is not connected or needs reconnecting, do not guess and do not try to publish: call get_connect_link (or use the `connect_url` in the response), give the user the link, ask them to tell you when they have connected their accounts, and wait. Then call list_users again and publish. " +
         "Plans: get_account_info returns the account `plan`; \"Default\" is the Free plan, which caps uploads per month and cannot publish to TikTok (Basic or higher is required). If a Free-plan user wants TikTok, say so before connecting it or preparing the post, and give them the upgrade link " + UPGRADE_URL + ". When an upload is refused with `upgrade_url` (monthly allowance used up, or TikTok on the Free plan), do not retry it as is: relay `next_step` and the link. " +
@@ -81,7 +81,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   const ctx: SessionContext = {};
 
   const uploadTools = registerUploadTools(server, client, ctx);
-  registerStatusTools(server, client);
+  const statusTools = registerStatusTools(server, client);
   registerScheduleTools(server, client);
   registerAnalyticsTools(server, client);
   registerAudienceTools(server, client);
@@ -169,6 +169,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     studio.tool.disable();
     studio.resource.disable();
     uploadTools.applyClientProfile(ctx);
+    statusTools.applyClientProfile(ctx);
     mediaTools.applyClientProfile(ctx);
     if (!gated) {
       // Parameters added after the ChatGPT review: every client but ChatGPT.
