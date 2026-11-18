@@ -6,7 +6,9 @@
  * again:
  *   - the same arguments give the same key, whatever their order;
  *   - different arguments (or another tool) give another key;
- *   - the key is not the confirmation flag: preview + confirmed call match.
+ *   - the key is not the confirmation flag: preview + confirmed call match;
+ *   - it holds within one 10-minute window and changes in the next one, so a
+ *     deliberate repeat later publishes again.
  * The SDK's HTTP call is replaced by an in-memory fake. Run after `npm run build`.
  */
 import assert from "node:assert/strict";
@@ -14,6 +16,11 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { buildServer } from "../dist/server.js";
 import { UploadPostMcpClient } from "../dist/client.js";
+import { idempotencyClock } from "../dist/tools/upload.js";
+
+const WINDOW_MS = 10 * 60 * 1000;
+let now = 2000 * WINDOW_MS + 1000; // just after a window starts
+idempotencyClock.now = () => now;
 
 const sent = [];
 const upClient = new UploadPostMcpClient({ apiKey: "test", baseUrl: "https://example.invalid/api" });
@@ -71,11 +78,21 @@ assert.notEqual(
   "array order matters"
 );
 
+// Time window: same window, same key; next window, another key.
+const base = await keyFor("upload_text", calls.upload_text);
+now += WINDOW_MS - 2000; // later, still in the same window
+assert.equal(await keyFor("upload_text", calls.upload_text), base, "same window, same key");
+now += 2000; // next window
+assert.notEqual(await keyFor("upload_text", calls.upload_text), base, "next window, another key");
+
 // The tool descriptions say what a repeated call does.
 const { tools } = await client.listTools();
 for (const name of ["upload_video", "upload_photos", "upload_text"]) {
   const tool = tools.find((t) => t.name === name);
   assert.match(tool.description, /idempotent_replay/, `${name} documents the replay`);
+  assert.match(tool.description, /following minutes/, `${name} says the replay is for a short time`);
+  assert.match(tool.description, /retry_post/, `${name} points failed uploads to retry_post`);
+  assert.doesNotMatch(tool.description, /within 24 hours is taken as a retry/, name);
 }
 
 console.log("check-upload-idempotency: ok");

@@ -435,18 +435,26 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
+const IDEMPOTENCY_WINDOW_MS = 10 * 60 * 1000;
+
+/** Clock used for the idempotency window; replaceable in tests. */
+export const idempotencyClock = { now: (): number => Date.now() };
+
 /**
- * Idempotency-Key of an upload: a hash of the tool and its arguments. A call
- * repeated after a timeout (the client gave up, the upload went through) then
- * gets the first upload back instead of publishing it twice. The API keeps
- * keys per account, so the credential is not part of the hash.
+ * Idempotency-Key of an upload: a hash of the tool, its arguments and a fixed
+ * 10-minute time window. A call repeated right after a timeout (the client
+ * gave up, the upload went through) gets the first upload back instead of
+ * publishing it twice, while the same call made deliberately later publishes
+ * again. A repeat that crosses a window boundary is not deduplicated. The API
+ * keeps keys per account, so the credential is not part of the hash.
  */
 function uploadIdempotencyKey(tool: string, args: unknown): string {
-  return `mcp-${tool}-${createHash("sha256").update(canonicalJson(args)).digest("hex")}`;
+  const window = Math.floor(idempotencyClock.now() / IDEMPOTENCY_WINDOW_MS);
+  return `mcp-${tool}-${createHash("sha256").update(canonicalJson([window, args])).digest("hex")}`;
 }
 
 const REPEATED_CALL_NOTE =
-  "A call repeated with exactly the same arguments within 24 hours is taken as a retry of the first one (e.g. after a timeout): it returns that upload, marked `idempotent_replay: true`, instead of publishing again. To retry the platforms of an upload that failed, use retry_post.";
+  "An identical call repeated in the following minutes (same arguments, e.g. after a timeout) returns the earlier result, marked `idempotent_replay: true`, instead of publishing again. To retry the platforms of an upload that failed, use retry_post.";
 
 async function resolvePlatformRouting(
   client: UploadPostMcpClient,
