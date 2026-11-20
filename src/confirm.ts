@@ -92,9 +92,20 @@ const SILENT_SENDER_ACTIONS = new Set(["mark_seen", "mark_read", "mute", "unmute
 
 const sendDm = (a: Args): string | undefined => {
   const platform = str(a.platform ?? "instagram");
-  const network = platform === "bluesky" ? "Bluesky" : platform === "telegram" ? "Telegram" : "Instagram";
+  const network =
+    platform === "bluesky" ? "Bluesky" : platform === "telegram" ? "Telegram" : platform === "whatsapp" ? "WhatsApp" : "Instagram";
   const to = a.recipient_id !== undefined ? `recipient ${str(a.recipient_id)}` : `conversation ${str(a.conversation_id)}`;
   const action = typeof a.sender_action === "string" ? a.sender_action : undefined;
+  // WhatsApp read receipts and typing change nothing the person reads.
+  if (platform === "whatsapp" && (action === "mark_read" || action === "typing_on")) return undefined;
+  if (platform === "whatsapp" && !action && a.reaction !== undefined) {
+    const r = (typeof a.reaction === "object" && a.reaction ? a.reaction : {}) as Args;
+    const emoji = typeof a.reaction === "string" ? a.reaction : str(r.emoji ?? "");
+    const target = str(a.message_id ?? r.message_id);
+    return emoji
+      ? `Reacts ${emoji} to message ${target} in the WhatsApp chat with ${to}, as profile "${str(a.user)}"; the person sees it.`
+      : `Removes the reaction on message ${target} in the WhatsApp chat with ${to}, as profile "${str(a.user)}".`;
+  }
   if (action) {
     if (SILENT_SENDER_ACTIONS.has(action)) return undefined;
     if (action === "react" || action === "unreact") {
@@ -107,6 +118,10 @@ const sendDm = (a: Args): string | undefined => {
     }
     if (action === "delete") return `Deletes message ${str(a.message_id)} for profile "${str(a.user)}" only (the other participant keeps it).`;
     return `Runs ${action} on the ${network} conversation with ${to} as profile "${str(a.user)}".`;
+  }
+  if (platform === "whatsapp" && a.template !== undefined) {
+    const t = (typeof a.template === "object" && a.template ? a.template : {}) as Args;
+    return `Sends the WhatsApp template "${str(t.name ?? "")}" as profile "${str(a.user)}" to ${to}; Meta bills the conversation to the user's WhatsApp Business account.`;
   }
   return `Sends a ${network} DM as profile "${str(a.user)}" to ${to}.`;
 };
@@ -126,6 +141,22 @@ export const GATES: Record<string, Gate> = {
   upload_text: upload("a text post"),
   upload_document: upload("a document"),
   send_dm: { describe: sendDm },
+  manage_whatsapp_templates: {
+    describe: (a) =>
+      a.action === "delete"
+        ? `Deletes the WhatsApp template "${str(a.name)}" (every language) of profile "${str(a.user)}". It cannot be restored; Meta blocks the name for a while.`
+        : undefined,
+  },
+  manage_whatsapp_business: {
+    describe: (a) => {
+      if (a.action === "update_profile") {
+        const { action: _a, user: _u, confirmed: _c, ...p } = a;
+        return `Changes the public WhatsApp Business profile of profile "${str(a.user)}" (everyone who opens the chat sees it): ${JSON.stringify(p)}.`;
+      }
+      if (a.action === "delete_qr_code") return `Deletes WhatsApp QR code / link ${str(a.code)} of profile "${str(a.user)}"; it stops working for anyone who has it.`;
+      return undefined;
+    },
+  },
   reply_to_comment: {
     describe: (a) => `Sends a private DM as profile "${str(a.user)}" to the author of comment ${str(a.commentId)}.`,
   },

@@ -3,7 +3,7 @@
   "name": "com.upload-post/mcp",
   "title": "Upload-Post",
   "description": "Social media MCP: publish, schedule & analyze posts on TikTok, Instagram, YouTube, LinkedIn & X",
-  "version": "0.26.5",
+  "version": "0.27.0",
   "websiteUrl": "https://www.upload-post.com",
   "repository": {
     "url": "https://github.com/Upload-Post/upload-post-mcp",
@@ -62,6 +62,8 @@
         "google business",
         "discord",
         "telegram",
+        "whatsapp",
+        "whatsapp business",
         "cross-posting",
         "analytics",
         "auto dm"
@@ -79,7 +81,8 @@
         "Bluesky",
         "Google Business",
         "Discord",
-        "Telegram"
+        "Telegram",
+        "WhatsApp"
       ],
       "documentationUrl": "https://docs.upload-post.com",
       "authentication": "OAuth (Dynamic Client Registration) or Upload-Post API key via Authorization header"

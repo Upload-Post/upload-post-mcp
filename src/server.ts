@@ -26,6 +26,7 @@ import { registerAdsTools } from "./tools/ads.js";
 import { registerWebhookSubscriptionTools } from "./tools/webhook_subscriptions.js";
 import { registerApprovalTools } from "./tools/approvals.js";
 import { registerAccountExtraTools } from "./tools/account_extras.js";
+import { registerWhatsappTools } from "./tools/whatsapp.js";
 import { applySecondWaveParameters } from "./extensions.js";
 import { UPGRADE_URL } from "./plan.js";
 import { applyConfirmationGates } from "./confirm.js";
@@ -105,6 +106,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   const webhookSubscriptionTools = registerWebhookSubscriptionTools(server, client);
   const approvalTools = registerApprovalTools(server, client);
   const accountExtraTools = registerAccountExtraTools(server, client);
+  const whatsappTools = registerWhatsappTools(server, client);
   // Added after the ChatGPT app review: they join ChatGPT's surface with the
   // next submission (chatgpt-app-submission.json), not before.
   const notYetReviewedForChatGpt = [
@@ -122,6 +124,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     ...webhookSubscriptionTools,
     ...approvalTools,
     ...accountExtraTools,
+    ...whatsappTools,
   ];
   const studio = registerUploadStudio(server);
 

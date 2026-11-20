@@ -56,7 +56,7 @@ const TELEGRAM_FIELDS = ["business_connection_id", "parse_mode", "location", "co
 
 const s = await connect("claude-ai");
 const send = s.tools.get("send_dm");
-assert.deepEqual(send.inputSchema.properties.platform.enum, ["instagram", "bluesky", "telegram"]);
+assert.deepEqual(send.inputSchema.properties.platform.enum, ["instagram", "bluesky", "telegram", "whatsapp"]);
 for (const field of TELEGRAM_FIELDS) assert.ok(send.inputSchema.properties[field], `send_dm accepts ${field}`);
 assert.match(send.description, /telegram_recipient_not_started/);
 assert.match(send.description, /telegram_private_chats_only/);

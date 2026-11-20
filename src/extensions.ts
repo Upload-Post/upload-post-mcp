@@ -355,6 +355,139 @@ export function applySecondWaveParameters(server: McpServer): void {
     "Telegram (the profile's own bot): `recipient_id` is the person's numeric chat id (sender.id of a dm_received event); only private chats (groups and channels: 403 telegram_private_chats_only, publish there with the upload tools); text up to 4096 characters. 403 telegram_recipient_not_started (the person never started the bot) or telegram_recipient_blocked; 504 telegram_send_unconfirmed means it may have been sent: list the conversation before retrying."
   );
 
+  widen(
+    "get_connect_link",
+    () => undefined,
+    "WhatsApp is connected on the same page (platforms ['whatsapp']): the user signs in with Meta and picks or registers their WhatsApp Business number. It is for DMs (send_dm, list_dm_conversations), never a publishing destination."
+  );
+
+  // WhatsApp DMs: the customer's own WhatsApp Business number (Cloud API), open to every account.
+  widen(
+    "send_dm",
+    (s) => {
+      retype(
+        s,
+        "platform",
+        z
+          .enum(["instagram", "bluesky", "telegram", "whatsapp"])
+          .describe("DM platform: 'instagram', 'bluesky', 'telegram' or 'whatsapp'.")
+      );
+      retype(
+        s,
+        "recipient_id",
+        z
+          .union([z.string(), z.number().int()])
+          .optional()
+          .describe(
+            "Who receives the DM. Instagram (required): the recipient/commenter ID. Bluesky: handle, @handle, DID or bsky.app profile link; optional when `conversation_id` is given. Telegram: the person's numeric chat id. WhatsApp (required): the person's phone number in international format, e.g. '+34600111222' (the participant id from list_dm_conversations)."
+          )
+      );
+      retype(
+        s,
+        "message",
+        z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            "DM text. Required on Instagram. Optional on Bluesky with a shared post or a sender_action, on Telegram with attachments, and on WhatsApp with attachments, template, location, contacts or a reaction. WhatsApp: up to 4096 characters; with buttons, list or cta_url it is the body of the interactive message (up to 1024); with a single image, video or document it becomes its caption."
+          )
+      );
+      retype(
+        s,
+        "buttons",
+        z
+          .union([(s.buttons as z.ZodOptional<z.ZodTypeAny>).unwrap(), z.array(z.union([z.string(), z.record(z.unknown())])).max(3)])
+          .optional()
+          .describe(
+            "Instagram: up to 3 web_url buttons { title, url }. Telegram: inline buttons, a flat list or rows of { text, url } or { text, callback_data } (up to 100). WhatsApp: up to 3 reply buttons { title (max 20 characters), id? }, with `message` as the body; the person's tap arrives as their reply."
+          )
+      );
+      retype(
+        s,
+        "attachments",
+        z
+          .union([
+            (s.attachments as z.ZodOptional<z.ZodTypeAny>).unwrap(),
+            z.record(z.unknown()),
+            z.array(z.record(z.unknown())).max(10),
+          ])
+          .optional()
+          .describe(
+            "Bluesky: one post to share, { type: 'post', url }. Telegram: up to 10 files [{ type: photo|video|document|audio|voice|animation|sticker|video_note, url or media_id (a Telegram file_id), caption }]; several go as one album (photos and videos together, or only documents, or only audios). WhatsApp: up to 10 files [{ type: image|video|audio|document|sticker, url (public https) or media_id, caption (image, video, document), filename (document) }], each sent as its own message. WhatsApp limits: image 5 MB (JPEG/PNG), video 16 MB (MP4/3GPP), audio 16 MB, document 100 MB, sticker 500 KB (WebP)."
+          )
+      );
+      retype(
+        s,
+        "reply_to",
+        z
+          .union([z.string(), z.number().int()])
+          .optional()
+          .describe("Bluesky: id of the message this DM replies to. Telegram: message_id in that chat. WhatsApp: the message id (wamid) being replied to, shown quoted.")
+      );
+      retype(
+        s,
+        "sender_action",
+        z
+          .string()
+          .optional()
+          .describe(
+            "Act on the conversation instead of sending text. Bluesky: mark_seen/mark_read, react, unreact, delete, accept, mute, unmute, leave. Telegram: typing (and the other chat actions: upload_photo, record_video, upload_video, record_voice, upload_voice, upload_document, choose_sticker, find_location, record_video_note, upload_video_note), react / unreact (`message_id`, `reaction`), delete (`message_id` or `message_ids`; gone for both sides), and in Business chats mark_read and edit_checklist (with `business_connection_id`). WhatsApp: mark_read (blue ticks) or typing_on (shows typing for up to 25 s and marks it read), both with `message_id` = the person's inbound message; reactions go in `reaction`. Sender actions do not count toward the daily DM allowance."
+          )
+      );
+      retype(
+        s,
+        "message_id",
+        z
+          .string()
+          .optional()
+          .describe("Message the action applies to. Bluesky: react, unreact, delete (and optionally mark_seen). Telegram: react, unreact, delete. WhatsApp: the message to react to, or the inbound message for mark_read / typing_on.")
+      );
+      retype(
+        s,
+        "reaction",
+        z
+          .union([z.string(), z.record(z.unknown())])
+          .optional()
+          .describe(
+            "One emoji. Bluesky and Telegram: for sender_action react/unreact. WhatsApp: sent on its own with `message_id` (no sender_action), or as { message_id, emoji }; { message_id, emoji: '' } removes it."
+          )
+      );
+      retype(
+        s,
+        "location",
+        z
+          .record(z.unknown())
+          .optional()
+          .describe("Telegram: { latitude, longitude } or a venue with title and address. WhatsApp: { latitude, longitude, name?, address? } (a `message` goes first as text).")
+      );
+      s.template = z
+        .record(z.unknown())
+        .optional()
+        .describe(
+          "WhatsApp only: an approved message template { name, language (e.g. 'en_US'), components? (Meta's format, with the values of its {{1}} variables) }. The ONLY way to write to someone more than 24 h after their last message (Meta answers meta_error_code 131047 otherwise); list or create them with manage_whatsapp_templates."
+        );
+      s.contacts = z
+        .union([z.record(z.unknown()), z.array(z.record(z.unknown())).min(1).max(10)])
+        .optional()
+        .describe("WhatsApp only: 1-10 contact cards, Meta's contact objects; at least { name: { formatted_name } or a string, phones: [{ phone }] or a string }.");
+      s.list = z
+        .record(z.unknown())
+        .optional()
+        .describe(
+          "WhatsApp only: an interactive list { button (label, max 20 characters), sections: [{ title?, rows: [{ id?, title (max 24), description? (max 72) }] }] } with at most 10 rows in all; `message` is the body."
+        );
+      s.cta_url = z
+        .record(z.unknown())
+        .optional()
+        .describe("WhatsApp only: one link button { display_text (max 20 characters), url }; `message` is the body.");
+      s.header = z.string().max(60).optional().describe("WhatsApp only: text header of a buttons / list / cta_url message (max 60 characters).");
+      s.footer = z.string().max(60).optional().describe("WhatsApp only: footer of a buttons / list / cta_url message (max 60 characters).");
+      s.typing = z.boolean().optional().describe("WhatsApp only: with sender_action mark_read, also show the typing indicator.");
+    },
+    "WhatsApp (`platform: \"whatsapp\"`, available to every account): the profile's own WhatsApp Business number, connected from the connection page (get_connect_link with platforms ['whatsapp']); WhatsApp is a messaging channel only, posts are never published to it. `recipient_id` is the phone number in international format. Free text, media, buttons, lists, location and contacts only reach someone within 24 h of their last message to the number (the customer-service window); outside it send an approved `template` (other sends fail with meta_error_code 131047). Meta bills template conversations to the customer's own WhatsApp Business account. Other errors: 401 whatsapp_reauth_required (reconnect WhatsApp), meta_error_code 131026 (the number is not on WhatsApp or cannot receive it). Incoming messages (with a `media_id` for files) show up in list_dm_conversations and in the dm_received webhook."
+  );
+
   widen("list_dm_conversations", (s) => {
     s.kind = z.literal("direct").optional().describe("Bluesky only: only direct (1:1) conversations.");
     s.view = z
@@ -375,5 +508,5 @@ export function applySecondWaveParameters(server: McpServer): void {
       .optional()
       .describe("Telegram only: the chats of this connected Telegram Business account instead of the bot's.");
     s.include_profile_photos = z.boolean().optional().describe("Telegram only: add each participant's profile photo.");
-  }, "Telegram (`platform: \"telegram\"`): the private chats of the profile's own bot, with `participant_id` = the person's numeric chat id (what send_dm takes as recipient_id). It needs the bot's updates on (manage_telegram_bot set_updates); otherwise 409 telegram_updates_not_enabled. Files people send come with a `media_id` (a Telegram file_id), which send_dm attachments can send again.");
+  }, "WhatsApp (available to every account) lists the conversations of the profile's WhatsApp Business number, stored as they arrive, with `participant_id` = the person's phone number (what send_dm takes as recipient_id); files people send come with a `media_id`. Telegram (`platform: \"telegram\"`): the private chats of the profile's own bot, with `participant_id` = the person's numeric chat id (what send_dm takes as recipient_id). It needs the bot's updates on (manage_telegram_bot set_updates); otherwise 409 telegram_updates_not_enabled. Files people send come with a `media_id` (a Telegram file_id), which send_dm attachments can send again.");
 }

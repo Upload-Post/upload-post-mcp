@@ -65,6 +65,8 @@ export const NETWORKS: NetworkInfo[] = [
   { id: "hashnode", label: "Hashnode", mode: "form", featured: false, color: "#2962FF" },
   { id: "whop", label: "Whop", mode: "form", featured: false, color: "#FA4616" },
   { id: "listmonk", label: "Listmonk", mode: "form", featured: false, color: "#00A98F" },
+  // Messaging only (send_dm / list_dm_conversations), never a publishing destination.
+  { id: "whatsapp", label: "WhatsApp", mode: "oauth", featured: false, color: "#25D366" },
 ];
 
 const NETWORK_IDS = NETWORKS.map((n) => n.id) as [string, ...string[]];

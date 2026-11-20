@@ -79,11 +79,21 @@ export function registerDmTools(
     },
     safe(async (args) => {
       const a = compact(args as Record<string, unknown>);
-      const telegramOnly = a.platform === "telegram" ? [] : TELEGRAM_ONLY_DM_FIELDS.filter((k) => a[k] !== undefined);
+      const telegramOnly =
+        a.platform === "telegram"
+          ? []
+          : TELEGRAM_ONLY_DM_FIELDS.filter((k) => a[k] !== undefined && !(a.platform === "whatsapp" && k === "location"));
       if (telegramOnly.length) {
         throw new Error(`${telegramOnly.join(", ")}: Telegram only in this tool.`);
       }
-      if (a.platform === "bluesky") {
+      const whatsappOnly = a.platform === "whatsapp" ? [] : WHATSAPP_ONLY_DM_FIELDS.filter((k) => a[k] !== undefined);
+      if (whatsappOnly.length) {
+        throw new Error(`${whatsappOnly.join(", ")}: WhatsApp only in this tool.`);
+      }
+      if (a.platform === "whatsapp") {
+        // Only offered outside ChatGPT (extensions.ts widens the platform list).
+        validateWhatsappDm(a);
+      } else if (a.platform === "bluesky") {
         if (!a.recipient_id && !a.conversation_id) {
           throw new Error("Bluesky DMs need `recipient_id` (handle, DID or profile link) or `conversation_id`.");
         }
@@ -276,6 +286,44 @@ export function registerDmTools(
 
 const BLUESKY_ONLY_DM_FIELDS = ["conversation_id", "attachments", "reply_to", "sender_action", "message_id", "reaction"];
 const TELEGRAM_ONLY_DM_FIELDS = ["business_connection_id", "parse_mode", "location", "contact", "checklist", "message_ids"];
+const WHATSAPP_ONLY_DM_FIELDS = ["template", "contacts", "list", "cta_url", "header", "footer", "typing"];
+const WHATSAPP_SENDER_ACTIONS = ["mark_read", "typing_on"];
+
+/** What the API would refuse on WhatsApp, refused before the call with the reason. */
+function validateWhatsappDm(a: Record<string, unknown>): void {
+  if (a.recipient_id === undefined) {
+    throw new Error("WhatsApp DMs need `recipient_id`: the person's phone number in international format (e.g. '+34600111222'), or their id from list_dm_conversations.");
+  }
+  if (a.conversation_id !== undefined) {
+    throw new Error("`conversation_id` is Bluesky only: on WhatsApp the chat is `recipient_id` (the phone number).");
+  }
+  if (a.sender_action !== undefined) {
+    if (!WHATSAPP_SENDER_ACTIONS.includes(String(a.sender_action))) {
+      throw new Error("sender_action on WhatsApp is mark_read or typing_on; to react, send `reaction` with `message_id`.");
+    }
+    if (!a.message_id) {
+      throw new Error("WhatsApp mark_read / typing_on need `message_id`: the id of the person's (inbound) message.");
+    }
+    return;
+  }
+  if (a.reaction !== undefined) {
+    const target = typeof a.reaction === "object" && a.reaction ? (a.reaction as Record<string, unknown>).message_id : undefined;
+    if (!a.message_id && !target) {
+      throw new Error("A WhatsApp reaction needs `message_id`: the message to react to.");
+    }
+    return;
+  }
+  const interactive = a.buttons !== undefined || a.list !== undefined || a.cta_url !== undefined;
+  if (interactive && !a.message) {
+    throw new Error("WhatsApp buttons, list and cta_url need `message`: the body text of the interactive message.");
+  }
+  if (interactive && a.attachments !== undefined) {
+    throw new Error("WhatsApp interactive messages cannot carry attachments: send the file in a separate send_dm.");
+  }
+  if (!a.message && !a.attachments && !a.template && !a.location && !a.contacts) {
+    throw new Error("WhatsApp DMs need `message`, `attachments`, `template`, `location`, `contacts`, a `reaction` or a `sender_action`.");
+  }
+}
 
 /** /uploadposts/autodms/<action>: status and logs are GETs, the rest POSTs. */
 async function runAutodm(
