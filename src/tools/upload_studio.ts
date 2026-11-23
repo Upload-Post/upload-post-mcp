@@ -589,7 +589,10 @@ ${REDDIT_ENABLED ? `          ["reddit", "Reddit", true, true],\n` : ""}        
           kind: "video",
           // Each item: { file, fileId, fileName, mimeType, size, previewUrl, mediaUrl }
           items: [],
-          stagedMediaUrls: []
+          stagedMediaUrls: [],
+          // Last failure of a Studio action, kept in the widget state so the
+          // model can see which phase failed and why: { phase, message, detail }.
+          lastError: null
         };
 
         var els = {
@@ -709,7 +712,8 @@ ${REDDIT_ENABLED ? `          ["reddit", "Reddit", true, true],\n` : ""}        
                 return { fileId: item.fileId, fileName: item.fileName, mimeType: item.mimeType };
               }),
               // Staged media URLs in carousel order, so the model can pass them to upload_photos.
-              stagedMediaUrls: state.stagedMediaUrls
+              stagedMediaUrls: state.stagedMediaUrls,
+              lastError: state.lastError || undefined
             }
           });
         }
@@ -817,23 +821,77 @@ ${REDDIT_ENABLED ? `          ["reddit", "Reddit", true, true],\n` : ""}        
           return result;
         }
 
-        function originFromUrl(value) {
+        // Files up to this size are read into memory before the upload; bigger
+        // ones are streamed as they are, so a long video does not exhaust memory.
+        // Some mobile file pickers hand over files the browser cannot stream into
+        // a request (it fails with a bare network error), while reading them
+        // first works.
+        var READ_INTO_MEMORY_MAX_BYTES = 200 * 1024 * 1024;
+        // Pauses before each new attempt of the staging upload. The signed
+        // upload URL stays valid long enough to be reused.
+        var PUT_RETRY_DELAYS_MS = [1000, 3000];
+        var UPLOAD_HELP = "Check your connection and try again, or upload it from the Upload-Post dashboard (app.upload-post.com).";
+
+        function errorDetail(error) {
+          if (!error) return "unknown error";
+          var name = error.name && error.name !== "Error" ? error.name + ": " : "";
+          return name + (error.message || String(error));
+        }
+
+        // phase: "read" (getting the file from the device) or "upload" (sending it to staging).
+        function stagingError(phase, text, detail) {
+          var error = new Error(text + "\\nDetails: " + detail);
+          error.userMessage = text;
+          error.phase = phase;
+          error.detail = detail;
+          return error;
+        }
+
+        function wait(ms) {
+          return new Promise(function (resolve) {
+            window.setTimeout(resolve, ms);
+          });
+        }
+
+        async function readUploadBody(file, contentType) {
+          if (file.size > READ_INTO_MEMORY_MAX_BYTES || typeof file.arrayBuffer !== "function") {
+            return { body: file, mode: "streamed" };
+          }
           try {
-            return new URL(value).origin;
+            return { body: new Blob([await file.arrayBuffer()], { type: contentType }), mode: "read into memory" };
           } catch (error) {
-            return "unknown upload origin";
+            throw stagingError("read", "Couldn't read the file from your device. Please pick it again.", errorDetail(error));
           }
         }
 
-        function explainBrowserUploadFailure(error, uploadUrl) {
-          var detail = error && error.message ? error.message : String(error || "Failed to fetch");
-          var browserOrigin = window.location && window.location.origin ? window.location.origin : "unknown browser origin";
-          var uploadOrigin = originFromUrl(uploadUrl);
-          return new Error(
-            "Browser could not upload the file to Upload-Post/R2 staging (" + detail + "). " +
-            "This is usually R2 CORS or widget CSP. Allow the R2 bucket origin " + uploadOrigin +
-            " to receive PUT requests from " + browserOrigin +
-            " (or use AllowedOrigins '*'), with methods PUT, GET, HEAD and headers Content-Type or '*'."
+        // Network errors (fetch rejects with a TypeError) and 5xx answers are
+        // retried with the same signed URL; any other answer fails at once.
+        async function putToStaging(url, init, label, mode) {
+          var tries = PUT_RETRY_DELAYS_MS.length + 1;
+          var detail = "";
+          var attempt = 0;
+          for (; attempt < tries; attempt += 1) {
+            if (attempt > 0) {
+              setStatus("Upload interrupted, retrying" + label + " (attempt " + (attempt + 1) + " of " + tries + ")…", "warn");
+              await wait(PUT_RETRY_DELAYS_MS[attempt - 1]);
+            }
+            var retryable = false;
+            try {
+              var res = await fetch(url, init);
+              if (res.ok) return res;
+              detail = "HTTP " + res.status;
+              retryable = res.status >= 500;
+            } catch (error) {
+              detail = errorDetail(error);
+              retryable = !!error && error.name === "TypeError";
+            }
+            if (!retryable) break;
+          }
+          var made = Math.min(attempt + 1, tries);
+          throw stagingError(
+            "upload",
+            "Couldn't upload the file to Upload-Post. " + UPLOAD_HELP,
+            detail + " (" + made + (made === 1 ? " attempt" : " attempts") + ", file " + mode + ")"
           );
         }
 
@@ -842,11 +900,15 @@ ${REDDIT_ENABLED ? `          ["reddit", "Reddit", true, true],\n` : ""}        
           var photo = mediaType === "image";
           var file = item.file;
           var contentType = item.mimeType || file.type || (photo ? "image/jpeg" : "video/mp4");
+          // Read before asking for a staging slot, so a file the device cannot
+          // hand over does not leave an unfinished upload behind.
+          setStatus("Reading " + (photo ? "image" : "video") + label + "…", "warn");
+          var upload = await readUploadBody(file, contentType);
           setStatus("Creating Upload-Post upload URL" + label + "…", "warn");
           var created = parseToolJson(await openai.callTool("create_media_upload", {
             filename: item.fileName || file.name || (photo ? "chatgpt-image-upload.jpg" : "chatgpt-video-upload.mp4"),
             contentType: contentType,
-            contentLength: file.size,
+            contentLength: upload.body.size,
             mediaType: photo ? "image" : "video",
             source: "mcp_chatgpt"
           }));
@@ -859,20 +921,12 @@ ${REDDIT_ENABLED ? `          ["reddit", "Reddit", true, true],\n` : ""}        
             : "Uploading video to Upload-Post staging…", "warn");
           var putHeaders = Object.assign({}, created.headers || {});
           if (!putHeaders["Content-Type"]) putHeaders["Content-Type"] = contentType;
-          var put;
-          try {
-            put = await fetch(created.upload_url, {
-              method: created.method || "PUT",
-              mode: "cors",
-              headers: putHeaders,
-              body: file
-            });
-          } catch (error) {
-            throw explainBrowserUploadFailure(error, created.upload_url);
-          }
-          if (!put.ok) {
-            throw new Error("R2 upload failed with HTTP " + put.status + ".");
-          }
+          await putToStaging(created.upload_url, {
+            method: created.method || "PUT",
+            mode: "cors",
+            headers: putHeaders,
+            body: upload.body
+          }, label, upload.mode);
 
           setStatus("Validating staged media" + label + "…", "warn");
           var completed = parseToolJson(await openai.callTool("complete_media_upload", {
@@ -1256,11 +1310,18 @@ ${REDDIT_ENABLED ? `          ["reddit", "Reddit", true, true],\n` : ""}        
           els.handoffButton.disabled = true;
           els.result.style.display = "none";
           showConnect("");
+          state.lastError = null;
           action()
             .catch(function (error) {
+              var message = error && error.message ? error.message : String(error);
+              state.lastError = {
+                phase: (error && error.phase) || "other",
+                message: (error && error.userMessage) || message,
+                detail: (error && error.detail) || ""
+              };
               els.result.style.display = "block";
-              els.result.textContent = error && error.message ? error.message : String(error);
-              setStatus(error && error.message ? error.message : String(error), "bad");
+              els.result.textContent = message;
+              setStatus(state.lastError.message, "bad");
             })
             .finally(function () {
               els.publishButton.disabled = false;

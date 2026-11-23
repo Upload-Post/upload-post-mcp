@@ -85,6 +85,7 @@ async function connect(name) {
   assert.ok(!s.tools.get("unpublish_post").inputSchema.properties.platform.enum.includes("telegram"));
   assert.equal(s.tools.get("upload_text").inputSchema.properties.platformOptions.properties.telegramPoll, undefined);
   assert.equal(s.tools.get("list_dm_conversations").inputSchema.properties.view, undefined);
+  assert.deepEqual(s.tools.get("like_comment").inputSchema.properties.platform.enum, ["tiktok", "facebook"]);
   // A new key sent anyway is stripped by ChatGPT's schema: never reaches the API.
   await s.call("unpublish_post", { user: "demo", platform: "x", postId: "1", delete_all_messages: true });
   assert.equal(s.calls.at(-1).data.delete_all_messages, undefined);
@@ -106,6 +107,23 @@ for (const name of ["edit_post", "manage_telegram_chat", "manage_telegram_bot", 
 assert.ok(!s.tools.get("get_best_times").inputSchema.properties.platform.enum.includes("x"));
 assert.ok(!s.tools.get("post_action").inputSchema.properties.action.enum.includes("like"));
 assert.ok(!s.tools.get("repost_post").inputSchema.properties.platform.enum.includes("bluesky"));
+
+// --- Comment likes on X and Bluesky ------------------------------------------------------
+{
+  const like = s.tools.get("like_comment");
+  assert.deepEqual(like.inputSchema.properties.platform.enum, ["tiktok", "facebook", "x", "bluesky"]);
+  assert.equal(like.inputSchema.properties.platform.description, "Social platform the comment lives on.");
+  assert.match(like.description, /TikTok, Facebook, X and Bluesky/);
+  assert.match(like.description, /reconnect X once/);
+  assert.doesNotMatch(like.description, /Works on TikTok and Facebook\./);
+  for (const platform of ["x", "bluesky"]) {
+    await s.call("like_comment", { user: "demo", platform, commentId: "c1", liked: false });
+    assert.equal(last().url, "/uploadposts/comments/action");
+    assert.deepEqual(last().data, { platform, user: "demo", comment_id: "c1", action: "unlike" });
+  }
+  const action = s.tools.get("comment_action");
+  assert.ok(["x", "bluesky"].every((p) => action.inputSchema.properties.platform.enum.includes(p)));
+}
 
 // --- Best times ------------------------------------------------------------------------
 await s.call("get_best_times", { profile_username: "demo", platform: "instagram", top: 3 });

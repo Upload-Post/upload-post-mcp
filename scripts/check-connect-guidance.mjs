@@ -428,9 +428,10 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
   const script = html.slice(html.indexOf("<script>") + 8, html.lastIndexOf("</script>"));
   const block = script.slice(script.indexOf("var MAX_PHOTOS"), script.indexOf("// --- end media selection ---"));
 
-  function studio() {
+  function studio({ respond } = {}) {
     const calls = [];
     const puts = [];
+    const waits = [];
     let n = 0;
     const openai = {
       async callTool(name, args) {
@@ -456,15 +457,23 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
       },
     };
     const fetch = async (url, init) => {
-      puts.push([url, init.method, init.headers["Content-Type"]]);
-      return { ok: true, status: 200 };
+      puts.push([url, init.method, init.headers["Content-Type"], init.body]);
+      return respond ? respond(puts.length) : { ok: true, status: 200 };
+    };
+    // Retry pauses are recorded, not waited for.
+    const win = {
+      location: { origin: "https://widget.example" },
+      setTimeout: (fn, ms) => {
+        waits.push(ms);
+        fn();
+      },
     };
     const state = { kind: "video", items: [], stagedMediaUrls: [] };
     const api = new Function(
       "openai", "state", "setStatus", "saveState", "fetch", "window",
       `${block}; return { classifySelection, resolveMediaUrls, guessImageMime };`
-    )(openai, state, () => {}, () => {}, fetch, { location: { origin: "https://widget.example" } });
-    return { api, state, calls, puts };
+    )(openai, state, () => {}, () => {}, fetch, win);
+    return { api, state, calls, puts, waits };
   }
 
   const { api } = studio();
@@ -517,6 +526,78 @@ const called = (account, method) => account.calls.filter((c) => c[0] === method)
   assert.equal(v.calls[0][1].mediaType, "video");
   assert.equal(v.calls[0][1].contentType, "video/mp4");
   assert.deepEqual(v.state.stagedMediaUrls, []);
+
+  // A local file is read into memory before the PUT: some mobile pickers hand
+  // over files the browser cannot stream into a request.
+  const localFile = (bytes, { size = bytes.length, type = "video/mp4", fails } = {}) => ({
+    size,
+    type,
+    async arrayBuffer() {
+      if (fails) throw Object.assign(new Error("A requested file or directory could not be found."), { name: "NotFoundError" });
+      return new Uint8Array(bytes).buffer;
+    },
+  });
+  const r1 = studio();
+  r1.state.items = [{ file: localFile([1, 2, 3]), fileName: "clip.mp4", mimeType: "video/mp4" }];
+  await r1.api.resolveMediaUrls();
+  const sent = r1.puts[0][3];
+  assert.ok(sent instanceof Blob, "the PUT sends the bytes read from the file");
+  assert.equal(sent.size, 3);
+  assert.equal(sent.type, "video/mp4");
+  assert.equal(r1.calls[0][1].contentLength, 3);
+
+  // Very large files are streamed as they are (no full copy in memory).
+  const big = localFile([], { size: 300 * 1024 * 1024 });
+  const r2 = studio();
+  r2.state.items = [{ file: big, fileName: "long.mp4", mimeType: "video/mp4" }];
+  await r2.api.resolveMediaUrls();
+  assert.equal(r2.puts[0][3], big);
+
+  // The device cannot hand over the file: say so, and do not open a staging slot.
+  const r3 = studio();
+  r3.state.items = [{ file: localFile([1], { fails: true }), fileName: "clip.mp4", mimeType: "video/mp4" }];
+  const readErr = await r3.api.resolveMediaUrls().then(() => null, (e) => e);
+  assert.equal(readErr.phase, "read");
+  assert.match(readErr.userMessage, /Couldn't read the file from your device\. Please pick it again\./);
+  assert.match(readErr.message, /Details: NotFoundError: A requested file/);
+  assert.equal(r3.calls.length, 0, "no create_media_upload when the file cannot be read");
+  assert.equal(r3.puts.length, 0);
+
+  // A network error is retried twice with the same signed URL, after 1 s and 3 s.
+  const netError = () => {
+    throw new TypeError("Failed to fetch");
+  };
+  const r4 = studio({ respond: (n) => (n < 3 ? netError() : { ok: true, status: 200 }) });
+  r4.state.items = [{ file: localFile([1, 2]), fileName: "clip.mp4", mimeType: "video/mp4" }];
+  assert.deepEqual(await r4.api.resolveMediaUrls(), ["https://r2.example/get/up_1"]);
+  assert.equal(r4.puts.length, 3);
+  assert.ok(r4.puts.every((p) => p[0] === "https://r2.example/put/1"), "the signed URL is reused");
+  assert.deepEqual(r4.waits, [1000, 3000]);
+  assert.equal(r4.calls.filter(([name]) => name === "create_media_upload").length, 1);
+
+  // Still failing after 3 attempts: a user-facing message naming the upload
+  // phase, the technical detail on its own line, no CORS/CSP talk.
+  const r5 = studio({ respond: netError });
+  r5.state.items = [{ file: localFile([1]), fileName: "clip.mp4", mimeType: "video/mp4" }];
+  const upErr = await r5.api.resolveMediaUrls().then(() => null, (e) => e);
+  assert.equal(r5.puts.length, 3);
+  assert.equal(upErr.phase, "upload");
+  assert.match(upErr.userMessage, /Couldn't upload the file to Upload-Post\. .*try again.*dashboard/);
+  assert.equal(upErr.detail, "TypeError: Failed to fetch (3 attempts, file read into memory)");
+  assert.match(upErr.message, /\nDetails: TypeError: Failed to fetch/);
+  assert.doesNotMatch(upErr.message, /CORS|CSP/);
+  assert.equal(r5.calls.some(([name]) => name === "complete_media_upload"), false);
+
+  // A refused upload (4xx) is not retried.
+  const r6 = studio({ respond: () => ({ ok: false, status: 403 }) });
+  r6.state.items = [{ file: localFile([1]), fileName: "clip.mp4", mimeType: "video/mp4" }];
+  const refused = await r6.api.resolveMediaUrls().then(() => null, (e) => e);
+  assert.equal(r6.puts.length, 1);
+  assert.equal(refused.detail, "HTTP 403 (1 attempt, file read into memory)");
+
+  // The failure reaches the widget state the model reads.
+  assert.match(script, /lastError: state\.lastError \|\| undefined/);
+  assert.doesNotMatch(script, /usually R2 CORS or widget CSP/);
   await s.close();
 }
 

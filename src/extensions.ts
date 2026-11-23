@@ -299,6 +299,20 @@ export function applySecondWaveParameters(server: McpServer): void {
     "Telegram posts can be deleted too: pass the post id returned by the upload."
   );
 
+  // Comment likes on X and Bluesky.
+  const likeComment = tools["like_comment"];
+  if (likeComment) {
+    const shape = shapeOf(likeComment);
+    retype(shape, "platform", z.enum([...(shape.platform as z.ZodEnum<[string, ...string[]]>).options, "x", "bluesky"]));
+    likeComment.update({
+      paramsSchema: shape,
+      description: (likeComment.description ?? "").replace(
+        "Works on TikTok and Facebook.",
+        "Works on TikTok, Facebook, X and Bluesky. X: an account connected before likes were available has to reconnect X once (get_connect_link) to grant the like permission."
+      ),
+    });
+  }
+
   // The API answers 400 without `platforms`, so it is required here.
   widen(
     "get_analytics",

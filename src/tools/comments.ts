@@ -273,12 +273,12 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
     {
       title: "Hide, like or pin a comment",
       description:
-        "Moderate or react to a comment on one of the profile's own posts. One endpoint for every network, chosen with `platform`; each network supports its own verbs and answers 400 `platform_not_supported` / invalid action otherwise. TikTok: hide/unhide (postId), like/unlike (no postId), pin/unpin (postId). Facebook: hide/unhide, like/unlike, edit (needs `message`). Instagram: hide/unhide a comment, or enable_comments/disable_comments on a post (postId, no commentId). YouTube: hide/unhide/hold (postId; `banAuthor` only with hide). Threads: hide/unhide, approve/ignore. Most actions have an inverse; `edit` does not keep the previous text and `banAuthor` bans the commenter from the YouTube channel, so both need the user's approval of the exact change. Deleting a comment is a different tool: delete_comment. TikTok: " +
+        "Moderate or react to a comment on one of the profile's own posts. One endpoint for every network, chosen with `platform`; each network supports its own verbs and answers 400 `platform_not_supported` / invalid action otherwise. TikTok: hide/unhide (postId), like/unlike (no postId), pin/unpin (postId). Facebook: hide/unhide, like/unlike, edit (needs `message`). Instagram: hide/unhide a comment, or enable_comments/disable_comments on a post (postId, no commentId). YouTube: hide/unhide/hold (postId; `banAuthor` only with hide). Threads: hide/unhide, approve/ignore. X: like/unlike (an account connected before likes were available has to reconnect X once to grant the like permission). Bluesky: hide/unhide, like/unlike. Most actions have an inverse; `edit` does not keep the previous text and `banAuthor` bans the commenter from the YouTube channel, so both need the user's approval of the exact change. Deleting a comment is a different tool: delete_comment. TikTok: " +
         requiresTiktokCapability("comments", true),
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
         platform: z
-          .enum(["tiktok", "facebook", "instagram", "youtube", "threads"])
+          .enum(["tiktok", "facebook", "instagram", "youtube", "threads", "x", "bluesky"])
           .describe("Social platform the comment lives on."),
         commentId: z
           .string()
