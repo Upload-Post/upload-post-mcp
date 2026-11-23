@@ -79,6 +79,22 @@ function assertPreview(r, label) {
   assert.doesNotMatch(s.tools.get("get_account_info").description, /API key/);
   assert.doesNotMatch(s.tools.get("comment_action").description, /nothing here is permanent/);
   assert.match(s.tools.get("submit_ffmpeg_job").description, /\{output\}/);
+  // Partly gated tools name the gated actions instead of claiming every call
+  // previews: agents expected manage_youtube_playlists create to preview (agent
+  // feedback, nov-2026) and it ran at once.
+  for (const [name, gate] of Object.entries(GATES)) {
+    if (!gate.only) continue;
+    const tool = s.tools.get(name);
+    assert.ok(tool.description.includes(`Approval: only ${gate.only}`), `${name} names its gated actions`);
+    assert.ok(!tool.description.includes("Needs the user's approval: call it first"), `${name} keeps no blanket note`);
+    assert.match(tool.inputSchema.properties.confirmed.description, /other actions run without it/);
+  }
+  assert.match(s.tools.get("manage_youtube_playlists").description, /only `delete`, `remove_video` and `delete_image`/);
+  const created = await s.call("manage_youtube_playlists", { action: "create", user: "demo", params: { title: "t" } });
+  assert.equal(created.isError, false);
+  assert.notEqual(created.result?.status, "confirmation_required", "create is not gated, as now documented");
+  const del = await s.call("manage_youtube_playlists", { action: "delete", user: "demo", playlist_id: "PL1" });
+  assertPreview(del, "manage_youtube_playlists delete");
   await s.close();
 }
 

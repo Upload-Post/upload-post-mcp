@@ -31,6 +31,12 @@ interface Gate {
   field?: "confirmed" | "confirm_username";
   /** Description note replacing the default one. */
   note?: string;
+  /**
+   * When only some actions are gated: those actions, in words. The description
+   * then names them instead of saying every call needs approval (agents read
+   * that and expected `create` to return a preview; it ran at once).
+   */
+  only?: string;
 }
 
 const CONFIRMED_FIELD = z
@@ -38,6 +44,13 @@ const CONFIRMED_FIELD = z
   .optional()
   .describe(
     "Set to true only after the user has seen the preview this tool returns without it and approved it. Without it nothing is sent."
+  );
+
+const PARTIAL_CONFIRMED_FIELD = z
+  .boolean()
+  .optional()
+  .describe(
+    "Set to true only after the user has seen the preview this tool returns for an action that needs approval, and approved it. The other actions run without it."
   );
 
 const CONFIRM_USERNAME_FIELD = z
@@ -52,6 +65,9 @@ const CONFIRMED_NOTE =
 
 const UPLOAD_NOTE =
   "Publishing now needs the user's approval: call it first without `confirmed` to get a preview (nothing is sent), show the user exactly what will go out, and repeat the call with `confirmed: true` only after they approve. Calls with `scheduledDate` or `addToQueue` run straight away, since the post can still be reviewed and cancelled before it goes out.";
+
+const partialNote = (only: string): string =>
+  `Approval: only ${only}, not the other actions. Each of those needs the user's approval: call it first without \`confirmed\` to get a preview (nothing is sent), show the user what will change, and repeat the call with \`confirmed: true\` only after they approve. Every other action runs at once and returns no preview, so check with the user before calling one that changes what they or others see.`;
 
 const CONFIRM_USERNAME_NOTE =
   "Needs the user's approval: the call only deletes when `confirm_username` repeats the profile name, typed or approved by the user. Without it the response says what would be deleted.";
@@ -142,12 +158,14 @@ export const GATES: Record<string, Gate> = {
   upload_document: upload("a document"),
   send_dm: { describe: sendDm },
   manage_whatsapp_templates: {
+    only: "`delete`",
     describe: (a) =>
       a.action === "delete"
         ? `Deletes the WhatsApp template "${str(a.name)}" (every language) of profile "${str(a.user)}". It cannot be restored; Meta blocks the name for a while.`
         : undefined,
   },
   manage_whatsapp_business: {
+    only: "`update_profile` and `delete_qr_code`",
     describe: (a) => {
       if (a.action === "update_profile") {
         const { action: _a, user: _u, confirmed: _c, ...p } = a;
@@ -175,12 +193,14 @@ export const GATES: Record<string, Gate> = {
     describe: (a) => `Rewrites comment ${str(a.commentId)} on ${str(a.platform)}; the previous text is not kept.`,
   },
   hide_comment: {
+    only: "hiding with `banAuthor`",
     describe: (a) =>
       a.banAuthor && a.hidden !== false
         ? `Hides comment ${str(a.commentId)} and BANS its author from the YouTube channel.`
         : undefined,
   },
   comment_action: {
+    only: "`edit`, and `hide` with `banAuthor`",
     describe: (a) => {
       if (a.action === "edit") return `Rewrites comment ${str(a.commentId)} on ${str(a.platform)}; the previous text is not kept.`;
       if (a.banAuthor && a.action === "hide") return `Hides comment ${str(a.commentId)} and BANS its author from the YouTube channel.`;
@@ -193,7 +213,7 @@ export const GATES: Record<string, Gate> = {
     describe: (a) =>
       `Sends webhook delivery ${str(a.delivery_id)} again, with the same body, to the webhook URL configured now; the receiver gets the event a second time.`,
   },
-  manage_autodms: { describe: (a) => (a.action === "start" ? autodmStart(a) : undefined) },
+  manage_autodms: { only: "`start`", describe: (a) => (a.action === "start" ? autodmStart(a) : undefined) },
   edit_post: {
     describe: (a) =>
       `Changes the live post ${str(a.post_id)} on ${str(a.platform)} as profile "${str(a.user)}"${a.text !== undefined ? ` to the text: ${str(a.text)}` : ""}${a.telegram_action ? ` (${str(a.telegram_action)})` : ""}; the previous version is not kept.`,
@@ -214,6 +234,7 @@ export const GATES: Record<string, Gate> = {
     },
   },
   manage_youtube_live: {
+    only: "`send_chat_message`, `transition` to `live` or `complete`, `delete_broadcast`, `delete_stream`, `delete_chat_message`, `ban_user` and `remove_moderator`",
     describe: (a) => {
       const p = (a.params ?? {}) as Args;
       if (a.action === "send_chat_message") {
@@ -234,6 +255,7 @@ export const GATES: Record<string, Gate> = {
     },
   },
   manage_youtube_playlists: {
+    only: "`delete`, `remove_video` and `delete_image`",
     describe: (a) => {
       if (a.action === "delete") return `Deletes YouTube playlist ${str(a.playlist_id)} (the videos stay). It cannot be restored.`;
       if (a.action === "remove_video") return `Removes item ${str(a.item_id)} from YouTube playlist ${str(a.playlist_id)}.`;
@@ -242,6 +264,7 @@ export const GATES: Record<string, Gate> = {
     },
   },
   manage_youtube_channel: {
+    only: "`delete_section` and `remove_watermark`",
     describe: (a) => {
       if (a.action === "delete_section") return `Deletes section ${str(a.section_id)} from the YouTube channel page of profile "${str(a.user)}".`;
       if (a.action === "remove_watermark") return `Removes the watermark from every video of the YouTube channel of profile "${str(a.user)}".`;
@@ -249,6 +272,7 @@ export const GATES: Record<string, Gate> = {
     },
   },
   manage_youtube_videos: {
+    only: "`delete_caption` and `report_abuse`",
     describe: (a) => {
       if (a.action === "delete_caption") return `Deletes YouTube caption track ${str(a.caption_id)}. It cannot be restored.`;
       if (a.action === "report_abuse") {
@@ -279,6 +303,7 @@ export const GATES: Record<string, Gate> = {
     describe: (a) => `Deletes webhook subscription ${str(a.subscription_id)}: Upload-Post stops sending events to its URL right away.`,
   },
   manage_webhook_settings: {
+    only: "`set_account`, `remove_account`, `set_profile`, `test_account` and `remove_profile`",
     describe: (a) => {
       if (a.action === "set_account" && a.webhook_url !== undefined) return `Sends the account's events (uploads, DMs, comments…) to ${str(a.webhook_url)} from now on, instead of the current account webhook.`;
       if (a.action === "set_account") return `Changes the account webhook settings: ${JSON.stringify({ webhook_events: a.webhook_events, ...((a.params ?? {}) as Args) })}.`;
@@ -293,18 +318,21 @@ export const GATES: Record<string, Gate> = {
     },
   },
   manage_profile: {
+    only: "`disconnect_social`",
     describe: (a) =>
       a.action === "disconnect_social"
         ? `Disconnects ${str(a.social_platform)} from profile "${str(a.username)}": nothing more is published there until the user reconnects it by logging in to the network again.`
         : undefined,
   },
   save_post: {
+    only: "saving a Pin to a Pinterest board",
     describe: (a) =>
       a.platform === "pinterest"
         ? `Saves Pin ${str(a.post_id)} to Pinterest board ${str(a.pinterest_board_id)} of profile "${str(a.user)}"; it shows on that board.`
         : undefined,
   },
   manage_google_business: {
+    only: "`delete_review_reply`",
     describe: (a) => {
       const p = (a.params ?? {}) as Args;
       if (a.action === "delete_review_reply") return `Deletes the PUBLIC owner reply to Google review ${str(p.review_name ?? p.review_id)} of profile "${str(a.user)}".`;
@@ -312,6 +340,7 @@ export const GATES: Record<string, Gate> = {
     },
   },
   manage_telegram_payments: {
+    only: "`send_invoice`",
     describe: (a) => {
       const p = (a.params ?? {}) as Args;
       if (a.action === "send_invoice") return `Posts an invoice "${str(p.title ?? "")}" for ${JSON.stringify(p.prices ?? [])} ${str(p.currency ?? "XTR")} in the Telegram chat of profile "${str(a.user)}"; its members see it and can pay.`;
@@ -319,6 +348,7 @@ export const GATES: Record<string, Gate> = {
     },
   },
   manage_telegram_business: {
+    only: "`post_story`, `repost_story`, `delete_story` and `update_profile`",
     describe: (a) => {
       const p = (a.params ?? {}) as Args;
       if (a.action === "post_story" || a.action === "repost_story") return `Posts a Telegram story as the user's Telegram Business account (profile "${str(a.user)}")${p.caption ? `: ${str(p.caption)}` : ""}; their contacts see it.`;
@@ -403,8 +433,14 @@ export function applyConfirmationGates(server: McpServer): void {
     const shape = (tool.inputSchema as z.AnyZodObject).shape;
     const original = tool.handler as (args: Args, extra: unknown) => Promise<unknown>;
     tool.update({
-      description: `${tool.description ?? ""} ${gate.note ?? (field === "confirmed" ? CONFIRMED_NOTE : CONFIRM_USERNAME_NOTE)}`,
-      paramsSchema: { ...shape, [field]: field === "confirmed" ? CONFIRMED_FIELD : CONFIRM_USERNAME_FIELD },
+      description: `${tool.description ?? ""} ${
+        gate.note ?? (gate.only ? partialNote(gate.only) : field === "confirmed" ? CONFIRMED_NOTE : CONFIRM_USERNAME_NOTE)
+      }`,
+      paramsSchema: {
+        ...shape,
+        [field]:
+          field === "confirm_username" ? CONFIRM_USERNAME_FIELD : gate.only ? PARTIAL_CONFIRMED_FIELD : CONFIRMED_FIELD,
+      },
       callback: (async (args: Args, extra: unknown) => {
         const action = gate.describe(args);
         if (action && !isUnlocked(args, field)) {
