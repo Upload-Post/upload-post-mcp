@@ -5,7 +5,7 @@
  *     WhatsApp tools (its reviewed surface); every other client gets platform
  *     'whatsapp', its fields, and the template / business tools;
  *   - descriptions say WhatsApp is available to every account (no rollout or
- *     allowlist wording), while Messenger stays a limited rollout;
+ *     allowlist wording), while Messenger is not available yet;
  *   - every WhatsApp field reaches POST /uploadposts/dms/send under the API's
  *     names, nothing dropped; what the API would refuse never reaches it;
  *   - templates, business profile and QR codes hit their routes, with user /
@@ -71,7 +71,7 @@ assert.match(send.description, /131047/);
 assert.match(send.description, /template/);
 const list = s.tools.get("list_dm_conversations");
 assert.match(list.description, /WhatsApp \(available to every account\)/);
-assert.match(list.inputSchema.properties.platform.description, /Messenger is in a limited rollout/, "Messenger stays limited");
+assert.match(list.inputSchema.properties.platform.description, /Messenger is not available yet/, "Messenger not available until Meta approves");
 assert.match(s.tools.get("get_connect_link").description, /\['whatsapp'\]/);
 const waText = [send, list, ...WA_TOOLS.map((t) => s.tools.get(t))].map((t) => t.description).join(" ");
 assert.doesNotMatch(waText, /WhatsApp[^.]*(limited|allowlist|not generally available|rollout)/i, "no WhatsApp availability warning");

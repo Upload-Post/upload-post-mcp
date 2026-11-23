@@ -194,6 +194,13 @@ function whenSdkSends(shape: Shape): Shape {
   return Object.fromEntries(Object.entries(shape).filter(([key]) => known.has(key)));
 }
 
+// ChatGPT keeps the reviewed wording; every other client learns that Messenger
+// can't be enabled for anyone until Meta approves it (support can't turn it on).
+const MESSENGER_REVIEWED_HELP =
+  "Messenger is in a limited rollout: an account without access gets 403 `messenger_not_enabled`, and no plan, setting or reconnect changes that (the user can ask Upload-Post support for access).";
+const MESSENGER_NOT_AVAILABLE_HELP =
+  "Messenger is not available yet: Upload-Post is waiting for Meta's approval, so every call gets 403 `messenger_not_enabled`; no plan, setting, reconnect or support request turns it on.";
+
 export function applySecondWaveParameters(server: McpServer): void {
   const tools = registered(server);
   const widen = (name: string, edit: (shape: Shape) => void, descriptionSuffix?: string): void => {
@@ -502,7 +509,11 @@ export function applySecondWaveParameters(server: McpServer): void {
     s.platform = z
       .string()
       .optional()
-      .describe(platformHelp.replace("or 'bluesky'.", "'bluesky' or 'telegram'."));
+      .describe(
+        platformHelp
+          .replace("or 'bluesky'.", "'bluesky' or 'telegram'.")
+          .replace(MESSENGER_REVIEWED_HELP, MESSENGER_NOT_AVAILABLE_HELP)
+      );
     s.business_connection_id = z
       .string()
       .optional()

@@ -176,7 +176,7 @@ WhatsApp is open to every account as a **messaging channel**: posts are never pu
 - Free-form messages only reach someone within 24 h of their last message to the number. Outside that window send an approved `template` (`{ name, language, components }`); anything else fails with `meta_error_code` 131047. `manage_whatsapp_templates` lists, creates (Meta reviews them) and deletes templates.
 - `list_dm_conversations` with `platform: "whatsapp"` returns the stored inbox (`participant_id` = phone number); files people send carry a `media_id`.
 - `manage_whatsapp_business` reads and edits the business profile (about, description, address, email, websites, category) and manages the QR codes / links that open a chat with a prefilled message.
-- Facebook Messenger (`platform: "facebook"` in `list_dm_conversations`) is still a limited rollout: accounts without access get 403 `messenger_not_enabled`.
+- Facebook Messenger (`platform: "facebook"` in `list_dm_conversations`) is not available yet: Upload-Post is waiting for Meta's approval, so every call gets 403 `messenger_not_enabled` and it can't be enabled on request.
 
 ### Telegram, Bluesky and Google Business
 
