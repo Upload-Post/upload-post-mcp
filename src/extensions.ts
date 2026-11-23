@@ -194,12 +194,10 @@ function whenSdkSends(shape: Shape): Shape {
   return Object.fromEntries(Object.entries(shape).filter(([key]) => known.has(key)));
 }
 
-// ChatGPT keeps the reviewed wording; every other client learns that Messenger
-// can't be enabled for anyone until Meta approves it (support can't turn it on).
-const MESSENGER_REVIEWED_HELP =
-  "Messenger is in a limited rollout: an account without access gets 403 `messenger_not_enabled`, and no plan, setting or reconnect changes that (the user can ask Upload-Post support for access).";
-const MESSENGER_NOT_AVAILABLE_HELP =
-  "Messenger is not available yet: Upload-Post is waiting for Meta's approval, so every call gets 403 `messenger_not_enabled`; no plan, setting, reconnect or support request turns it on.";
+// ChatGPT keeps the help OpenAI reviewed (which still names Messenger); every
+// other client gets the networks that work today. Messenger is off until Meta
+// approves it (FACEBOOK_MESSAGING_ALLOWLIST in the API); see branch messenger-launch.
+const DM_PLATFORM_HELP = "'instagram', 'whatsapp', 'bluesky' or 'telegram'. Required by the Upload-Post API.";
 
 export function applySecondWaveParameters(server: McpServer): void {
   const tools = registered(server);
@@ -505,15 +503,7 @@ export function applySecondWaveParameters(server: McpServer): void {
       .literal("unread_counts")
       .optional()
       .describe("Bluesky only: add `unread_counts` {accepted, request} to the answer.");
-    const platformHelp = s.platform?.description ?? "";
-    s.platform = z
-      .string()
-      .optional()
-      .describe(
-        platformHelp
-          .replace("or 'bluesky'.", "'bluesky' or 'telegram'.")
-          .replace(MESSENGER_REVIEWED_HELP, MESSENGER_NOT_AVAILABLE_HELP)
-      );
+    s.platform = z.string().optional().describe(DM_PLATFORM_HELP);
     s.business_connection_id = z
       .string()
       .optional()
