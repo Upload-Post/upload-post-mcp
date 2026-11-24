@@ -8,6 +8,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { LOCAL_FILE_GUIDANCE, isChatGpt, type SessionContext } from "../client_profile.js";
 import type { UploadPostMcpClient } from "../client.js";
 import { safeUpload } from "../connect.js";
+import { normalizeTargetingOptions } from "../targeting.js";
 import {
   PhotoPlatform,
   REDDIT_UNAVAILABLE,
@@ -489,6 +490,9 @@ async function resolvePlatformRouting(
   }
   delete opts.post_mode;
   delete opts.tiktok_upload_to_draft;
+
+  // facebookTargeting { countries: [...] } -> Graph's { geo_locations: { countries } }.
+  normalizeTargetingOptions(opts);
 
   return opts;
 }

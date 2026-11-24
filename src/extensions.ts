@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AnalyticsPlatform } from "./schemas.js";
 import { sdkOptionKeys } from "./sdk-options.js";
+import { FACEBOOK_TARGETING, LINKEDIN_TARGETING } from "./targeting.js";
 
 /**
  * Parameters added to EXISTING tools after the ChatGPT app review.
@@ -229,6 +230,18 @@ export function applySecondWaveParameters(server: McpServer): void {
   widen("upload_text", (s) =>
     widenObjectField(s, "platformOptions", { ...SPONSORED, ...TELEGRAM_COMMON, ...TELEGRAM_TEXT, ...BLUESKY_COMMON, ...BLUESKY_TEXT, ...GBP_COMMON })
   );
+  // Country / audience targeting on Facebook Page posts and LinkedIn Page posts.
+  const targeting = whenSdkSends({ ...FACEBOOK_TARGETING, ...LINKEDIN_TARGETING });
+  if (Object.keys(targeting).length) {
+    for (const name of ["upload_video", "upload_photos", "upload_text"]) {
+      widen(name, (s) => widenObjectField(s, "platformOptions", targeting));
+    }
+  }
+  // upload_document has no platformOptions: its LinkedIn options are top-level.
+  const documentTargeting = whenSdkSends(LINKEDIN_TARGETING);
+  if (Object.keys(documentTargeting).length) {
+    widen("upload_document", (s) => Object.assign(s, documentTargeting));
+  }
   const paidBroadcast = whenSdkSends(TELEGRAM_PAID_BROADCAST);
   if (Object.keys(paidBroadcast).length) {
     for (const name of ["upload_video", "upload_photos", "upload_text"]) {
