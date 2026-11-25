@@ -32,6 +32,13 @@ const BLUESKY_ACTIONS = [
   "reattach_quote",
 ] as const;
 const TELEGRAM_ACTIONS = ["react", "delete_reaction"] as const;
+const X_ACTIONS = ["bookmark", "unbookmark", "unrepost"] as const;
+/** Which actions each platform takes. */
+const POST_ACTIONS_BY_PLATFORM: Record<string, readonly string[]> = {
+  bluesky: BLUESKY_ACTIONS,
+  telegram: TELEGRAM_ACTIONS,
+  x: X_ACTIONS,
+};
 
 export function registerPostActionTools(server: McpServer, client: UploadPostMcpClient): RegisteredTool[] {
   const edit = server.registerTool(
@@ -125,12 +132,14 @@ export function registerPostActionTools(server: McpServer, client: UploadPostMcp
       description:
         "Actions on a published post. Bluesky: bookmark / unbookmark (private), pin / unpin on the profile (unpin takes no post_id), reply_settings (who can reply: `reply_settings` everyone, nobody, mention, following, followers or list:<at-uri>, one or several), quote_settings (`quote_settings` disable_quotes or everyone), detach_quote / reattach_quote (`quote_uri` = the post that quotes this one). " +
         "Telegram: react (`emoji`, or `params.telegram_reaction`, `params.telegram_is_big`), delete_reaction (removes another person's reaction in a group: `params.user_id` or `params.actor_chat_id`, needs `confirm`). " +
+        "X: bookmark (optional folder_id, a bookmark folder) / unbookmark (private), unrepost (undo a repost the account made). Each counts toward the daily X write limit shared with replies, edits, reposts and likes (429 x_daily_write_limit); bookmarks need the X bookmark permission, so accounts connected before it get 403 x_reconnect_required (reconnect X); 502 x_write_outcome_unknown means X did not answer: check before retrying. " +
         "Bluesky likes and reposts are not available.",
       inputSchema: {
         user: z.string().describe("Upload-Post profile name."),
-        platform: z.enum(["bluesky", "telegram"]),
-        action: z.enum([...BLUESKY_ACTIONS, ...TELEGRAM_ACTIONS]),
-        post_id: z.string().optional().describe("Bluesky: at:// URI or bsky.app link. Telegram: the post id returned by the upload."),
+        platform: z.enum(["bluesky", "telegram", "x"]),
+        action: z.enum([...BLUESKY_ACTIONS, ...TELEGRAM_ACTIONS, "unrepost"]),
+        post_id: z.string().optional().describe("Bluesky: at:// URI or bsky.app link. Telegram: the post id returned by the upload. X: the post id."),
+        folder_id: z.string().optional().describe("X bookmark only: bookmark folder id."),
         reply_settings: z.union([z.string(), z.array(z.string())]).optional().describe("Bluesky reply_settings action only."),
         quote_settings: z.enum(["disable_quotes", "everyone"]).optional().describe("Bluesky quote_settings action only."),
         quote_uri: z.string().optional().describe("Bluesky detach_quote / reattach_quote only."),
@@ -149,8 +158,7 @@ export function registerPostActionTools(server: McpServer, client: UploadPostMcp
     },
     safe(async (args) => {
       const { params, ...named } = args as { params?: Record<string, unknown>; platform: string; action: string };
-      const bluesky = (BLUESKY_ACTIONS as readonly string[]).includes(named.action);
-      if (bluesky !== (named.platform === "bluesky")) {
+      if (!(POST_ACTIONS_BY_PLATFORM[named.platform] ?? []).includes(named.action)) {
         throw new Error(`Action '${named.action}' is not available on ${named.platform}.`);
       }
       return callRoute(client, { method: "POST", path: "/uploadposts/posts/action" }, { ...(params ?? {}), ...compact(named) });

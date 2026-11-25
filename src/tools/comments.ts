@@ -208,6 +208,7 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
         postId?: string;
         postUrl?: string;
         linkedinPageId?: string;
+        imageUrl?: string;
       };
       return client.request("POST", "/uploadposts/comments/create", {
         body: compact({
@@ -218,6 +219,8 @@ export function registerCommentTools(server: McpServer, client: UploadPostMcpCli
           post_id: a.postId,
           post_url: a.postUrl,
           target_linkedin_page_id: a.linkedinPageId,
+          // TikTok image comments: offered outside ChatGPT only (extensions.ts).
+          image_url: a.imageUrl,
         }),
       });
     })

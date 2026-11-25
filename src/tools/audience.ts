@@ -109,10 +109,12 @@ export function registerAudienceTools(server: McpServer, client: UploadPostMcpCl
       const a = args as {
         user: string;
         platform: string;
-        type: "hashtags" | "keywords";
+        type: "hashtags" | "keywords" | "trending";
         q?: string;
         countryCode?: string;
         language?: string;
+        // TikTok `trending` and `personalized`: offered outside ChatGPT only (extensions.ts).
+        personalized?: boolean;
       };
       return client.request("GET", "/uploadposts/suggestions", {
         query: compact({
@@ -122,6 +124,7 @@ export function registerAudienceTools(server: McpServer, client: UploadPostMcpCl
           q: a.q,
           country_code: a.countryCode,
           language: a.language,
+          personalized: a.personalized,
         }),
       });
     })

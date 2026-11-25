@@ -158,11 +158,51 @@ export const GATES: Record<string, Gate> = {
   upload_document: upload("a document"),
   send_dm: { describe: sendDm },
   manage_whatsapp_templates: {
-    only: "`delete`",
+    only: "`delete` and `edit`",
+    describe: (a) => {
+      if (a.action === "delete") return `Deletes the WhatsApp template "${str(a.name)}" (every language) of profile "${str(a.user)}". It cannot be restored; Meta blocks the name for a while.`;
+      if (a.action === "edit") return `Changes WhatsApp template ${str(a.template_id)} of profile "${str(a.user)}" (it goes back to Meta's review; Meta allows 10 edits per 30 days).`;
+      return undefined;
+    },
+  },
+  manage_whatsapp_number: {
+    only: "`block_users`, `request_display_name`, `apply_display_name`, `change_pin` and `enable_template_insights`",
+    describe: (a) => {
+      if (a.action === "block_users") return `Blocks ${list(a.users)} on the WhatsApp number of profile "${str(a.user)}": they can no longer write to it, and it cannot write to them.`;
+      if (a.action === "request_display_name") return `Asks Meta to review "${str(a.display_name)}" as the new display name of the WhatsApp number of profile "${str(a.user)}".`;
+      if (a.action === "apply_display_name") return `Applies the approved new display name of the WhatsApp number of profile "${str(a.user)}"; everyone who chats with it sees the new name.`;
+      if (a.action === "change_pin") return `Changes the two-step verification PIN of the WhatsApp number of profile "${str(a.user)}".`;
+      if (a.action === "enable_template_insights") return `Turns template analytics on for the WhatsApp Business account of profile "${str(a.user)}"; Meta does not let it be turned off again.`;
+      return undefined;
+    },
+  },
+  manage_whatsapp_flows: {
+    only: "`publish`, `deprecate` and `delete`",
+    describe: (a) => {
+      if (a.action === "publish") return `Publishes WhatsApp Flow ${str(a.flow_id)} of profile "${str(a.user)}"; once published it cannot be edited or deleted, only deprecated.`;
+      if (a.action === "deprecate") return `Deprecates WhatsApp Flow ${str(a.flow_id)} of profile "${str(a.user)}"; it can no longer be sent.`;
+      if (a.action === "delete") return `Deletes the draft WhatsApp Flow ${str(a.flow_id)} of profile "${str(a.user)}".`;
+      return undefined;
+    },
+  },
+  manage_facebook_video_captions: {
     describe: (a) =>
-      a.action === "delete"
-        ? `Deletes the WhatsApp template "${str(a.name)}" (every language) of profile "${str(a.user)}". It cannot be restored; Meta blocks the name for a while.`
-        : undefined,
+      `Changes the captions of Facebook video ${str(a.video_id)} of profile "${str(a.user)}": ${[
+        a.srt ? `adds a ${str(a.locale)} track` : "",
+        a.default_locale ? `default ${str(a.default_locale)}` : "",
+        Array.isArray(a.delete_locales) && a.delete_locales.length ? `DELETES ${list(a.delete_locales)}` : "",
+      ]
+        .filter(Boolean)
+        .join(", ")}. Viewers see the change.`,
+  },
+  manage_pinterest_api: {
+    only: "`DELETE`",
+    describe: (a) =>
+      a.method === "DELETE" ? `Deletes Pinterest ${str(a.endpoint)} of profile "${str(a.user)}" (a board deletes its Pins too). It cannot be undone.` : undefined,
+  },
+  manage_x_lists: {
+    only: "`delete`",
+    describe: (a) => (a.action === "delete" ? `Deletes X list ${str(a.list_id)} of profile "${str(a.user)}". It cannot be undone.` : undefined),
   },
   manage_whatsapp_business: {
     only: "`update_profile` and `delete_qr_code`",
@@ -287,6 +327,7 @@ export const GATES: Record<string, Gate> = {
       // Bookmarks are private; delete_reaction carries the API's own `confirm`.
       if (a.action === "bookmark" || a.action === "unbookmark" || a.action === "delete_reaction") return undefined;
       if (a.action === "react") return `Reacts ${str(a.emoji ?? "")} to message ${str(a.post_id)} on Telegram as profile "${str(a.user)}"; the chat sees it.`;
+      if (a.platform === "x") return `Runs ${str(a.action)} on X post ${str(a.post_id)} as profile "${str(a.user)}"; it changes what others see.`;
       return `Runs ${str(a.action)} on Bluesky post ${str(a.post_id ?? "(pinned)")} as profile "${str(a.user)}"; it changes what others see on the post or profile.`;
     },
   },

@@ -194,11 +194,11 @@ export function registerAccountExtraTools(server: McpServer, client: UploadPostM
     {
       title: "Save a Pin or bookmark a post",
       description:
-        "Pinterest: save an existing Pin (`post_id`) to one of the profile's boards (`pinterest_board_id`, optionally a section); it shows on that board. Bluesky: bookmark a post (private).",
+        "Pinterest: save an existing Pin (`post_id`) to one of the profile's boards (`pinterest_board_id`, optionally a section); it shows on that board. Bluesky and X: bookmark a post (private). X bookmarks need the X bookmark permission (403 x_reconnect_required for accounts connected before it: reconnect X) and count toward the daily X write limit.",
       inputSchema: {
-        platform: z.enum(["pinterest", "bluesky"]),
+        platform: z.enum(["pinterest", "bluesky", "x"]),
         user: z.string().min(1).describe("Upload-Post profile name."),
-        post_id: z.string().min(1).describe("Pinterest Pin id, or Bluesky at:// URI or bsky.app link."),
+        post_id: z.string().min(1).describe("Pinterest Pin id, Bluesky at:// URI or bsky.app link, or X post id."),
         pinterest_board_id: z.string().optional().describe("Pinterest: the board to save to (required)."),
         pinterest_board_section_id: z.string().optional().describe("Pinterest: a section of that board."),
       },

@@ -286,7 +286,7 @@ export function registerDmTools(
 
 const BLUESKY_ONLY_DM_FIELDS = ["conversation_id", "attachments", "reply_to", "sender_action", "message_id", "reaction"];
 const TELEGRAM_ONLY_DM_FIELDS = ["business_connection_id", "parse_mode", "location", "contact", "checklist", "message_ids"];
-const WHATSAPP_ONLY_DM_FIELDS = ["template", "contacts", "list", "cta_url", "header", "footer", "typing"];
+const WHATSAPP_ONLY_DM_FIELDS = ["template", "contacts", "list", "cta_url", "header", "footer", "typing", "flow", "carousel", "location_request", "call_button"];
 const WHATSAPP_SENDER_ACTIONS = ["mark_read", "typing_on"];
 
 /** What the API would refuse on WhatsApp, refused before the call with the reason. */
@@ -313,9 +313,16 @@ function validateWhatsappDm(a: Record<string, unknown>): void {
     }
     return;
   }
-  const interactive = a.buttons !== undefined || a.list !== undefined || a.cta_url !== undefined;
+  const interactive =
+    a.buttons !== undefined ||
+    a.list !== undefined ||
+    a.cta_url !== undefined ||
+    a.flow !== undefined ||
+    a.carousel !== undefined ||
+    a.location_request !== undefined ||
+    a.call_button !== undefined;
   if (interactive && !a.message) {
-    throw new Error("WhatsApp buttons, list and cta_url need `message`: the body text of the interactive message.");
+    throw new Error("WhatsApp buttons, list, cta_url, flow, carousel, location_request and call_button need `message`: the body text of the interactive message.");
   }
   if (interactive && a.attachments !== undefined) {
     throw new Error("WhatsApp interactive messages cannot carry attachments: send the file in a separate send_dm.");

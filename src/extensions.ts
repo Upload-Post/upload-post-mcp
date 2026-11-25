@@ -552,4 +552,99 @@ export function applySecondWaveParameters(server: McpServer): void {
       .describe("Telegram only: the chats of this connected Telegram Business account instead of the bot's.");
     s.include_profile_photos = z.boolean().optional().describe("Telegram only: add each participant's profile photo.");
   }, "WhatsApp (available to every account) lists the conversations of the profile's WhatsApp Business number, stored as they arrive, with `participant_id` = the person's phone number (what send_dm takes as recipient_id); files people send come with a `media_id`. Telegram (`platform: \"telegram\"`): the private chats of the profile's own bot, with `participant_id` = the person's numeric chat id (what send_dm takes as recipient_id). It needs the bot's updates on (manage_telegram_bot set_updates); otherwise 409 telegram_updates_not_enabled. Files people send come with a `media_id` (a Telegram file_id), which send_dm attachments can send again.");
+
+  applyNetworkExtrasOnExistingTools(widen, tools);
+}
+
+// ---- Switched on in the API on 2026-11-25 -----------------------------------------
+// Parameters of features that are live in production, on tools ChatGPT also has
+// (its reviewed schemas stay as they are). The upload options of the same round
+// (Threads GIFs, spoilers and ghost posts, the X video card and clips, Facebook
+// backdating, the Reel fields of a single video on upload_photos) go through the
+// upload-post SDK, which does not send them yet: they are not offered here until it does.
+
+type Widen = (name: string, edit: (shape: Shape) => void, descriptionSuffix?: string) => void;
+
+function enumPlus(shape: Shape, key: string, extra: string[]): z.ZodEnum<[string, ...string[]]> {
+  const field = shape[key];
+  const base = (field instanceof z.ZodOptional ? field.unwrap() : field instanceof z.ZodDefault ? field.removeDefault() : field) as z.ZodEnum<[string, ...string[]]>;
+  const options = [...base.options, ...extra.filter((v) => !base.options.includes(v))] as [string, ...string[]];
+  return z.enum(options);
+}
+
+function applyNetworkExtrasOnExistingTools(widen: Widen, tools: Record<string, RegisteredTool>): void {
+  widen(
+    "create_comment",
+    (s) => {
+      s.imageUrl = z
+        .string()
+        .optional()
+        .describe(
+          "TikTok only: public URL of an image posted as the comment or with it (JPG, PNG or WebP, up to 5 MB, 360x360 to 1080x1920 or 1920x1080 pixels); an image TikTok cannot take answers 400 invalid_image and nothing is posted. Sent as `image_url`."
+        );
+    }
+  );
+
+  widen(
+    "get_suggestions",
+    (s) => {
+      retype(s, "type", enumPlus(s, "type", ["trending"]));
+      s.personalized = z
+        .boolean()
+        .optional()
+        .describe("TikTok `keywords` and `trending`: searches personalized for this account.");
+    },
+    "`type: 'trending'` (no q) returns the 20 searches trending on TikTok right now in `keywords`; it needs 'trend_search' too. TikTok shares them only with accounts that have Advanced Access or are Verified Business accounts: for any other account the list is empty and the answer carries `warnings` saying why (tell the user; it is not an error)."
+  );
+
+  widen(
+    "get_post_analytics",
+    () => undefined,
+    "TikTok `post_metrics` also carries `media_type` and `engagement_likes` (when the likes happened along the video, ordered by second like `retention`), when TikTok reports them."
+  );
+
+  if (tools["comment_action"]) {
+    widen(
+      "comment_action",
+      () => undefined,
+      "X also takes hide / unhide of a reply in a conversation the account started (commentId = the reply's post id); it needs the X permission tweet.moderate.write, so accounts connected before it get 403 x_reconnect_required (reconnect X)."
+    );
+  }
+
+  widen(
+    "send_dm",
+    (s) => {
+      s.flow = z
+        .record(z.unknown())
+        .optional()
+        .describe(
+          "WhatsApp only: send a WhatsApp Flow (a form in the chat) { flow_id or flow_name, cta (button label, max 30), flow_token?, mode? published|draft, flow_action? navigate|data_exchange, screen?, data? }; `message` is the body. Build Flows with manage_whatsapp_flows."
+        );
+      s.carousel = z
+        .array(z.record(z.unknown()))
+        .min(2)
+        .max(10)
+        .optional()
+        .describe(
+          "WhatsApp only: a media carousel of 2-10 cards { media_url (https), media_type image|video, body? (max 160), and either cta_url { display_text, url } or buttons (up to 2 quick replies) }; every card has the same kind and number of buttons; `message` is the body."
+        );
+      s.location_request = z
+        .boolean()
+        .optional()
+        .describe("WhatsApp only: true asks the person to share their location (their answer arrives as a location message); `message` is the body.");
+      s.call_button = z
+        .record(z.unknown())
+        .optional()
+        .describe(
+          "WhatsApp only: a button that calls the number on WhatsApp { display_text? (max 20), ttl_minutes? (1-43200), payload? (max 512) }; needs the Calling API on the number; `message` is the body."
+        );
+    },
+    "WhatsApp `recipient_id` can also be a WhatsApp user id (e.g. US.13491208655302741918) for people who reached the number without a phone number: always answer to the `sender.id` of dm_received or the participant `id` of list_dm_conversations."
+  );
+
+  widen(
+    "list_dm_conversations",
+    () => undefined,
+    "On WhatsApp each person's participant also carries `user_id` (their WhatsApp user id), `username` and `phone` (null when WhatsApp did not share it); `id` stays what send_dm takes."
+  );
 }
