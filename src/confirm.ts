@@ -200,6 +200,14 @@ export const GATES: Record<string, Gate> = {
     describe: (a) =>
       a.method === "DELETE" ? `Deletes Pinterest ${str(a.endpoint)} of profile "${str(a.user)}" (a board deletes its Pins too). It cannot be undone.` : undefined,
   },
+  manage_instagram_messaging_profile: {
+    only: "`set` and `delete`",
+    describe: (a) => {
+      if (a.action === "set") return `Replaces the Instagram ${[a.ice_breakers !== undefined ? "ice breakers" : "", a.persistent_menu !== undefined ? "persistent menu" : ""].filter(Boolean).join(" and ")} of profile "${str(a.user)}"; everyone who opens a chat with the account sees them.`;
+      if (a.action === "delete") return `Removes the Instagram ${list(a.fields)} of profile "${str(a.user)}".`;
+      return undefined;
+    },
+  },
   manage_x_lists: {
     only: "`delete`",
     describe: (a) => (a.action === "delete" ? `Deletes X list ${str(a.list_id)} of profile "${str(a.user)}". It cannot be undone.` : undefined),

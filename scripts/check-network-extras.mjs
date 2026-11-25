@@ -29,6 +29,7 @@ const NEW_TOOLS = [
   "manage_x_lists",
   "manage_whatsapp_number",
   "manage_whatsapp_flows",
+  "manage_instagram_messaging_profile",
 ];
 
 async function connect(name) {
@@ -84,8 +85,6 @@ for (const off of [/catalog/i, /\bterms\b/, /search\/(pins|boards)/, /product_ta
 }
 const everything = JSON.stringify([...s.tools.values()]);
 for (const off of [
-  /reposts_of_me/,
-  /timeline\.read/,
   /linkedin\/reactions/,
   /instagram\/audio/,
   /threads\/(mentions|search|locations)/,
@@ -94,7 +93,9 @@ for (const off of [
 ]) {
   assert.doesNotMatch(everything, off, `nothing off in production is offered (${off})`);
 }
-assert.ok(!props(s, "x_read").action.enum.includes("reposts_of_me"));
+assert.ok(props(s, "x_read").action.enum.includes("reposts_of_me"));
+assert.match(s.tools.get("x_read").description, /2026-11-25/);
+assert.doesNotMatch(everything, /instagram_mention_received/, "Instagram mention webhooks are off");
 assert.ok(!props(s, "send_dm").platform?.enum?.includes?.("x"), "no X DMs");
 
 // --- Facebook Pages -------------------------------------------------------------
@@ -226,6 +227,20 @@ assert.ok(isPreview(r), "editing a template waits for confirmation");
 await s.call("manage_whatsapp_templates", { action: "edit", user: "brand", template_id: "129", message_send_ttl_seconds: 3600, current_category: "UTILITY", confirmed: true });
 assert.equal(last(s).method, "PATCH");
 assert.equal(last(s).data.platform, "whatsapp");
+
+// --- Instagram messaging profile ------------------------------------------------------
+await s.call("manage_instagram_messaging_profile", { action: "get", user: "brand" });
+assert.equal(last(s).method, "GET");
+assert.equal(last(s).url, "/uploadposts/dms/instagram/profile");
+r = await s.call("manage_instagram_messaging_profile", { action: "set", user: "brand", ice_breakers: [{ question: "Hi?", payload: "HI" }] });
+assert.ok(isPreview(r), "changing ice breakers waits for confirmation");
+await s.call("manage_instagram_messaging_profile", { action: "delete", user: "brand", fields: ["ice_breakers"], confirm: true, confirmed: true });
+assert.equal(last(s).method, "DELETE");
+assert.deepEqual(last(s).data, { user: "brand", fields: ["ice_breakers"], confirm: true });
+assert.match(s.tools.get("get_post_comments").description, /like_count/);
+assert.match(s.tools.get("get_analytics").description, /breakdowns_detail/);
+assert.match(s.tools.get("create_comment").description, /top-level comment on one of the account's own posts/);
+assert.doesNotMatch(s.tools.get("create_comment").description, /replies only/);
 
 await s.close();
 console.log(`check-network-extras: ok (${NEW_TOOLS.length} new tools)`);

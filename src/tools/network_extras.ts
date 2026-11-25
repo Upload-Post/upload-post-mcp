@@ -80,6 +80,7 @@ const X_READ_KINDS = [
   "liking_users",
   "reposted_by",
   "quote_posts",
+  "reposts_of_me",
   "bookmarks",
   "followers",
   "following",
@@ -289,7 +290,7 @@ export function registerNetworkExtraTools(server: McpServer, client: UploadPostM
         X_PAID +
         "mentions: posts that @mention the account (not only replies), newest first, each with the author's verified, verified_type (blue, business, government, none) and followers_count; filters verified_only, verified_type (comma-separated), min_followers and replies (include, exclude, only) apply to the `limit` (5-100) mentions scanned, so a page can hold fewer; page with cursor = pagination.next_cursor. " +
         "Every other action is one X read (`data`, `includes`, `meta` are X's): search_recent (query, last 7 days; start_time, end_time, since_id, until_id, sort_order), counts_recent (query, granularity minute|hour|day), liking_users / reposted_by / quote_posts (post_id; quote_posts takes exclude), bookmarks, followers, following, owned_lists, followed_lists, pinned_lists, list / list_posts / list_members / list_followers (list_id), trends (woeid, limit 1-50), trend_locations, personalized_trends, post_analytics (ids, up to 100; start_time, end_time, granularity hourly|daily|weekly|total), media_analytics (media_keys). Page with cursor = pagination.next_cursor. " +
-        "liking_users, bookmarks, followers/following and the lists need an X permission accounts connected before it was asked did not grant: 403 x_reconnect_required with `scope` means reconnect X.",
+        "liking_users, reposts_of_me (reposts of the account's posts), bookmarks, followers/following and the lists need X permissions Upload-Post asks since 2026-11-25: an X account connected before that answers 403 x_reconnect_required (with `scope`) until the user reconnects X once; mentions, search_recent, counts_recent, reposted_by, quote_posts, trends and the analytics work with the existing connection.",
       inputSchema: {
         action: z.enum(["mentions", ...X_READ_KINDS]),
         user: z.string().describe("Upload-Post profile name with X connected."),
@@ -311,7 +312,7 @@ export function registerNetworkExtraTools(server: McpServer, client: UploadPostM
     {
       title: "Manage X lists",
       description:
-        "Create, update and delete the X account's lists and their members. create (name 1-25 characters, description up to 100, private), update (list_id, name, description, private), delete (list_id, confirm: true; cannot be undone), add_member / remove_member (list_id, user_id = numeric X user id). Read lists with x_read owned_lists and list_members. Needs the X list.write permission (403 x_reconnect_required for accounts connected before it: reconnect X). Each call counts toward the daily X write limit shared with replies, edits, reposts and likes (429 x_daily_write_limit); 502 x_write_outcome_unknown means X did not answer: check before retrying.",
+        "Create, update and delete the X account's lists and their members (needs X connected or reconnected on or after 2026-11-25). create (name 1-25 characters, description up to 100, private), update (list_id, name, description, private), delete (list_id, confirm: true; cannot be undone), add_member / remove_member (list_id, user_id = numeric X user id). Read lists with x_read owned_lists and list_members. Needs the X list.write permission (403 x_reconnect_required for accounts connected before it: reconnect X). Each call counts toward the daily X write limit shared with replies, edits, reposts and likes (429 x_daily_write_limit); 502 x_write_outcome_unknown means X did not answer: check before retrying.",
       inputSchema: {
         action: z.enum(["create", "update", "delete", "add_member", "remove_member"]),
         user: z.string().describe("Upload-Post profile name with X connected."),
@@ -328,5 +329,36 @@ export function registerNetworkExtraTools(server: McpServer, client: UploadPostM
     safe(async (args) => callRoute(client, { method: "POST", path: "/uploadposts/x/lists" }, args as Record<string, unknown>))
   );
 
-  return [facebookRead, facebookCaptions, pinterestRead, pinterestWrite, instagramRead, threadsGhost, xRead, xLists];
+  const instagramMessaging = server.registerTool(
+    "manage_instagram_messaging_profile",
+    {
+      title: "Instagram ice breakers and persistent menu",
+      description:
+        "The ice breakers (questions offered when someone opens a chat with the Instagram account for the first time) and the persistent menu of its inbox. Only accounts connected with Instagram Login; one connected through a Facebook Page answers 400 instagram_connection_unsupported. " +
+        "get (fields: ice_breakers and/or persistent_menu, default both). set: each field sent replaces what Instagram had for it, the other stays; ice_breakers = up to 4 { question, payload } (the default locale) or [{ locale, call_to_actions: [{ question, payload }] }] with a `default` entry; persistent_menu = [{ locale (default 'default'), call_to_actions: [{ type: 'postback', title, payload } | { type: 'web_url', title, url }] }] with one `default` entry (Meta recommends at most 5 items). delete (fields, confirm: true). Tapping an ice breaker or a postback item arrives as a dm_received webhook with its payload.",
+      inputSchema: {
+        action: z.enum(["get", "set", "delete"]),
+        user: z.string().describe("Upload-Post profile name with Instagram connected."),
+        fields: z.array(z.enum(["ice_breakers", "persistent_menu"])).optional().describe("get / delete: which ones."),
+        ice_breakers: z.array(z.record(z.unknown())).optional().describe("set: see the description."),
+        persistent_menu: z.array(z.record(z.unknown())).optional().describe("set: see the description."),
+        confirm: apiConfirmField,
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: { title: "Instagram ice breakers and persistent menu", readOnlyHint: false, openWorldHint: true, destructiveHint: true },
+    },
+    safe(async (args) => {
+      const { action, ...rest } = args as { action: string; fields?: string[] } & Record<string, unknown>;
+      const path = "/uploadposts/dms/instagram/profile";
+      if (action === "get") return callRoute(client, { method: "GET", path }, rest);
+      if (action === "delete") {
+        if (!rest.fields || !(rest.fields as string[]).length) throw new Error("`fields` is required to delete.");
+        return client.request("DELETE", path, { body: rest });
+      }
+      if (rest.ice_breakers === undefined && rest.persistent_menu === undefined) throw new Error("Send ice_breakers and/or persistent_menu.");
+      return client.request("POST", path, { body: rest });
+    })
+  );
+
+  return [facebookRead, facebookCaptions, pinterestRead, pinterestWrite, instagramRead, threadsGhost, xRead, xLists, instagramMessaging];
 }

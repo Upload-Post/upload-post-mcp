@@ -600,8 +600,31 @@ function applyNetworkExtrasOnExistingTools(widen: Widen, tools: Record<string, R
   widen(
     "get_post_analytics",
     () => undefined,
-    "TikTok `post_metrics` also carries `media_type` and `engagement_likes` (when the likes happened along the video, ordered by second like `retention`), when TikTok reports them."
+    "TikTok `post_metrics` also carries `media_type` and `engagement_likes` (when the likes happened along the video, ordered by second like `retention`), when TikTok reports them. Instagram adds `profile_activity` and `profile_activity_breakdown` (actions on the profile after seeing a feed post or story: bio_link_clicked, call, direction, email, text...) and `reels_skip_rate` (Reels, a percentage), when Meta reports them."
   );
+
+  widen(
+    "get_analytics",
+    () => undefined,
+    "Instagram also returns `breakdowns_detail`: { metric: { breakdown: { value: count } } }, i.e. comments, likes, reach, saves, shares, total_interactions and views by media_product_type, reach by follow_type and views by follower_type (only what Meta returns for the account)."
+  );
+
+  widen(
+    "get_post_comments",
+    () => undefined,
+    "Instagram comments and replies carry `like_count` and `hidden` (true when the account hid it)."
+  );
+
+  // Instagram top-level comments are on in the API: the reviewed text (ChatGPT keeps it) said replies only.
+  const createComment = tools["create_comment"];
+  if (createComment?.description?.includes("Instagram requires `commentId` (replies only).")) {
+    createComment.update({
+      description: createComment.description.replace(
+        "Instagram requires `commentId` (replies only).",
+        "Instagram: `commentId` replies to a comment, and `postId` (the numeric media id) or `postUrl` without it posts a top-level comment on one of the account's own posts."
+      ),
+    });
+  }
 
   if (tools["comment_action"]) {
     widen(
