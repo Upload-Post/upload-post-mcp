@@ -230,6 +230,21 @@ export function applySecondWaveParameters(server: McpServer): void {
   widen("upload_text", (s) =>
     widenObjectField(s, "platformOptions", { ...SPONSORED, ...TELEGRAM_COMMON, ...TELEGRAM_TEXT, ...BLUESKY_COMMON, ...BLUESKY_TEXT, ...GBP_COMMON })
   );
+  // A location pinned to the profile wins over googleBusinessLocationId. The reviewed
+  // text said the reverse ("Selected on the profile before publishing"), and an agent
+  // posted to the pinned location believing it reached the one it named (feedback
+  // 6b052a80); the API now also returns a warning when that happens.
+  const gbpLocation: Shape = {
+    googleBusinessLocationId: z
+      .string()
+      .optional()
+      .describe(
+        "Google Business location ID (see get_google_business_locations). Ignored when the profile has a location pinned (pinGoogleBusinessLocation / the dashboard): the pinned one always wins and the result carries a warning."
+      ),
+  };
+  for (const name of ["upload_video", "upload_photos", "upload_text"]) {
+    widen(name, (s) => widenObjectField(s, "platformOptions", gbpLocation));
+  }
   // Country / audience targeting on Facebook Page posts and LinkedIn Page posts.
   const targeting = whenSdkSends({ ...FACEBOOK_TARGETING, ...LINKEDIN_TARGETING });
   if (Object.keys(targeting).length) {
