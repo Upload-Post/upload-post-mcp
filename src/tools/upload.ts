@@ -653,6 +653,7 @@ const UPLOAD_VIDEO_DESCRIPTION_CHATGPT =
 
 const UPLOAD_VIDEO_DESCRIPTION_OTHER =
   "Publish a video to one or more platforms. Use `videoPathOrUrl` only for public/signed HTTPS URLs, or for absolute local paths when the MCP server runs on the same machine as the file. `videoBase64` is only for clients that can provide raw bytes directly and is capped by UPLOAD_POST_MAX_INLINE_MB (default 100). Returns a `request_id` you can poll with `get_status`. Supports per-platform overrides (tiktokPrivacyLevel, youtubePrivacyStatus, youtubePlaylistId, youtubeThumbnailUrl, youtubeTags, facebookPageId, instagramMediaType, etc.). " +
+  "YouTube subtitles: `platformOptions.youtubeSubtitles` = [{ language, name?, url }] with a public URL of the .srt/.vtt file; for a local file, stage it first with create_media_upload (mediaType `subtitle`) and pass the returned media_url. " +
   LINKEDIN_MENTIONS +
   " " +
   LOCAL_FILE_GUIDANCE +

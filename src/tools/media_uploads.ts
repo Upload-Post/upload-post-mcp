@@ -6,6 +6,8 @@ import { genericResultOutputSchema, safe } from "../schemas.js";
 import { LOCAL_FILE_GUIDANCE, type SessionContext } from "../client_profile.js";
 
 const MediaType = z.enum(["video", "image", "document"]);
+// Not in the surface OpenAI reviewed: ChatGPT keeps the enum above until the next submission.
+const MediaTypeWithSubtitle = z.enum(["video", "image", "document", "subtitle"]);
 
 export interface MediaUploadHandles {
   /** Re-shape descriptions/visibility for hosts that do not get the Studio widget. */
@@ -22,7 +24,20 @@ const COMPLETE_DESCRIPTION_CHATGPT =
   "Internal/app staging helper. Validate a media upload only after the browser/client has successfully PUT the actual file bytes to upload_url. Do NOT call this immediately after create_media_upload from the model; without the intervening PUT, completion will fail or produce no publishable media. Returns a temporary media_url that can be passed to upload_video/upload_photos immediately.";
 
 const COMPLETE_DESCRIPTION_OTHER =
-  "Step 2 of staging a local file. Call it only after the file bytes were actually PUT to the `upload_url` from create_media_upload; without that PUT it fails or yields no publishable media. Returns a temporary `media_url` to pass straight to upload_video / upload_photos / upload_document.";
+  "Step 2 of staging a local file. Call it only after the file bytes were actually PUT to the `upload_url` from create_media_upload; without that PUT it fails or yields no publishable media. Returns a temporary `media_url` to pass straight to upload_video / upload_photos / upload_document (a `subtitle` upload: to `platformOptions.youtubeSubtitles[].url` in upload_video or `file_url` in manage_youtube_videos upload_caption).";
+
+function createShape(mediaType: z.ZodTypeAny) {
+  return {
+    filename: z.string().describe("Original filename, e.g. clip.mp4."),
+    contentType: z.string().describe("MIME type, e.g. video/mp4."),
+    contentLength: z.number().int().positive().describe("File size in bytes."),
+    mediaType,
+    source: z.string().optional().describe("Optional source label identifying the calling client, e.g. mcp_studio."),
+  };
+}
+
+const MEDIA_TYPE_DESCRIPTION_OTHER =
+  "Kind of media being uploaded. `subtitle` = a caption file (.srt, .vtt, .sbv, .sub, .ass, .ssa, .ttml, .dfxp, .lrc; max 10 MB; contentType e.g. application/x-subrip, text/vtt or text/plain): pass its media_url as `platformOptions.youtubeSubtitles[].url` in upload_video, or as `file_url` in manage_youtube_videos upload_caption.";
 
 export function registerMediaUploadTools(server: McpServer, client: UploadPostMcpClient): MediaUploadHandles {
   const createTool = server.registerTool(
@@ -30,13 +45,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
     {
       title: "Create media upload",
       description: CREATE_DESCRIPTION_CHATGPT,
-      inputSchema: {
-        filename: z.string().describe("Original filename, e.g. clip.mp4."),
-        contentType: z.string().describe("MIME type, e.g. video/mp4."),
-        contentLength: z.number().int().positive().describe("File size in bytes."),
-        mediaType: MediaType.default("video").describe("Kind of media being uploaded."),
-        source: z.string().optional().describe("Optional source label identifying the calling client, e.g. mcp_studio."),
-      },
+      inputSchema: createShape(MediaType.default("video").describe("Kind of media being uploaded.")),
       outputSchema: genericResultOutputSchema,
       annotations: {
         title: "Create media upload",
@@ -58,7 +67,7 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
         filename: string;
         contentType: string;
         contentLength: number;
-        mediaType?: z.infer<typeof MediaType>;
+        mediaType?: z.infer<typeof MediaTypeWithSubtitle>;
         source?: string;
       };
       return client.request("POST", "/uploadposts/media-uploads", {
@@ -171,7 +180,11 @@ export function registerMediaUploadTools(server: McpServer, client: UploadPostMc
   return {
     applyClientProfile(ctx) {
       if (ctx.profile?.kind === "chatgpt") return;
-      createTool.update({ description: CREATE_DESCRIPTION_OTHER, _meta: modelVisible(createTool._meta) });
+      createTool.update({
+        description: CREATE_DESCRIPTION_OTHER,
+        paramsSchema: createShape(MediaTypeWithSubtitle.default("video").describe(MEDIA_TYPE_DESCRIPTION_OTHER)),
+        _meta: modelVisible(createTool._meta),
+      });
       completeTool.update({ description: COMPLETE_DESCRIPTION_OTHER, _meta: modelVisible(completeTool._meta) });
       getTool.update({ _meta: modelVisible(getTool._meta) });
       // Only the Studio widget deletes its own staging uploads; staged media expires after 24 h anyway.
