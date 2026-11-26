@@ -237,7 +237,7 @@ export function registerYoutubeTools(server: McpServer, client: UploadPostMcpCli
       title: "Manage YouTube videos",
       description:
         "Per-video actions on the connected channel (edit title, description, tags, privacy and translations with edit_post). rate (video_id, rating like|dislike|none); set_thumbnail (video_id, thumbnail_url); " +
-        "captions: upload_caption (video_id, file_url, language, name, is_draft; 400+ units, more than a free plan's whole day), update_caption (caption_id, file_url and/or is_draft false to publish a draft; replacing the file needs `confirm`), delete_caption (caption_id, needs `confirm`); " +
+        "captions: upload_caption (video_id, file_url (a public URL, or the media_url of a create_media_upload with mediaType `subtitle`), language, name, is_draft; 400+ units, more than a free plan's whole day), update_caption (caption_id, file_url and/or is_draft false to publish a draft; replacing the file needs `confirm`), delete_caption (caption_id, needs `confirm`); " +
           "report_abuse (video_id, reason_id and secondary_reason_id from youtube_read abuse_reasons, comments, language; reports someone's video to YouTube as the channel, cannot be withdrawn, needs `confirm`, 50 units and a daily limit per channel). " +
         YOUTUBE_AVAILABILITY("set_thumbnail") +
         YOUTUBE_QUOTA,
