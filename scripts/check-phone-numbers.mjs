@@ -92,6 +92,13 @@ assert.doesNotMatch(all, /USD cents|totals? in USD|_usd\b/, "prices and usage ar
 assert.match(desc("phone_numbers_read"), /billing currency[\s\S]*409 phone_numbers_currency_unsupported/);
 assert.match(desc("phone_numbers_read"), /`total`, and `today` against the account's `daily_cap`/);
 assert.match(desc("purchase_phone_number"), /never a profile JWT/);
+assert.match(desc("purchase_phone_number"), /202 pending_payment/);
+for (const name of ["phone_numbers_read", "purchase_phone_number"]) {
+  assert.match(desc(name), /varies by country and number type|vary by country and number type/, `${name}: prices vary`);
+  assert.match(desc(name), /1\.5 times[\s\S]*2\.40 gives 3\.60, so 4[\s\S]*7\.30 gives 10\.95, so 11/, `${name}: the price formula`);
+}
+assert.doesNotMatch(all, /3 to 30/, "no fixed price range suggested as the price");
+assert.equal(s.tools.get("phone_numbers_read").inputSchema.properties.limit.type, "integer", "limit is an integer");
 for (const name of TOOLS) assert.match(desc(name), /403 phone_numbers_not_available/, `${name} states the availability gate`);
 assert.doesNotMatch(all, /telnyx/i, "the carrier is never named");
 assert.doesNotMatch(all, /[A-Z][A-Z0-9]*_[A-Z0-9_]*(ENABLED|ALLOWLIST|SCOPES)|PHONE_NUMBERS_|UPLOADPOSTS_/, "no internal switch is named");
@@ -169,6 +176,7 @@ await s.close();
 for (const [status, re] of [
   ["kyc_required", /Nothing has been bought or charged[\s\S]*kyc_fields[\s\S]*SAME arguments and purchase_intent_id/],
   ["pending_regulatory", /Paid and waiting/],
+  ["pending_payment", /Paid, and the order[\s\S]*Do not buy again[\s\S]*phone_numbers_read `get`[\s\S]*same purchase_intent_id returns this same number/],
 ]) {
   const k = await connect("claude-ai", { respond: () => ({ status: 202, data: { success: true, status } }) });
   const res = await k.call("purchase_phone_number", { ...buy, confirmed: true });
