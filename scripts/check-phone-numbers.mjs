@@ -141,6 +141,11 @@ for (const name of ["phone_numbers_read", "purchase_phone_number", "fix_phone_nu
 }
 assert.match(readme, /keeps the payment[\s\S]{0,200}monthly charge is paused/, "README: declined keeps the payment");
 assert.match(readme, /30 days/, "README: the 30-day window");
+for (const name of ["phone_numbers_read", "purchase_phone_number", "fix_phone_number_kyc"]) {
+  assert.match(desc(name), /remediation_deadline_at \(declined_at \+ 30 days[^)]*\) is the last day to fix it: tell the user that date/, `${name}: show the user the deadline`);
+}
+assert.match(desc("phone_numbers_read"), /only while regulatory_declined declined_at and remediation_deadline_at \(declined_at \+ 30 days/, "the number fields include the deadline");
+assert.match(readme, /`declined_at` and `remediation_deadline_at`/, "README: the deadline fields");
 assert.match(desc("phone_numbers_read"), /kyc_review \(number_id; owner only\)[\s\S]*needs_fix/);
 assert.match(desc("phone_numbers_read"), /kyc_links \(owner only\)[\s\S]*active \| used \| expired \| revoked/);
 assert.match(desc("release_phone_number"), /declined \(regulatory_declined\) cancels the purchase and refunds it/);
@@ -251,7 +256,7 @@ await s.close();
 // 202 answers come back as successes with what to do next.
 for (const [status, re] of [
   ["kyc_required", /Nothing has been bought or charged[\s\S]*kyc_fields[\s\S]*SAME arguments and purchase_intent_id/],
-  ["pending_regulatory", /Paid and waiting[\s\S]*payment is kept and the monthly charge paused[\s\S]*fix_phone_number_kyc `resubmit` \(no second charge\)[\s\S]*30 days[\s\S]*cancelled and refunded/],
+  ["pending_regulatory", /Paid and waiting[\s\S]*payment is kept and the monthly charge paused[\s\S]*fix_phone_number_kyc `resubmit` \(no second charge\)[\s\S]*remediation_deadline_at, and tell the user that date[\s\S]*30 days[\s\S]*cancelled and refunded/],
   ["pending_payment", /Paid, and the order[\s\S]*Do not buy again[\s\S]*phone_numbers_read `get`[\s\S]*same purchase_intent_id returns this same number/],
 ]) {
   const k = await connect("claude-ai", { respond: () => ({ status: 202, data: { success: true, status } }) });
