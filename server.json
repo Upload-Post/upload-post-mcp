@@ -3,7 +3,7 @@
   "name": "com.upload-post/mcp",
   "title": "Upload-Post",
   "description": "Social media MCP: publish, schedule & analyze posts on TikTok, Instagram, YouTube, LinkedIn & X",
-  "version": "0.28.1",
+  "version": "0.29.0",
   "websiteUrl": "https://www.upload-post.com",
   "repository": {
     "url": "https://github.com/Upload-Post/upload-post-mcp",
@@ -64,6 +64,8 @@
         "telegram",
         "whatsapp",
         "whatsapp business",
+        "phone numbers",
+        "sms",
         "cross-posting",
         "analytics",
         "auto dm"

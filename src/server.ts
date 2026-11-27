@@ -28,6 +28,7 @@ import { registerApprovalTools } from "./tools/approvals.js";
 import { registerAccountExtraTools } from "./tools/account_extras.js";
 import { registerWhatsappTools } from "./tools/whatsapp.js";
 import { registerNetworkExtraTools } from "./tools/network_extras.js";
+import { registerPhoneNumberTools } from "./tools/phone_numbers.js";
 import { applySecondWaveParameters } from "./extensions.js";
 import { UPGRADE_URL } from "./plan.js";
 import { applyConfirmationGates } from "./confirm.js";
@@ -109,6 +110,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
   const accountExtraTools = registerAccountExtraTools(server, client);
   const whatsappTools = registerWhatsappTools(server, client);
   const networkExtraTools = registerNetworkExtraTools(server, client);
+  const phoneNumberTools = registerPhoneNumberTools(server, client);
   // Added after the ChatGPT app review: they join ChatGPT's surface with the
   // next submission (chatgpt-app-submission.json), not before.
   const notYetReviewedForChatGpt = [
@@ -128,6 +130,7 @@ export function buildServer(client: UploadPostMcpClient, clientInfo?: ClientInfo
     ...accountExtraTools,
     ...whatsappTools,
     ...networkExtraTools,
+    ...phoneNumberTools,
   ];
   const studio = registerUploadStudio(server);
 

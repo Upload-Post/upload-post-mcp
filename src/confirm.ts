@@ -223,6 +223,19 @@ export const GATES: Record<string, Gate> = {
       return undefined;
     },
   },
+  purchase_phone_number: {
+    describe: (a) => {
+      const docs = a.documents && typeof a.documents === "object" ? Object.keys(a.documents as Args) : [];
+      return `Buys ${a.phone_number ? `phone number ${str(a.phone_number)}` : `the first available ${str(a.number_type)} number${a.area_code ? ` in area code ${str(a.area_code)}` : ""}`} in ${str(a.country)} for profile "${str(a.profile_username)}": the monthly price is charged on the account's subscription now (prorated) and on every renewal until the number is released${docs.length ? `; sends the end user's identity and documents (${docs.join(", ")}) to our carrier for review` : ""}. The user accepts the phone number terms (version ${str(a.terms_version)}): no emergency calls.`;
+    },
+  },
+  send_sms: {
+    describe: (a) => `Sends an SMS from phone number ${str(a.number_id)} to ${str(a.to)}, billed per message part: ${str(a.text)}`,
+  },
+  release_phone_number: {
+    describe: (a) =>
+      `Releases phone number ${str(a.number_id)} for good: it stops receiving SMS and calls, WhatsApp on it stops working, and the carrier may give it to someone else. The monthly charge stops, with no refund for the rest of the period. It cannot be undone.`,
+  },
   reply_to_comment: {
     describe: (a) => `Sends a private DM as profile "${str(a.user)}" to the author of comment ${str(a.commentId)}.`,
   },
@@ -432,7 +445,18 @@ function previewArgs(args: Args): Args {
   const out: Args = {};
   for (const [key, value] of Object.entries(args)) {
     if (value === undefined || key === "confirmed" || key === "confirm_username") continue;
-    out[key] = /base64/i.test(key) && typeof value === "string" ? `<${value.length} base64 characters>` : value;
+    out[key] = /base64/i.test(key) && typeof value === "string" ? `<${value.length} base64 characters>` : summariseBase64(value);
+  }
+  return out;
+}
+
+/** Nested file bytes (e.g. identity documents) are summarised too. */
+function summariseBase64(value: unknown, depth = 0): unknown {
+  if (depth > 4 || value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((v) => summariseBase64(v, depth + 1));
+  const out: Args = {};
+  for (const [key, v] of Object.entries(value as Args)) {
+    out[key] = /base64/i.test(key) && typeof v === "string" ? `<${v.length} base64 characters>` : summariseBase64(v, depth + 1);
   }
   return out;
 }
