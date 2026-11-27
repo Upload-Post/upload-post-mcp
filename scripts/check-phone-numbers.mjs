@@ -100,7 +100,7 @@ for (const name of ["phone_numbers_read", "purchase_phone_number"]) {
 assert.doesNotMatch(all, /3 to 30/, "no fixed price range suggested as the price");
 assert.equal(s.tools.get("phone_numbers_read").inputSchema.properties.limit.type, "integer", "limit is an integer");
 for (const name of TOOLS) assert.match(desc(name), /403 phone_numbers_not_available/, `${name} states the availability gate`);
-assert.doesNotMatch(all, /telnyx/i, "the carrier is never named");
+assert.doesNotMatch(all, /tel[n]yx/i, "the carrier is never named");
 assert.doesNotMatch(all, /[A-Z][A-Z0-9]*_[A-Z0-9_]*(ENABLED|ALLOWLIST|SCOPES)|PHONE_NUMBERS_|UPLOADPOSTS_/, "no internal switch is named");
 assert.match(s.tools.get("create_webhook_subscription").description, /sms_received/, "subscriptions list the phone events");
 
