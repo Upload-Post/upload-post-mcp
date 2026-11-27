@@ -78,6 +78,19 @@ const actionEnum = (routes: Record<string, Route>) => z.enum(Object.keys(routes)
 export const PHONE_AVAILABILITY =
   "Not generally available yet: the API answers 403 phone_numbers_not_available until phone numbers are available for the account (phone_numbers_read `config` answers enabled: false). ";
 
+/** What a consumer (end_user.type individual) agrees to with immediate_start_consent, as the API words it. */
+export const IMMEDIATE_START_CONSENT_TEXT =
+  "I ask Upload-Post to start providing this number now, within the 14-day withdrawal period. I understand that if I withdraw I will pay for the days already provided, and that I lose the right of withdrawal once the service has been fully provided.";
+
+/** A consumer purchase without the consent: refuse before sending, and say what to ask. */
+export function needsImmediateStartConsent(args: Record<string, unknown>): boolean {
+  const endUser = args.end_user as { type?: unknown } | undefined;
+  return endUser?.type === "individual" && args.immediate_start_consent !== true;
+}
+
+const CONSENT_REFUSAL =
+  `immediate_start_consent_required: nothing was sent, bought or charged. The end user is an individual (a consumer), so the purchase needs their express request to start the service now, within the 14-day withdrawal period. Show the user this text exactly and ask whether they agree: "${IMMEDIATE_START_CONSENT_TEXT}" Only if they agree, call purchase_phone_number again with the same arguments plus immediate_start_consent: true. Never set it on their behalf.`;
+
 const PHONE_RULES =
   "Paid plans only (an active subscription with at least one paid invoice; trials and the Free plan get 402 phone_numbers_paid_plan_required with an `upgrade_url` to relay). " +
   "These numbers cannot make outbound calls and can NEVER call emergency services (112 / 911). US and Canadian numbers receive SMS but cannot send SMS yet (403 sms_registration_required); some Spanish, German and Italian numbers have no SMS at all. ";
@@ -178,6 +191,11 @@ async function resolveDocuments(
 /** The replacement number is gone too: say what to send instead of leaving the model to buy again. */
 export function remediationError(err: unknown): unknown {
   const message = err instanceof Error ? err.message : String(err);
+  if (/phone_numbers_capacity/.test(message)) {
+    return new Error(
+      `${message} next_step: The payment is kept and nothing was charged again. A new order with our carrier is temporarily not possible: try fix_phone_number_kyc \`resubmit\` again later with the same corrections. Do not buy a new number.`
+    );
+  }
   if (!/phone_number_unavailable/.test(message)) return err;
   return new Error(
     `${message} next_step: The payment is kept and nothing was charged again. The number is no longer available from our carrier: find another one with phone_numbers_read search_available (same country and number_type, a price no higher than this one) and call fix_phone_number_kyc \`resubmit\` again with the same corrections plus phone_number set to it. Do not buy a new number.`
@@ -273,9 +291,12 @@ export function registerPhoneNumberTools(server: McpServer, client: UploadPostMc
         "end_user is the person or business that will use the number, as our carrier needs it: type individual | business, first_name, last_name, business_name (business), phone (E.164), email, address { street_address, extended_address, locality, administrative_area, postal_code, country_code }. Spanish, German, French and Italian numbers need an address in that country (local numbers: in the area code's region). " +
         "purchase_intent_id is your idempotency key (8-100 characters: letters, digits, _ - . :): make one up once per number you mean to buy and reuse it on every retry of that purchase; the same id never charges twice and returns the same number. Use a new id only to retry a purchase that failed. " +
         "Answers: 200 status active (bought). 202 status kyc_required: nothing charged yet; the country needs identity documents: read phone_numbers_read `kyc_fields`, collect them from the user and call this tool again with the same arguments plus `values` and `documents` (then it is sent to POST /kyc). 202 pending_payment: paid, the order with our carrier is still being confirmed; it ends active (phone_number_activated webhook) or failed with the charge refunded, usually within about 15 minutes: check phone_numbers_read `get` and do not buy again (repeating the same purchase_intent_id returns the same number). 202 pending_regulatory: paid, our carrier is reviewing the identity; it turns active when approved. " +
+        "Consumers: when end_user.type is individual, every purchase (and the identity step) needs immediate_start_consent: true, the end user's express request to start the service now within the 14-day withdrawal period; it is ignored for a business. Before setting it, show the user this text and ask whether they agree: \"" +
+        IMMEDIATE_START_CONSENT_TEXT +
+        "\" Without it nothing is sent (400 immediate_start_consent_required, whose body carries consent_text and terms_url). A consumer who withdraws within the 14 days does it through Upload-Post support: the number is released and the part not provided is refunded. " +
         DECLINED_RULE +
         "To let the end user fill in their own identity and documents instead, create a shareable KYC link with manage_phone_kyc_links. " +
-        "Errors: 400 terms_not_accepted (send accept_terms: true and the current terms_version), phone_numbers_kyc_invalid, phone_numbers_country_not_available, phone_numbers_type_not_offered; 402 phone_numbers_paid_plan_required (relay `upgrade_url`) or phone_numbers_payment_failed; 403 phone_numbers_account_suspended; 404 profile_not_found; 409 purchase_velocity (one purchase every 10 minutes), phone_numbers_limit_reached (5 numbers per account by default), phone_number_unavailable (taken: search again), phone_numbers_currency_unsupported; 429 phone_numbers_rate_limited (honour Retry-After); 502 phone_numbers_carrier_error (the carrier refused the order, the charge was refunded); 503 phone_numbers_capacity. " +
+        "Errors: 400 terms_not_accepted (send accept_terms: true and the current terms_version), immediate_start_consent_required, phone_numbers_kyc_invalid, phone_numbers_country_not_available, phone_numbers_type_not_offered; 402 phone_numbers_paid_plan_required (relay `upgrade_url`) or phone_numbers_payment_failed; 403 phone_numbers_account_suspended; 404 profile_not_found; 409 purchase_velocity (one purchase every 10 minutes), phone_numbers_limit_reached (5 numbers per account by default), phone_number_unavailable (taken: search again), phone_numbers_currency_unsupported; 429 phone_numbers_rate_limited (honour Retry-After); 502 phone_numbers_carrier_error (the carrier refused the order, the charge was refunded); 503 phone_numbers_capacity. " +
         "Countries in this first version: US, GB, ES, FR, DE, IT, MX, BR; types local, mobile, national (no toll-free). " +
         OWNER_ONLY +
         PHONE_RULES +
@@ -296,7 +317,13 @@ export function registerPhoneNumberTools(server: McpServer, client: UploadPostMc
         accept_terms: z
           .literal(true)
           .describe("true, only after the user has read and accepted the terms at `terms_url` (phone_numbers_read config)."),
-        terms_version: z.string().min(1).describe("The `terms_version` from phone_numbers_read config."),
+        terms_version: z.string().min(1).describe("The `terms_version` from phone_numbers_read config, e.g. '2026-11-28'."),
+        immediate_start_consent: z
+          .boolean()
+          .optional()
+          .describe(
+            "Required true when end_user.type is individual (ignored for a business): set it only after showing the user the consent text in this tool's description and they agreed to start the service now within the 14-day withdrawal period."
+          ),
         values: z
           .record(z.string())
           .optional()
@@ -320,6 +347,7 @@ export function registerPhoneNumberTools(server: McpServer, client: UploadPostMc
         values?: Record<string, string>;
         documents?: Record<string, FileArg>;
       };
+      if (needsImmediateStartConsent(body)) throw new Error(CONSENT_REFUSAL);
       const fields: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(body)) if (v !== undefined) fields[k] = v;
       if (values === undefined && documents === undefined) {
@@ -442,7 +470,7 @@ export function registerPhoneNumberTools(server: McpServer, client: UploadPostMc
       title: "Fix the identity review of an Upload-Post phone number",
       description:
         "Fix our carrier's identity review of a number in pending_regulatory or regulatory_declined (otherwise 409 phone_number_not_remediable), without paying again. Read phone_numbers_read `kyc_review` first: it says which requirements were declined (needs_fix), the fields to send again and the reviewer's comments. " +
-        "resubmit (number_id): send ONLY what changes: `values` (text and date requirements), `documents` (file requirements) and/or `end_user` (the whole end user again, with the new address); at least one of them (400 phone_numbers_kyc_invalid when there is nothing to fix or a correction is invalid). The review is updated and submitted again and the number goes back to pending_regulatory (phone_number_kyc_resubmitted webhook; its `order` says whether the same order was kept, the same number ordered again or a replacement ordered). It never charges again. If our carrier cancelled the order, the same number is ordered again; if that number is gone, the API answers 409 phone_number_unavailable with keeps_payment: true: pick another number of the same country and number_type, at no higher price, with phone_numbers_read search_available and resubmit with `phone_number` set to it (409 phone_numbers_type_not_offered when the replacement costs more). " +
+        "resubmit (number_id): send ONLY what changes: `values` (text and date requirements), `documents` (file requirements) and/or `end_user` (the whole end user again, with the new address); at least one of them (400 phone_numbers_kyc_invalid when there is nothing to fix or a correction is invalid). The review is updated and submitted again and the number goes back to pending_regulatory (phone_number_kyc_resubmitted webhook; its `order` says whether the same order was kept, the same number ordered again or a replacement ordered). It never charges again. If our carrier cancelled the order, the same number is ordered again; if that number is gone, the API answers 409 phone_number_unavailable with keeps_payment: true: pick another number of the same country and number_type, at no higher price, with phone_numbers_read search_available and resubmit with `phone_number` set to it (409 phone_numbers_type_not_offered when the replacement costs more). 409 phone_number_remediation_in_progress: another correction for this number is being sent; wait and read `kyc_review` before trying again. 503 phone_numbers_capacity: a new order with our carrier is temporarily not possible; the payment is kept, try again later and do not buy again. In the answer, `order` is same_order, already_ordered, new_order, new_order_other_number or order_unknown (our carrier did not confirm the new order in time; it is resolved automatically and no second order is placed). " +
         "reply (number_id, text up to 2000 characters, optional attachments): answer the reviewer; the message joins the thread shown in `kyc_review` (phone_number_kyc_comment webhook when the reviewer writes). 400 phone_numbers_invalid_request for an empty or too long text. " +
         "Files: PDF, JPG or PNG up to 10 MB, as content_base64; a file path only works on a local server (the hosted server refuses paths). 404 phone_number_not_found, 502 phone_numbers_carrier_error (our carrier did not answer or refused the corrections). " +
         DECLINED_RULE +
@@ -520,7 +548,7 @@ export function registerPhoneNumberTools(server: McpServer, client: UploadPostMc
         "Shareable KYC links: a white-label page (no login) where the integrator's end user fills in their own identity and documents for one phone number and accepts the phone number terms; when they submit it, the number is BOUGHT AND BILLED TO THIS ACCOUNT (the monthly price, prorated now and on every renewal until it is released; read the price with phone_numbers_read search_available or countries and tell the user before creating one). List them with phone_numbers_read `kyc_links`. " +
         "create (profile_username, country, number_type, redirect_url required; optional phone_number from search_available, branding { company_name up to 80 characters, logo_url https, brand_color #RRGGBB }, language en | es | pt-BR, default en): returns id (`kl_...`), url (the hosted page to send to the end user, shown only now), token and expires_at. Single use, valid 7 days; anyone with the url can submit it, so send it only to that end user. After submitting, the page sends the end user to redirect_url with ?kyc=submitted&country=XX, and the number shows up in phone_numbers_read `list` (and as number_id in `kyc_links`) in pending_regulatory until our carrier approves it. The paid plan is checked now and again when the page is submitted (402 phone_numbers_paid_plan_required, relay `upgrade_url`); problems the end user cannot fix (plan, limits…) show on the page as phone_kyc_link_unavailable and the link stays active. At most 20 active links (409 phone_kyc_links_limit). Other errors: 400 phone_numbers_invalid_request, phone_numbers_country_not_available, phone_numbers_type_not_offered; 404 profile_not_found; 409 phone_numbers_currency_unsupported. " +
         "revoke (link_id): the link stops working at once (the page answers phone_kyc_link_revoked); it cannot be undone. A link already used cannot be revoked (409 phone_kyc_link_used): release the number with release_phone_number instead. 404 phone_kyc_link_not_found. " +
-        "The page itself is for the end user only: no tool fills it in. " +
+        "An individual end user also gives the immediate-start consent (to start the service now within the 14-day withdrawal period) on the page. The page itself is for the end user only: no tool fills it in. Guide: https://docs.upload-post.com/guides/phone-number-kyc-link. " +
         OWNER_ONLY +
         PHONE_RULES +
         PHONE_AVAILABILITY,

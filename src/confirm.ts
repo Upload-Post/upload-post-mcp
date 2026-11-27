@@ -3,6 +3,7 @@ import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server
 import { ignoredPlatformOptions } from "./sdk-options.js";
 import { ok } from "./schemas.js";
 import { describeAdsAction } from "./tools/ads.js";
+import { needsImmediateStartConsent } from "./tools/phone_numbers.js";
 
 /**
  * Confirmation step for actions that reach other people or publish as the user.
@@ -224,9 +225,16 @@ export const GATES: Record<string, Gate> = {
     },
   },
   purchase_phone_number: {
+    // A consumer purchase without immediate_start_consent gets no preview: the
+    // tool refuses it before sending and says which consent to ask for first.
     describe: (a) => {
+      if (needsImmediateStartConsent(a)) return undefined;
       const docs = a.documents && typeof a.documents === "object" ? Object.keys(a.documents as Args) : [];
-      return `Buys ${a.phone_number ? `phone number ${str(a.phone_number)}` : `the first available ${str(a.number_type)} number${a.area_code ? ` in area code ${str(a.area_code)}` : ""}`} in ${str(a.country)} for profile "${str(a.profile_username)}": the monthly price is charged on the account's subscription now (prorated) and on every renewal until the number is released${docs.length ? `; sends the end user's identity and documents (${docs.join(", ")}) to our carrier for review` : ""}. The user accepts the phone number terms (version ${str(a.terms_version)}): no emergency calls.`;
+      return `Buys ${a.phone_number ? `phone number ${str(a.phone_number)}` : `the first available ${str(a.number_type)} number${a.area_code ? ` in area code ${str(a.area_code)}` : ""}`} in ${str(a.country)} for profile "${str(a.profile_username)}": the monthly price is charged on the account's subscription now (prorated) and on every renewal until the number is released${docs.length ? `; sends the end user's identity and documents (${docs.join(", ")}) to our carrier for review` : ""}. The user accepts the phone number terms (version ${str(a.terms_version)}): no emergency calls.${
+        a.immediate_start_consent === true && (a.end_user as Args | undefined)?.type === "individual"
+          ? " The end user, a consumer, asks for the service to start now, within the 14-day withdrawal period."
+          : ""
+      }`;
     },
   },
   send_sms: {

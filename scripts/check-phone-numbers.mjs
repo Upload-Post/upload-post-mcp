@@ -158,6 +158,18 @@ for (const name of ["phone_numbers_read", "create_webhook_subscription", "manage
 }
 assert.match(readme, /phone_number_kyc_comment[\s\S]*phone_number_kyc_resubmitted/, "README lists the new webhook events");
 assert.doesNotMatch(readme, /tel[n]yx/i, "README never names the carrier");
+// UPDATE 2: consumer consent, terms 2026-11-28, remediation errors, the KYC link guide.
+const CONSENT = "I ask Upload-Post to start providing this number now, within the 14-day withdrawal period.";
+assert.ok(desc("purchase_phone_number").includes(CONSENT), "purchase quotes the consent text to show the user");
+assert.match(desc("purchase_phone_number"), /immediate_start_consent: true[\s\S]*ignored for a business[\s\S]*400 immediate_start_consent_required/);
+assert.match(s.tools.get("purchase_phone_number").inputSchema.properties.terms_version.description, /2026-11-28/);
+assert.ok(s.tools.get("purchase_phone_number").inputSchema.properties.immediate_start_consent, "purchase takes immediate_start_consent");
+assert.match(desc("fix_phone_number_kyc"), /409 phone_number_remediation_in_progress/);
+assert.match(desc("fix_phone_number_kyc"), /503 phone_numbers_capacity[^.]*; the payment is kept, try again later and do not buy again/);
+assert.match(desc("fix_phone_number_kyc"), /order_unknown \(our carrier did not confirm the new order in time; it is resolved automatically and no second order/);
+assert.match(desc("manage_phone_kyc_links"), /immediate-start consent[\s\S]*on the page/);
+assert.ok(readme.includes("https://docs.upload-post.com/guides/phone-number-kyc-link"), "README links the KYC link guide");
+assert.match(readme, /immediate_start_consent: true/, "README: consumer consent");
 
 // --- reads --------------------------------------------------------------------------
 await s.call("phone_numbers_read", { action: "config" });
@@ -218,7 +230,7 @@ const buy = {
   purchase_intent_id: "intent-0001",
   end_user: endUser,
   accept_terms: true,
-  terms_version: "2026-11-27",
+  terms_version: "2026-11-28",
 };
 n = s.calls.length;
 r = await s.call("purchase_phone_number", buy);
@@ -247,6 +259,26 @@ for (const [status, re] of [
   assert.equal(res.isError, undefined, `${status} is not an error`);
   assert.equal(result(res).status, status);
   assert.match(result(res).next_step, re, `${status} carries its next_step`);
+  await k.close();
+}
+
+// A consumer purchase without immediate_start_consent is refused before anything is sent, preview included.
+{
+  const k = await connect("claude-ai");
+  const consumer = { ...buy, end_user: { ...endUser, type: "individual", business_name: undefined } };
+  for (const extra of [{}, { confirmed: true }, { confirmed: true, immediate_start_consent: false }, { confirmed: true, values: { req_tax: "X" } }]) {
+    const res = await k.call("purchase_phone_number", { ...consumer, ...extra });
+    assert.equal(res.isError, true, `consumer without consent is refused (${JSON.stringify(extra)})`);
+    assert.match(res.content[0].text, /immediate_start_consent_required: nothing was sent[\s\S]*Show the user this text exactly and ask[\s\S]*14-day withdrawal period[\s\S]*immediate_start_consent: true/);
+  }
+  assert.equal(k.calls.length, 0, "nothing sent without the consumer's consent");
+  const preview = await k.call("purchase_phone_number", { ...consumer, immediate_start_consent: true });
+  assert.ok(isPreview(preview), "with consent the purchase previews as usual");
+  assert.match(result(preview).action, /a consumer, asks for the service to start now, within the 14-day withdrawal period/);
+  await k.call("purchase_phone_number", { ...consumer, immediate_start_consent: true, confirmed: true });
+  assert.equal(last(k).url, `${P}/purchase`);
+  assert.equal(last(k).data.immediate_start_consent, true, "the consent goes to the API");
+  assert.equal(last(k).data.terms_version, "2026-11-28");
   await k.close();
 }
 
@@ -383,6 +415,15 @@ for (const [status, re] of [
   assert.equal(res.isError, true);
   assert.match(res.content[0].text, /keeps_payment[\s\S]*next_step: The payment is kept[\s\S]*search_available[\s\S]*phone_number set to it\. Do not buy a new number\./);
   await g.close();
+
+  // Capacity: the payment is kept, try later, never buy again.
+  const c = await connect("claude-ai", {
+    respond: () => ({ status: 503, data: { success: false, error_code: "phone_numbers_capacity" } }),
+  });
+  res = await c.call("fix_phone_number_kyc", { action: "resubmit", number_id: "pn_1", values: { req_tax: "B1" }, confirmed: true });
+  assert.equal(res.isError, true);
+  assert.match(res.content[0].text, /phone_numbers_capacity[\s\S]*next_step: The payment is kept[\s\S]*try fix_phone_number_kyc `resubmit` again later[\s\S]*Do not buy a new number\./);
+  await c.close();
 
   // The hosted server refuses file paths, for documents and attachments alike.
   const h = await connect("claude-ai", { allowLocalFiles: false });
