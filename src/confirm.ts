@@ -3,6 +3,7 @@ import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server
 import { ignoredPlatformOptions } from "./sdk-options.js";
 import { ok } from "./schemas.js";
 import { describeAdsAction } from "./tools/ads.js";
+import { describeTiktokAdsAction } from "./tools/tiktok_ads.js";
 import { needsImmediateStartConsent } from "./tools/phone_numbers.js";
 
 /**
@@ -382,6 +383,10 @@ export const GATES: Record<string, Gate> = {
     },
   },
   manage_chatgpt_ads: { describe: describeAdsAction },
+  manage_tiktok_ads: {
+    only: "`resume_*`, `delete_*`, `disconnect`, budget changes (`update_*` with a budget) and creating anything with status active",
+    describe: describeTiktokAdsAction,
+  },
   create_webhook_subscription: {
     describe: (a) =>
       `From now on sends the account's ${list(a.events)} events${a.profile_username ? ` of profile "${str(a.profile_username)}"` : " of every profile"} to ${str(a.url)}, signed with the account webhook secret.`,
