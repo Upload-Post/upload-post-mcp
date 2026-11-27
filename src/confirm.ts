@@ -234,7 +234,28 @@ export const GATES: Record<string, Gate> = {
   },
   release_phone_number: {
     describe: (a) =>
-      `Releases phone number ${str(a.number_id)} for good: it stops receiving SMS and calls, WhatsApp on it stops working, and the carrier may give it to someone else. The monthly charge stops, with no refund for the rest of the period. It cannot be undone.`,
+      `Releases phone number ${str(a.number_id)} for good: it stops receiving SMS and calls, WhatsApp on it stops working, and the carrier may give it to someone else. The monthly charge stops, with no refund for the rest of the period (a number whose identity review was declined is refunded instead). It cannot be undone.`,
+  },
+  fix_phone_number_kyc: {
+    describe: (a) => {
+      if (a.action === "reply") {
+        const files = Array.isArray(a.attachments) ? a.attachments.length : 0;
+        return `Sends this message to our carrier's identity reviewer about phone number ${str(a.number_id)}${files ? ` with ${files} attachment${files > 1 ? "s" : ""}` : ""}: ${str(a.text)}`;
+      }
+      const parts = [
+        a.values && typeof a.values === "object" ? `values (${Object.keys(a.values as Args).join(", ")})` : "",
+        a.documents && typeof a.documents === "object" ? `documents (${Object.keys(a.documents as Args).join(", ")})` : "",
+        a.end_user ? "the end user with a new address" : "",
+        a.phone_number ? `replacement number ${str(a.phone_number)}` : "",
+      ].filter(Boolean);
+      return `Sends corrected identity data for phone number ${str(a.number_id)} to our carrier and submits the review again: ${parts.join(", ") || "nothing"}. No new charge.`;
+    },
+  },
+  manage_phone_kyc_links: {
+    describe: (a) => {
+      if (a.action === "revoke") return `Revokes KYC link ${str(a.link_id)}: it stops working at once for whoever has it. It cannot be undone.`;
+      return `Creates a single-use KYC link (valid 7 days) for profile "${str(a.profile_username)}": whoever opens it fills in the identity for ${a.phone_number ? `phone number ${str(a.phone_number)}` : `a ${str(a.number_type)} number`} in ${str(a.country)}, and on submitting it the number is bought and BILLED TO THIS ACCOUNT (monthly price now, prorated, and on every renewal until released).`;
+    },
   },
   reply_to_comment: {
     describe: (a) => `Sends a private DM as profile "${str(a.user)}" to the author of comment ${str(a.commentId)}.`,

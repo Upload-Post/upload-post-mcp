@@ -11,7 +11,9 @@ import { callRoute, mergeArgs, type Route } from "./resource.js";
  * carrier provides them) to receive SMS and calls, verify WhatsApp on them and,
  * outside the US and Canada, send SMS. One read tool for everything that only
  * looks, and one tool per thing that spends money, reaches someone or cannot be
- * undone, so each carries its own annotations and confirmation step.
+ * undone, so each carries its own annotations and confirmation step: fixing a
+ * declined identity review (and answering its reviewer) and the shareable KYC
+ * links are their own tools for the same reason.
  *
  * Raw HTTP: upload-post 2.21.0 has no phone number methods yet; these can move
  * to the SDK once it ships them.
@@ -31,6 +33,8 @@ const READ_ROUTES: Record<string, Route> = {
   codes: { method: "GET", path: `${P}/{number_id}/codes` },
   usage: { method: "GET", path: `${P}/usage` },
   port_out_info: { method: "GET", path: `${P}/{number_id}/port-out` },
+  kyc_review: { method: "GET", path: `${P}/{number_id}/remediate` },
+  kyc_links: { method: "GET", path: `${P}/kyc/share` },
 };
 
 const MANAGE_ROUTES: Record<string, Route> = {
@@ -51,6 +55,8 @@ const READ_FIELDS: Record<string, string[]> = {
   codes: ["number_id", "since"],
   usage: ["from", "to"],
   port_out_info: ["number_id"],
+  kyc_review: ["number_id"],
+  kyc_links: [],
 };
 
 const MANAGE_FIELDS: Record<string, string[]> = {
@@ -77,7 +83,11 @@ const PHONE_RULES =
   "These numbers cannot make outbound calls and can NEVER call emergency services (112 / 911). US and Canadian numbers receive SMS but cannot send SMS yet (403 sms_registration_required); some Spanish, German and Italian numbers have no SMS at all. ";
 
 const OWNER_ONLY =
-  "Team members acting on the owner's account cannot buy, send identity documents, release or read port-out details (403 phone_numbers_owner_only): only the owner or an Admin can. ";
+  "Team members acting on the owner's account cannot buy, send identity documents, fix an identity review or answer its reviewer, create or revoke KYC links, release or read port-out details (403 phone_numbers_owner_only): only the owner or an Admin can. ";
+
+/** A declined identity review no longer refunds at once: the payment is kept while it is fixed. */
+export const DECLINED_RULE =
+  "A declined identity review (status regulatory_declined, phone_number_declined webhook with the reason, and an email) keeps the payment and pauses the monthly charge (nothing renews): read phone_numbers_read `kyc_review` to see what was declined and send only the corrections with fix_phone_number_kyc `resubmit`, which never charges again. If nothing is fixed within 30 days, or the number is released, the purchase is cancelled and refunded and the number released. Once approved the number turns active and billing resumes (no new proration). ";
 
 const numberIdField = z.string().min(1).describe("Upload-Post id of the number (`pn_...`), from phone_numbers_read `list`.");
 const countryField = z.string().length(2).describe("ISO country code, e.g. 'ES', 'GB', 'US'.");
@@ -120,7 +130,7 @@ export function purchaseNextStep(result: unknown): unknown {
     return {
       ...r,
       next_step:
-        "Paid and waiting for our carrier's identity review. It becomes active when approved (phone_number_activated webhook, or check phone_numbers_read `get`); if declined the charge is refunded (phone_number_declined webhook with the reason).",
+        "Paid and waiting for our carrier's identity review. It becomes active when approved (phone_number_activated webhook, or check phone_numbers_read `get`). If declined (regulatory_declined, phone_number_declined webhook with the reason) the payment is kept and the monthly charge paused: read phone_numbers_read `kyc_review` and send the corrections with fix_phone_number_kyc `resubmit` (no second charge). With nothing fixed in 30 days, or if the number is released, the purchase is cancelled and refunded.",
     };
   }
   return result;
@@ -137,28 +147,61 @@ const documentField = z
   })
   .describe("One identity document: content_base64 or path, PDF, JPG or PNG, up to 10 MB.");
 
+type FileArg = { filename?: string; content_base64?: string; path?: string };
+type ApiFile = { filename: string; content_base64: string };
+
+/** One file as the API takes it: { filename, content_base64 }; a path only on a local server. */
+async function resolveFile(client: UploadPostMcpClient, label: string, doc: FileArg): Promise<ApiFile> {
+  if (doc.content_base64) return { filename: doc.filename ?? "document", content_base64: doc.content_base64 };
+  if (!doc.path) throw new Error(`${label} needs content_base64 or path.`);
+  if (!client.allowLocalFiles) {
+    throw new Error(
+      `${label}: this hosted server cannot read file paths. Send the file as content_base64 (the whole call must stay under 10 MB).`
+    );
+  }
+  const bytes = await readFile(doc.path);
+  return { filename: doc.filename ?? basename(doc.path), content_base64: bytes.toString("base64") };
+}
+
 /** `documents` as the API takes them: { requirement_id: { filename, content_base64 } }. */
 async function resolveDocuments(
   client: UploadPostMcpClient,
-  documents: Record<string, { filename?: string; content_base64?: string; path?: string }>
-): Promise<Record<string, { filename: string; content_base64: string }>> {
-  const out: Record<string, { filename: string; content_base64: string }> = {};
+  documents: Record<string, FileArg>
+): Promise<Record<string, ApiFile>> {
+  const out: Record<string, ApiFile> = {};
   for (const [requirementId, doc] of Object.entries(documents)) {
-    if (doc.content_base64) {
-      out[requirementId] = { filename: doc.filename ?? "document", content_base64: doc.content_base64 };
-      continue;
-    }
-    if (!doc.path) throw new Error(`documents.${requirementId} needs content_base64 or path.`);
-    if (!client.allowLocalFiles) {
-      throw new Error(
-        `documents.${requirementId}: this hosted server cannot read file paths. Send the file as content_base64 (the whole call must stay under 10 MB).`
-      );
-    }
-    const bytes = await readFile(doc.path);
-    out[requirementId] = { filename: doc.filename ?? basename(doc.path), content_base64: bytes.toString("base64") };
+    out[requirementId] = await resolveFile(client, `documents.${requirementId}`, doc);
   }
   return out;
 }
+
+/** The replacement number is gone too: say what to send instead of leaving the model to buy again. */
+export function remediationError(err: unknown): unknown {
+  const message = err instanceof Error ? err.message : String(err);
+  if (!/phone_number_unavailable/.test(message)) return err;
+  return new Error(
+    `${message} next_step: The payment is kept and nothing was charged again. The number is no longer available from our carrier: find another one with phone_numbers_read search_available (same country and number_type, a price no higher than this one) and call fix_phone_number_kyc \`resubmit\` again with the same corrections plus phone_number set to it. Do not buy a new number.`
+  );
+}
+
+const endUserField = z
+  .object({
+    type: z.enum(["individual", "business"]),
+    first_name: z.string().min(1),
+    last_name: z.string().min(1),
+    business_name: z.string().optional().describe("Required for a business."),
+    phone: z.string().min(1).describe("Contact phone in E.164, e.g. '+34600111222'."),
+    email: z.string().optional(),
+    address: z.object({
+      street_address: z.string().min(1),
+      extended_address: z.string().optional(),
+      locality: z.string().min(1).describe("City."),
+      administrative_area: z.string().optional().describe("State, province or region."),
+      postal_code: z.string().min(1),
+      country_code: z.string().length(2).describe("ISO country code. ES, DE, FR and IT numbers need an address in that country."),
+    }),
+  })
+  .describe("Who will use the number, as the carrier requires it.");
 
 export function registerPhoneNumberTools(server: McpServer, client: UploadPostMcpClient): RegisteredTool[] {
   const read = server.registerTool(
@@ -177,12 +220,15 @@ export function registerPhoneNumberTools(server: McpServer, client: UploadPostMc
         "codes (number_id, since = ISO date): one-time codes (4-8 digits, also spoken in English, Spanish or Portuguese) found in SMS and call transcripts of the last 30 minutes; poll it every few seconds while the user verifies WhatsApp. " +
         "usage (from, to: ISO dates, default this month so far): billable usage in the account's billing currency (`currency`), charged on the next subscription invoice (outbound SMS, forwarded minutes, recording and transcription; inbound minutes at cost; inbound SMS free): `lines` (number_id, phone_number, kind sms_outbound | forwarding | recording | transcription | inbound_minutes, quantity, unit, amount, billed, created_at), `totals` per kind { quantity, amount }, `total`, and `today` against the account's `daily_cap`; over the daily usage limit, outbound SMS, forwarding and recording stop until midnight UTC. " +
         "port_out_info (number_id): what the user gives another carrier to move the number there (name and address as submitted, account number, the number); owner only, and only for the user who is moving it. " +
-        "Webhooks (opt-in, list them in webhook_events or a webhook subscription): sms_received, call_received, voicemail_received, phone_number_activated, phone_number_declined, phone_number_released, phone_number_port_out. " +
+        "kyc_review (number_id; owner only): for a number in pending_regulatory or regulatory_declined (otherwise 409 phone_number_not_remediable), our carrier's review status (group_status, decline_reason, reasons), each requirement with its status and needs_fix: true when it must be sent again, `fields` to send again (same shape as kyc_fields) and the reviewer thread `comments` (from reviewer | you, body, created_at); fix it with fix_phone_number_kyc. " +
+        "kyc_links (owner only): the account's shareable KYC links (manage_phone_kyc_links), newest first: id (`kl_...`), profile_username, country, number_type, phone_number, status active | used | expired | revoked, created_at, expires_at, used_at, revoked_at and number_id (the number a used link bought). The link url is only returned when it is created. " +
+        DECLINED_RULE +
+        "Webhooks (opt-in, list them in webhook_events or a webhook subscription): sms_received, call_received, voicemail_received, phone_number_activated, phone_number_declined, phone_number_released, phone_number_port_out, phone_number_kyc_comment (the carrier's reviewer wrote a comment, one event each), phone_number_kyc_resubmitted (corrections sent, back to pending_regulatory). " +
         PHONE_RULES +
         PHONE_AVAILABILITY,
       inputSchema: {
         action: actionEnum(READ_ROUTES),
-        number_id: numberIdField.optional().describe("get, messages, calls, codes, port_out_info: the number's id (`pn_...`)."),
+        number_id: numberIdField.optional().describe("get, messages, calls, codes, port_out_info, kyc_review: the number's id (`pn_...`)."),
         country: countryField.optional().describe("search_available (required) and kyc_fields: ISO country code, e.g. 'ES'."),
         number_type: numberTypeField.optional(),
         area_code: z.string().optional().describe("search_available: national destination code (area code)."),
@@ -226,7 +272,9 @@ export function registerPhoneNumberTools(server: McpServer, client: UploadPostMc
         "Before calling: read phone_numbers_read `config` (can_purchase, terms_version, terms_url), pick the number with search_available, tell the user the price, and have them read and accept the terms at terms_url (no emergency calls, acceptable use, porting authorization, carrier data processing in the US). " +
         "end_user is the person or business that will use the number, as our carrier needs it: type individual | business, first_name, last_name, business_name (business), phone (E.164), email, address { street_address, extended_address, locality, administrative_area, postal_code, country_code }. Spanish, German, French and Italian numbers need an address in that country (local numbers: in the area code's region). " +
         "purchase_intent_id is your idempotency key (8-100 characters: letters, digits, _ - . :): make one up once per number you mean to buy and reuse it on every retry of that purchase; the same id never charges twice and returns the same number. Use a new id only to retry a purchase that failed. " +
-        "Answers: 200 status active (bought). 202 status kyc_required: nothing charged yet; the country needs identity documents: read phone_numbers_read `kyc_fields`, collect them from the user and call this tool again with the same arguments plus `values` and `documents` (then it is sent to POST /kyc). 202 pending_payment: paid, the order with our carrier is still being confirmed; it ends active (phone_number_activated webhook) or failed with the charge refunded, usually within about 15 minutes: check phone_numbers_read `get` and do not buy again (repeating the same purchase_intent_id returns the same number). 202 pending_regulatory: paid, our carrier is reviewing the identity; it turns active when approved, and a declined review is refunded (phone_number_declined webhook). " +
+        "Answers: 200 status active (bought). 202 status kyc_required: nothing charged yet; the country needs identity documents: read phone_numbers_read `kyc_fields`, collect them from the user and call this tool again with the same arguments plus `values` and `documents` (then it is sent to POST /kyc). 202 pending_payment: paid, the order with our carrier is still being confirmed; it ends active (phone_number_activated webhook) or failed with the charge refunded, usually within about 15 minutes: check phone_numbers_read `get` and do not buy again (repeating the same purchase_intent_id returns the same number). 202 pending_regulatory: paid, our carrier is reviewing the identity; it turns active when approved. " +
+        DECLINED_RULE +
+        "To let the end user fill in their own identity and documents instead, create a shareable KYC link with manage_phone_kyc_links. " +
         "Errors: 400 terms_not_accepted (send accept_terms: true and the current terms_version), phone_numbers_kyc_invalid, phone_numbers_country_not_available, phone_numbers_type_not_offered; 402 phone_numbers_paid_plan_required (relay `upgrade_url`) or phone_numbers_payment_failed; 403 phone_numbers_account_suspended; 404 profile_not_found; 409 purchase_velocity (one purchase every 10 minutes), phone_numbers_limit_reached (5 numbers per account by default), phone_number_unavailable (taken: search again), phone_numbers_currency_unsupported; 429 phone_numbers_rate_limited (honour Retry-After); 502 phone_numbers_carrier_error (the carrier refused the order, the charge was refunded); 503 phone_numbers_capacity. " +
         "Countries in this first version: US, GB, ES, FR, DE, IT, MX, BR; types local, mobile, national (no toll-free). " +
         OWNER_ONLY +
@@ -244,24 +292,7 @@ export function registerPhoneNumberTools(server: McpServer, client: UploadPostMc
           .max(100)
           .regex(/^[A-Za-z0-9_.:-]+$/)
           .describe("Idempotency key for this purchase (8-100 characters: letters, digits, _ - . :). Reuse it on retries; a new one buys another number."),
-        end_user: z
-          .object({
-            type: z.enum(["individual", "business"]),
-            first_name: z.string().min(1),
-            last_name: z.string().min(1),
-            business_name: z.string().optional().describe("Required for a business."),
-            phone: z.string().min(1).describe("Contact phone in E.164, e.g. '+34600111222'."),
-            email: z.string().optional(),
-            address: z.object({
-              street_address: z.string().min(1),
-              extended_address: z.string().optional(),
-              locality: z.string().min(1).describe("City."),
-              administrative_area: z.string().optional().describe("State, province or region."),
-              postal_code: z.string().min(1),
-              country_code: z.string().length(2).describe("ISO country code. ES, DE, FR and IT numbers need an address in that country."),
-            }),
-          })
-          .describe("Who will use the number, as the carrier requires it."),
+        end_user: endUserField,
         accept_terms: z
           .literal(true)
           .describe("true, only after the user has read and accepted the terms at `terms_url` (phone_numbers_read config)."),
@@ -287,7 +318,7 @@ export function registerPhoneNumberTools(server: McpServer, client: UploadPostMc
     safe(async (args) => {
       const { values, documents, ...body } = args as Record<string, unknown> & {
         values?: Record<string, string>;
-        documents?: Record<string, { filename?: string; content_base64?: string; path?: string }>;
+        documents?: Record<string, FileArg>;
       };
       const fields: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(body)) if (v !== undefined) fields[k] = v;
@@ -376,7 +407,7 @@ export function registerPhoneNumberTools(server: McpServer, client: UploadPostMc
     {
       title: "Release an Upload-Post phone number",
       description:
-        "Give an Upload-Post phone number back. It is FINAL and cannot be undone: the number stops receiving SMS and calls, WhatsApp and anything else verified on it stop working, and the carrier may give it to someone else later. The monthly charge stops (no refund for the rest of the period). To keep the number with another carrier, use phone_numbers_read `port_out_info` instead of releasing it. " +
+        "Give an Upload-Post phone number back. It is FINAL and cannot be undone: the number stops receiving SMS and calls, WhatsApp and anything else verified on it stop working, and the carrier may give it to someone else later. The monthly charge stops (no refund for the rest of the period); releasing a number whose identity review was declined (regulatory_declined) cancels the purchase and refunds it instead. To keep the number with another carrier, use phone_numbers_read `port_out_info` instead of releasing it. " +
         "Needs `confirm: true`, set only after the user approved releasing that exact number; without it the API answers 400 confirmation_required and nothing changes. 404 phone_number_not_found. " +
         "When the subscription is cancelled or ends, numbers are suspended at once and released after a 7-day grace period (the user gets an email warning). " +
         OWNER_ONLY +
@@ -405,5 +436,137 @@ export function registerPhoneNumberTools(server: McpServer, client: UploadPostMc
     })
   );
 
-  return [read, purchase, sms, manage, release];
+  const fixKyc = server.registerTool(
+    "fix_phone_number_kyc",
+    {
+      title: "Fix the identity review of an Upload-Post phone number",
+      description:
+        "Fix our carrier's identity review of a number in pending_regulatory or regulatory_declined (otherwise 409 phone_number_not_remediable), without paying again. Read phone_numbers_read `kyc_review` first: it says which requirements were declined (needs_fix), the fields to send again and the reviewer's comments. " +
+        "resubmit (number_id): send ONLY what changes: `values` (text and date requirements), `documents` (file requirements) and/or `end_user` (the whole end user again, with the new address); at least one of them (400 phone_numbers_kyc_invalid when there is nothing to fix or a correction is invalid). The review is updated and submitted again and the number goes back to pending_regulatory (phone_number_kyc_resubmitted webhook; its `order` says whether the same order was kept, the same number ordered again or a replacement ordered). It never charges again. If our carrier cancelled the order, the same number is ordered again; if that number is gone, the API answers 409 phone_number_unavailable with keeps_payment: true: pick another number of the same country and number_type, at no higher price, with phone_numbers_read search_available and resubmit with `phone_number` set to it (409 phone_numbers_type_not_offered when the replacement costs more). " +
+        "reply (number_id, text up to 2000 characters, optional attachments): answer the reviewer; the message joins the thread shown in `kyc_review` (phone_number_kyc_comment webhook when the reviewer writes). 400 phone_numbers_invalid_request for an empty or too long text. " +
+        "Files: PDF, JPG or PNG up to 10 MB, as content_base64; a file path only works on a local server (the hosted server refuses paths). 404 phone_number_not_found, 502 phone_numbers_carrier_error (our carrier did not answer or refused the corrections). " +
+        DECLINED_RULE +
+        OWNER_ONLY +
+        PHONE_AVAILABILITY,
+      inputSchema: {
+        action: z.enum(["resubmit", "reply"]),
+        number_id: numberIdField,
+        values: z
+          .record(z.string())
+          .optional()
+          .describe("resubmit: { requirement_id: value } for the corrected text and date requirements of kyc_review."),
+        documents: z
+          .record(documentField)
+          .optional()
+          .describe("resubmit: { requirement_id: { filename, content_base64 | path } } for the file requirements to send again."),
+        end_user: endUserField.optional().describe("resubmit: the end user again, complete, with the corrected address."),
+        phone_number: z
+          .string()
+          .optional()
+          .describe("resubmit, only after 409 phone_number_unavailable: another available number (E.164) of the same country and number_type, at no higher price."),
+        text: z.string().min(1).max(2000).optional().describe("reply: the message to the reviewer (up to 2000 characters)."),
+        attachments: z.array(documentField).max(10).optional().describe("reply: files for the reviewer, each { filename, content_base64 | path }."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Fix a phone number's identity review",
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    safe(async (args) => {
+      const a = args as {
+        action: "resubmit" | "reply";
+        number_id: string;
+        values?: Record<string, string>;
+        documents?: Record<string, FileArg>;
+        end_user?: Record<string, unknown>;
+        phone_number?: string;
+        text?: string;
+        attachments?: FileArg[];
+      };
+      const base = `${P}/${encodeURIComponent(a.number_id)}/remediate`;
+      if (a.action === "reply") {
+        if (!a.text) throw new Error("`text` is required for reply.");
+        const body: Record<string, unknown> = { text: a.text };
+        if (a.attachments?.length) {
+          body.attachments = await Promise.all(a.attachments.map((f, i) => resolveFile(client, `attachments[${i}]`, f)));
+        }
+        return client.request("POST", `${base}/reply`, { body });
+      }
+      if (a.values === undefined && a.documents === undefined && a.end_user === undefined) {
+        throw new Error("resubmit needs at least one correction: `values`, `documents` or `end_user`.");
+      }
+      const body: Record<string, unknown> = {};
+      if (a.values !== undefined) body.values = a.values;
+      if (a.documents !== undefined) body.documents = await resolveDocuments(client, a.documents);
+      if (a.end_user !== undefined) body.end_user = a.end_user;
+      if (a.phone_number !== undefined) body.phone_number = a.phone_number;
+      try {
+        return await client.request("POST", base, { body });
+      } catch (err) {
+        throw remediationError(err);
+      }
+    })
+  );
+
+  const kycLinks = server.registerTool(
+    "manage_phone_kyc_links",
+    {
+      title: "Create or revoke shareable KYC links for Upload-Post phone numbers",
+      description:
+        "Shareable KYC links: a white-label page (no login) where the integrator's end user fills in their own identity and documents for one phone number and accepts the phone number terms; when they submit it, the number is BOUGHT AND BILLED TO THIS ACCOUNT (the monthly price, prorated now and on every renewal until it is released; read the price with phone_numbers_read search_available or countries and tell the user before creating one). List them with phone_numbers_read `kyc_links`. " +
+        "create (profile_username, country, number_type, redirect_url required; optional phone_number from search_available, branding { company_name up to 80 characters, logo_url https, brand_color #RRGGBB }, language en | es | pt-BR, default en): returns id (`kl_...`), url (the hosted page to send to the end user, shown only now), token and expires_at. Single use, valid 7 days; anyone with the url can submit it, so send it only to that end user. After submitting, the page sends the end user to redirect_url with ?kyc=submitted&country=XX, and the number shows up in phone_numbers_read `list` (and as number_id in `kyc_links`) in pending_regulatory until our carrier approves it. The paid plan is checked now and again when the page is submitted (402 phone_numbers_paid_plan_required, relay `upgrade_url`); problems the end user cannot fix (plan, limits…) show on the page as phone_kyc_link_unavailable and the link stays active. At most 20 active links (409 phone_kyc_links_limit). Other errors: 400 phone_numbers_invalid_request, phone_numbers_country_not_available, phone_numbers_type_not_offered; 404 profile_not_found; 409 phone_numbers_currency_unsupported. " +
+        "revoke (link_id): the link stops working at once (the page answers phone_kyc_link_revoked); it cannot be undone. A link already used cannot be revoked (409 phone_kyc_link_used): release the number with release_phone_number instead. 404 phone_kyc_link_not_found. " +
+        "The page itself is for the end user only: no tool fills it in. " +
+        OWNER_ONLY +
+        PHONE_RULES +
+        PHONE_AVAILABILITY,
+      inputSchema: {
+        action: z.enum(["create", "revoke"]),
+        profile_username: z.string().min(1).optional().describe("create: Upload-Post profile the number will belong to (from list_users)."),
+        country: countryField.optional().describe("create: ISO country code of the number, e.g. 'ES'."),
+        number_type: numberTypeField.optional().describe("create: local, mobile or national."),
+        phone_number: z.string().optional().describe("create: a specific number from phone_numbers_read search_available (E.164). Omit to take the first available one."),
+        branding: z
+          .object({
+            company_name: z.string().max(80).optional(),
+            logo_url: z.string().optional().describe("https URL of the logo."),
+            brand_color: z
+              .string()
+              .regex(/^#[0-9A-Fa-f]{6}$/)
+              .optional()
+              .describe("#RRGGBB, e.g. '#4F46E5'."),
+          })
+          .optional()
+          .describe("create: how the page looks to the end user (the integrator's brand)."),
+        redirect_url: z.string().optional().describe("create: https URL the end user is sent to after submitting (?kyc=submitted&country=XX is added)."),
+        language: z.enum(["en", "es", "pt-BR"]).optional().describe("create: language of the page (default en)."),
+        link_id: z.string().min(1).optional().describe("revoke: the link's id (`kl_...`) from create or phone_numbers_read `kyc_links`."),
+      },
+      outputSchema: genericResultOutputSchema,
+      annotations: {
+        title: "Create or revoke phone number KYC links",
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    safe(async (args) => {
+      const a = args as Record<string, unknown> & { action: "create" | "revoke"; link_id?: string };
+      if (a.action === "revoke") {
+        if (!a.link_id) throw new Error("`link_id` is required for revoke.");
+        return client.request("DELETE", `${P}/kyc/share/${encodeURIComponent(a.link_id)}`);
+      }
+      const body = pick(a, ["profile_username", "country", "number_type", "phone_number", "branding", "redirect_url", "language"]);
+      const missing = ["profile_username", "country", "number_type", "redirect_url"].filter((k) => body[k] === undefined);
+      if (missing.length) throw new Error(`create needs ${missing.map((k) => `\`${k}\``).join(", ")}.`);
+      return client.request("POST", `${P}/kyc/share`, { body });
+    })
+  );
+
+  return [read, purchase, sms, manage, release, fixKyc, kycLinks];
 }

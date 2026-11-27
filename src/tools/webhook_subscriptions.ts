@@ -104,7 +104,7 @@ export function registerWebhookSubscriptionTools(
         "Add a destination that receives the listed events (besides the account webhook), signed like the account webhook (X-Upload-Post-Signature with the account's webhook secret, plus X-Upload-Post-Subscription: <id>). " +
         "Idempotent: the same url + events + profile_username returns the existing subscription (`created: false`) and reactivates it if it was disabled (`reactivated: true`); name and source are updated when sent. " +
         "The first delivery can take about a minute; failed deliveries are retried and show up in list_webhook_deliveries. At most 10 active subscriptions per account (409 subscription_limit_reached). Team members cannot create them (403 team_member_forbidden). " +
-        "Events: " + SUBSCRIPTION_EVENTS.join(", ") + "; also youtube_video_published / youtube_video_updated the post approval events (post_approval_requested, post_approved, post_rejected, post_approval_expired) and the phone number events (sms_received, call_received, voicemail_received, phone_number_activated, phone_number_declined, phone_number_released, phone_number_port_out) while those features are on for the account. " +
+        "Events: " + SUBSCRIPTION_EVENTS.join(", ") + "; also youtube_video_published / youtube_video_updated the post approval events (post_approval_requested, post_approved, post_rejected, post_approval_expired) and the phone number events (sms_received, call_received, voicemail_received, phone_number_activated, phone_number_declined, phone_number_released, phone_number_port_out, phone_number_kyc_comment, phone_number_kyc_resubmitted) while those features are on for the account. " +
         DISABLED_NOTE,
       inputSchema: {
         url: z.string().url().max(2048).describe("Public https URL that will receive the events."),
@@ -196,7 +196,7 @@ export function registerWebhookSubscriptionTools(
         "remove_account: clears webhook_url, webhook_events and the secret and turns the webhook channel off (webhook subscriptions keep working). " +
         "test_account: sends a sample upload_completed through the configured channels (params: platform, media_type, title, caption, profile_username), logged as a test delivery. " +
         "get_profile / set_profile (webhook_url; webhook_events {event: true|false}, omitted = every event, null = back to every event) / remove_profile (its events go back to the account webhook): need `profile_username`. " +
-        "webhook_events names: upload_completed, social_account_connected, social_account_disconnected, social_account_reauth_required, dm_received, comment_received and the others listed in create_webhook_subscription; the phone number events (sms_received, call_received, voicemail_received, phone_number_*) are sent only when listed by name. " +
+        "webhook_events names: upload_completed, social_account_connected, social_account_disconnected, social_account_reauth_required, dm_received, comment_received and the others listed in create_webhook_subscription; the phone number events (sms_received, call_received, voicemail_received, phone_number_activated, phone_number_declined, phone_number_released, phone_number_port_out, phone_number_kyc_comment, phone_number_kyc_resubmitted) are sent only when listed by name. " +
         "Team members cannot change where the owner's events go (403).",
       inputSchema: {
         action: z.enum([
